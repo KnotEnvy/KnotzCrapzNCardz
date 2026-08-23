@@ -1,0 +1,196 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ *
+ * Palette
+ *
+ * A pit at three in the morning: dark wood, worn brass, and a felt lit
+ * from directly overhead. Everything else on screen defers to the table.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  --color-pit-950: #08090b;
+  --color-pit-900: #0e1013;
+  --color-pit-850: #14171c;
+  --color-pit-800: #1b1f26;
+  --color-pit-700: #262c36;
+  --color-pit-600: #39414f;
+  --color-pit-400: #6b7688;
+  --color-pit-300: #9aa5b6;
+  --color-pit-100: #e6e9ef;
+
+  --color-felt-900: #06301f;
+  --color-felt-800: #084029;
+  --color-felt-700: #0b5136;
+  --color-felt-600: #0f6544;
+  --color-felt-line: #f2ead8;
+
+  --color-brass-500: #d4af37;
+  --color-brass-400: #e8c455;
+  --color-brass-300: #f2d97e;
+  --color-brass-700: #8a6f1c;
+
+  --color-wood-900: #241610;
+  --color-wood-800: #332016;
+  --color-wood-700: #4a3021;
+
+  --color-win: #4ade80;
+  --color-lose: #f87171;
+  --color-seat-a: #f0b429;
+  --color-seat-b: #38bdf8;
+
+  --font-display: var(--font-oswald), 'Arial Narrow', sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* Chip colours follow the standard casino denominations. */
+:root {
+  --chip-1: #f4f4f2;
+  --chip-1-edge: #b9b9b4;
+  --chip-5: #c8102e;
+  --chip-5-edge: #7d0a1d;
+  --chip-25: #1f8a4c;
+  --chip-25-edge: #115c33;
+  --chip-100: #16181d;
+  --chip-100-edge: #000;
+  --chip-500: #6d28d9;
+  --chip-500-edge: #431a94;
+  --chip-1000: #d4af37;
+  --chip-1000-edge: #8a6f1c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #1b2028 0%, #0b0d10 55%, #06070a 100%);
+  color: var(--color-pit-100);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Felt typography
+ *
+ * Craps layouts are screen printed, so the lettering is heavy, wide and
+ * slightly worn. The stroke plus a low-opacity shadow sells the print.
+ * ------------------------------------------------------------------ */
+
+.felt-text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  fill: var(--color-felt-line);
+  paint-order: stroke fill;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.felt-text--gold {
+  fill: var(--color-brass-400);
+}
+
+.felt-text--muted {
+  fill: color-mix(in srgb, var(--color-felt-line) 62%, transparent);
+  letter-spacing: 0.1em;
+}
+
+.felt-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  fill: var(--color-felt-line);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Interaction
+ * ------------------------------------------------------------------ */
+
+.hit {
+  cursor: pointer;
+  transition: fill 120ms ease;
+}
+
+.hit:hover {
+  fill: rgb(255 255 255 / 0.07);
+}
+
+.hit--blocked {
+  cursor: not-allowed;
+}
+
+.hit--blocked:hover {
+  fill: rgb(0 0 0 / 0.18);
+}
+
+/* Focus ring that reads against the felt. */
+:where(button, [role='button'], input, select):focus-visible {
+  outline: 2px solid var(--color-brass-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Chrome
+ * ------------------------------------------------------------------ */
+
+.panel {
+  background: linear-gradient(180deg, rgb(30 35 43 / 0.92), rgb(16 19 24 / 0.94));
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 18px 40px -24px rgb(0 0 0 / 0.9);
+}
+
+.rail {
+  background:
+    linear-gradient(180deg, #4a3021 0%, #332016 40%, #241610 100%);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.08) inset,
+    0 -3px 12px rgb(0 0 0 / 0.6) inset;
+}
+
+.stat-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-pit-400);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbars inside panels. */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

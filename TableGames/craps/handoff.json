@@ -1,0 +1,326 @@
+{
+  "project": "Knotz Craps",
+  "path": "TableGames/craps",
+  "oneLine": "A full craps table for one or two players sharing one screen, with rigid-body dice physics and true casino odds.",
+  "handoffDate": "2026-08-23",
+  "status": "Feature complete, play-tested and published. Everything is green: 112 unit tests, 4 dice tests, 6 seeded house-edge simulations, typecheck, lint and a production build. The dice render was confirmed on screen this session, closing the one item the previous handoff left open. Nothing is known-broken and nothing is unverified that a command could verify.",
+  "whatChangedThisSession": {
+    "summary": "A table-juice pass on the felt, then eight gameplay and UX fixes, then the repository was consolidated at the project root and published.",
+    "visualFx": [
+      "New src/components/table/Fx.tsx: the layers that fire when a roll resolves — box flashes, chips travelling to the rail or the bank, and a full-felt wash on a winner or a seven out.",
+      "New layout.rectFor(BetLocation): the companion to anchorFor. anchorFor answers 'where do the chips sit'; rectFor answers 'which box do I light up', which differs for every bet that travels.",
+      "Felt.tsx gained a seven-out shake and a puck landing ring.",
+      "All of it degrades under prefers-reduced-motion: travel and shake drop out, flashes become plain cross-fades."
+    ],
+    "gameplay": [
+      "Chip denominations convert per spot. The six and eight are bet in sixes, so a chip's five-dollar units become six-dollar ones: $5 -> $6, $25 -> $30, $100 -> $120.",
+      "A bet under the table minimum is taken at the minimum instead of refused.",
+      "Increment snapping now rounds UP, not down. A $10 hand-entered bet on the six becomes $12.",
+      "Press and Power Press act only on the number that just hit, and name it. They used to press all six numbers, which is the bug that prompted this.",
+      "Inside / Outside / Across buttons place the armed chip on 5-6-8-9, 4-5-9-10, or all six.",
+      "Solo play: one seat, and the dice never pass.",
+      "A start screen and setup form now open the app, and feed New session.",
+      "Hop bets are grouped by total 2 through 12 with the dice combinations underneath, instead of sorted by combination.",
+      "Win and loss figures clear themselves after a beat instead of sitting until the next roll."
+    ]
+  },
+  "origin": {
+    "spec": "../../crapsPlan.md",
+    "specCoverage": "All items in the plan are implemented. See `deviationsFromSpec` for the three places the implementation differs, and `beyondSpec` for what was added.",
+    "productDecisions": [
+      "One or two seats hot-seat at one table rather than networked play. The engine was kept transport-agnostic so a websocket layer can be added without a rewrite.",
+      "Dice are genuine 3D rigid-body physics, not a 2D animation."
+    ]
+  },
+  "stack": {
+    "framework": "Next.js 16.3.2 (App Router, Turbopack default), React 19.2",
+    "language": "TypeScript 5, strict",
+    "state": "zustand 5 + persist middleware; immer 11 used inside the engine rather than as zustand middleware",
+    "styling": "Tailwind CSS 4 (CSS-first @theme in src/app/globals.css)",
+    "motion": "motion 13 (the Framer Motion successor package)",
+    "3d": "three 0.185, @react-three/fiber 9, @react-three/drei 10",
+    "physics": "@dimforge/rapier3d-compat (WASM inlined; no loader config needed)",
+    "test": "vitest 4",
+    "fonts": "next/font/google — Oswald (felt lettering) + Inter (UI)"
+  },
+  "commands": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "test": "npm test — 112 tests, ~4s. Run this constantly.",
+    "testStats": "npm run test:stats — seeded house-edge simulations, several minutes. Opt-in, separate vitest config.",
+    "typecheck": "npm run typecheck",
+    "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs.",
+    "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own."
+  },
+  "architecture": {
+    "principle": "The engine is pure. `src/lib/engine` contains no React, no I/O, no clock and no randomness at the point of use. `applyRoll(table, roll)` returns a new table, the settlements to animate, and a ledger record. That is what makes the game replayable from a seed and testable without a browser. Keep it that way.",
+    "layers": [
+      {
+        "path": "src/lib/engine/types.ts",
+        "role": "Bets, table state, house rules, session stats. Plain data only."
+      },
+      {
+        "path": "src/lib/engine/odds.ts",
+        "role": "Every payout ratio in one place, plus the increment rules and chipToWager. The felt and the resolver both read from here, so displayed odds and paid money cannot drift apart."
+      },
+      {
+        "path": "src/lib/engine/rng.ts",
+        "role": "xoshiro128** seeded PRNG with rejection sampling for the dice, so no face carries modulo bias."
+      },
+      {
+        "path": "src/lib/engine/resolve.ts",
+        "role": "applyRoll — the only function in the codebase that moves money."
+      },
+      {
+        "path": "src/lib/engine/table.ts",
+        "role": "Table construction plus the legal moves between rolls. Each returns either a new table or a refusal with a reason the UI shows as a toast."
+      },
+      {
+        "path": "src/lib/engine/stats.ts",
+        "role": "Derived figures for the HUD: distribution vs theory, equity curve, per-seat yield."
+      },
+      {
+        "path": "src/lib/dice/simulate.ts",
+        "role": "Deterministic dice physics. Produces a recorded animation that lands on a predetermined outcome."
+      },
+      {
+        "path": "src/lib/store/useGame.ts",
+        "role": "The only thing the UI talks to. Delegates every money move to the engine; it cannot invent a payout."
+      },
+      {
+        "path": "src/components/table/layout.ts",
+        "role": "Single source of truth for felt geometry — where each betting area sits, where its chips land (anchorFor), and which box lights up when it resolves (rectFor). The renderer and the hit testing read the same rectangles."
+      },
+      {
+        "path": "src/components/table/Fx.tsx",
+        "role": "Read-only decoration drawn inside the felt's SVG. Handed a settlement list and a roll record; touches neither the store nor the engine."
+      },
+      {
+        "path": "src/components/Setup.tsx",
+        "role": "One setup form, two frames: the start screen wraps it before anyone sits down, the new-session dialog wraps it afterwards. Keeping it in one place is what stops the two offering different settings."
+      }
+    ]
+  },
+  "keyDecisions": [
+    {
+      "topic": "Dice that are both physically real and RNG-determined",
+      "where": "src/lib/dice/simulate.ts",
+      "decision": "The RNG picks the result before the throw. One physics simulation runs with arbitrary initial conditions; whichever face lands up, a cube-symmetry rotation R is applied to every recorded orientation so the wanted face occupies that slot.",
+      "why": "A uniform cube has an isotropic inertia tensor and a cube collider is invariant under the 24 rotations of the octahedral group, so q0 -> q0*R yields a provably identical trajectory with q(t) -> q(t)*R. Real tumble, exact outcome, no rejection sampling and no snap at the end.",
+      "doNot": "Do not switch to live physics in the render loop and read the resting face. It reintroduces bias risk, cocked dice and non-replayable sessions."
+    },
+    {
+      "topic": "A chip is worth what the spot bets in",
+      "where": "chipToWager in odds.ts, called from placeBet only when opts.fromChip is set",
+      "decision": "Chip denominations convert to the spot's own units: the six and eight take five-dollar units as six-dollar ones, so $25 becomes $30 and $100 becomes $120. Everything else snaps up to its increment.",
+      "why": "This is how the bet is actually made — nobody says 'twenty-five on the six' and means twenty-five. Rounding up rather than down matches a dealer taking the extra dollar rather than handing change back.",
+      "doNot": "Do not set fromChip on presses, power presses or Same Action. Those amounts are already stated in the spot's units, and converting them again inflates the bet — a $30 six pressed by $6 would become $42 instead of $36. Regression tests: the 'what a chip is worth on the felt' block."
+    },
+    {
+      "topic": "Pressing is a call about one number",
+      "where": "pressNumber / powerPressNumber in table.ts, driven from lastRoll in useGame",
+      "decision": "Press and Power Press take the number the last roll landed on, and refuse with a reason if it was not a box number or the seat has nothing there.",
+      "why": "The previous pressAll/powerPress reached across the whole layout and spent the rack on numbers that had done nothing. That is not what 'press it' means at a table.",
+      "doNot": "Do not reintroduce a press-everything call without a separate, clearly-labelled button. The old behaviour was reported as a bug."
+    },
+    {
+      "topic": "Under the minimum is taken at the minimum",
+      "where": "placeBet in table.ts",
+      "decision": "A wager below rules.minBet is raised to the minimum rather than refused. Props and hops stay exempt — a dollar on the yo is a real bet.",
+      "why": "Refusing was technically correct and practically annoying. The order of adjustments is deliberate: chip conversion, then the minimum, then the increment, then the rack check.",
+      "note": "There is a deliberate step-down: if rounding up would overdraw the rack, placeBet falls back to the largest payable total the seat can cover ($28 rack, quarter on the six, takes $24). Do not remove it — without it a short rack simply cannot bet."
+    },
+    {
+      "topic": "Roll history must stay outside immer's produce",
+      "where": "src/lib/engine/resolve.ts, end of applyRoll",
+      "decision": "The history window is rebuilt with plain array operations after `produce` returns, then Object.freeze'd before being handed back.",
+      "why": "Measured: mutating a 600-entry history inside the draft cost 118 rolls/sec versus 2462 after the change, a 21x cliff. Immer proxies every element of an array it sees mutated. Freezing it ourselves also lets immer's deep-freeze short-circuit on the next produce.",
+      "doNot": "Do not move `history.push` back inside the draft. It will not fail any test; it will just make the game crawl after a long session."
+    },
+    {
+      "topic": "Bet ids live on the table, not in a module counter",
+      "where": "TableState.betSeq, used by placeBet",
+      "decision": "`betSeq` is part of the persisted table state.",
+      "why": "A module-level counter resets on page load while restored bets keep their old ids, so new bets collided with them. That produced duplicate React keys and, worse, take-down and odds calls that addressed the wrong bet. Regression test: 'keeps issuing unique bet ids after a session is saved and reloaded'."
+    },
+    {
+      "topic": "Settlements carry their own location",
+      "where": "Settlement.at (BetLocation) in types.ts",
+      "decision": "Each settlement records where the bet was sitting.",
+      "why": "By the time the UI animates a loss, the bet has been swept off the table. This is also exactly what makes the chip-flight layer possible: the ghost chips fly from where the bet was, not from where it is."
+    },
+    {
+      "topic": "Effects are keyed on the roll, and the first roll of a session is not replayed",
+      "where": "Fx.tsx, and `openingRoll` in Felt.tsx",
+      "decision": "Each effect layer mounts fresh per roll and ends at zero opacity, rather than being wrapped in AnimatePresence. Felt records the roll index present at mount and treats only later rolls as live.",
+      "why": "A restored session arrives with its last roll already in table.history. Without the opening mark, reopening the tab replayed the previous sitting's finish — a gold wash, or the whole table shaking for a seven out from yesterday. This was caught by probing the DOM before firing any roll."
+    },
+    {
+      "topic": "The seven-out shake uses animation controls, not a remount",
+      "where": "Felt.tsx, useAnimationControls fired from an effect",
+      "decision": "The felt is wrapped in a motion.div whose transform is driven by controls.",
+      "why": "Keying the felt to force a replay would remount every chip, restarting each entrance spring and re-running the whole layout — a lot of work to move the table six pixels."
+    },
+    {
+      "topic": "A roll always settles, even in a hidden tab",
+      "where": "settleFallback in useGame.ts",
+      "decision": "Dice playback is driven by requestAnimationFrame, with a wall-clock setTimeout backstop sized to the animation length.",
+      "why": "Browsers pause rAF in a background tab. Without the backstop, switching tabs mid-throw left the table stuck on 'dice are out' forever. setTimeout is throttled rather than suspended. Both paths call settleDice, which is idempotent."
+    },
+    {
+      "topic": "Settlement figures clear on a timer",
+      "where": "holdSettlements in useGame.ts",
+      "decision": "The settlement list is emptied 2.6s after a roll, or 1.8s after a seven out.",
+      "why": "They used to sit until the next roll, which on a slow table meant stale numbers over live bets. The seven-out hold is shorter on purpose: the losses register, then the layout is swept for the next shooter. Both are longer than the FX they overlap, so nothing is cut off mid-animation.",
+      "doNot": "Do not shorten these below ~1.5s without re-checking Fx.tsx — the win flash alone runs 1.2s."
+    },
+    {
+      "topic": "The ON/OFF puck is one flag, reset at each phase change",
+      "where": "Bet.working plus applyPhaseDefaults in resolve.ts",
+      "decision": "`working` is the actual live state. The engine resets it to the house default whenever the phase changes.",
+      "why": "This matches a real table: you have to tell the dealer again each come-out. It avoids a second 'explicitly pinned on' flag that nobody could reason about."
+    },
+    {
+      "topic": "Chart colours are validated, not eyeballed",
+      "where": "src/components/hud/Charts.tsx",
+      "decision": "Seat series are #c08a14 and #3298dd — one step deeper than the chips on the felt.",
+      "why": "Ran through a CVD validator against the dark panel surface: protan deltaE 24.6, tritan 22.3, contrast pass. The brighter chip hues failed the dark-mode lightness band. Chips sit on lit green and want to be bright; chart marks sit on a dark panel and would glare. If you change these, re-validate rather than eyeball."
+    },
+    {
+      "topic": "The dice canvas renders continuously, on purpose",
+      "where": "src/components/dice/DiceStage.tsx, the Canvas frameloop prop",
+      "decision": "frameloop is the explicit string 'always'.",
+      "why": "R3F's on-demand mode was tried, to stop a GPU spinning at 60fps between throws. It built clean, type-checked clean and linted clean — and left the canvas blank after a throw settled, so the resting dice never appeared. An explicit invalidate on resize did not recover it. Reverted to the mode that was visually verified.",
+      "doNot": "Do not re-attempt this on the strength of a green build. It is a rendering change; it needs a screenshot of the settled dice to be considered working."
+    }
+  ],
+  "gotchas": [
+    "src/lib/dice/simulate.ts FACE_AXES and src/components/dice/DiceStage.tsx MATERIAL_ORDER encode the same die convention (+X=1, -X=6, +Y=2, -Y=5, +Z=3, -Z=4). If they disagree, every roll renders a face that does not match the result the engine settled. Nothing type-checks this; the dice test suite does.",
+    "Changing the shape of TableState requires bumping `version` in the persist config in useGame.ts. It is currently 3 — bumped this session for TableState.solo and TableRules.rebuyAmount. There is a `merge` guard that falls back to a fresh table if a saved one is missing required fields, but the version bump is what makes the discard clean.",
+    "placeBet's `opts.fromChip` is the difference between a rack denomination and an amount already in the spot's units. Getting it wrong does not fail typecheck and does not look wrong on screen — it just quietly bets more than the player asked for. See the keyDecision.",
+    "Simulations should pass rules.historyLimit = 0. It skips the history window copy and roughly triples throughput.",
+    "Prop and field bets ride after a win by default (rules.propsRideAfterWin), which is what a real table does. Betting the same spot again tops the existing bet up rather than replacing it.",
+    "The engine is loaded with immer's auto-freeze left ON. Do not disable it for speed; the history fix already recovered the throughput and the freeze catches accidental mutation.",
+    "Solo is TableState.solo, not a rule. resolve.ts checks it before passing the dice, and SeatBar, the HUD and the equity chart all narrow to one seat from it. Seat B still exists in state so nothing downstream has to handle a missing seat.",
+    "next dev rewrites the agent block at the top of AGENTS.md on every run. Committing it with your work keeps the tree clean.",
+    "A green build, typecheck and lint prove nothing about whether the 3D canvas actually drew anything, and nothing about whether an effect layer animated. Both were verified this session by sampling the live DOM — computed opacity over time for the flashes, the wrapper transform frame by frame for the shake — and by screenshot. That is the standard to hold."
+  ],
+  "verification": {
+    "automated": {
+      "unit": "112 tests, ~4s. Covers every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports.",
+      "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
+      "statistical": "npm run test:stats — 6 tests, ~165s, all passing after the increment change. Seeded, therefore deterministic rather than flaky. Bands are theory plus or minus three standard errors: pass line 1.41%, don't pass 1.36%, field 2.78%, any seven 16.67%, pass-with-full-odds ~0.37% on total action, plus a flatness check on all 36 dice combinations over 600,000 rolls. Worth knowing: rounding wagers up rather than down changes what a bet costs, not what it pays, so these bands were expected to hold — and they did.",
+      "static": "tsc --noEmit clean; eslint clean (0 errors, 0 warnings); next build succeeds (4 static routes)."
+    },
+    "manual": [
+      "Dice confirmed rendering on screen — the item the previous handoff left open. Both in flight and at rest.",
+      "Win and loss flashes screenshotted in both polarities: green glow on a field win with a gold-ringed chip travelling to the rail, red glow on FIELD and ANY SEVEN with the losing figures.",
+      "Seven out sampled frame by frame: the felt wrapper translates and settles back to no transform, and the red wash peaks at 0.96 opacity.",
+      "Chip and minimum rules driven through the real UI on a solo $15 table: $25 chip on the six -> $30, $5 on the pass line -> $15, $5 on the six -> $18, $100 on the six -> $120, $25 across -> $160, $25 inside -> $110.",
+      "Press verified scoped: after the 10 hit, the button read 'Press 10' and at-risk moved by $5, not the $32 a whole-layout press would have cost. Power press doubled that one number.",
+      "Settlement figures counted just after a roll and again three seconds later: 1 then 0.",
+      "Start screen, solo setup and the reordered hop panel screenshotted.",
+      "Previously: 60+ scripted rolls with a spread of bets across both seats produced zero console errors; right-click take-down verified end to end; layout checked for overflow at 1680x980, 1366x768 and 1024x680."
+    ],
+    "notVerified": [
+      "Touch input. The game is mouse-and-keyboard; no tap targets were sized for touch.",
+      "Any viewport narrower than ~1000px. The felt is a 1600x760 viewBox and gets small. The action bar now carries three more buttons and wraps to a second row on a short window.",
+      "Safari and Firefox. Only Chrome was used.",
+      "Audio was never listened to — it is synthesised WebAudio and was verified only by reading the code. Worth an ear before shipping.",
+      "Long-session memory behaviour beyond the 600-roll history window."
+    ]
+  },
+  "deviationsFromSpec": [
+    {
+      "item": "shadcn/ui",
+      "what": "UI primitives are hand-rolled in src/components/ui/primitives.tsx on shadcn's foundation (class-variance-authority + clsx + tailwind-merge) rather than generated by the shadcn CLI.",
+      "why": "The table needs a casino aesthetic, not shadcn's default one, so every generated component would have been rewritten. The API and dependencies match, so `npx shadcn add` still works if you want a component."
+    },
+    {
+      "item": "zustand immer middleware",
+      "what": "immer is used inside the engine's `produce` calls rather than as zustand middleware.",
+      "why": "The engine owns all nested mutation and is pure; adding the middleware on top would be a second, redundant layer. The spec's intent — mutable-style updates over nested bet state — is met."
+    },
+    {
+      "item": "Put bets",
+      "what": "A new pass or don't-pass bet is refused once the point is on ('The line is closed once the point is on').",
+      "why": "Most casinos allow put bets but they are a bad bet and a confusing UI affordance. Come is available and is the correct play. Change `canBet` in table.ts if you want them."
+    }
+  ],
+  "beyondSpec": [
+    "Fire Bet (24/249/999 to 1) and All/Tall/Small side bets, with their own felt spots.",
+    "All 21 hop bets and the four horn-high calls, grouped by total behind the Hop / Horn panel.",
+    "Seeded dice: a named seed replays an identical session, so two betting strategies can be compared against the same dice.",
+    "A start screen and setup form covering seats, buy-in, re-buy, limits, odds multiple and every house rule.",
+    "Solo play.",
+    "Grouped place calls: inside, outside, across.",
+    "Table juice: box flashes, chips travelling to the rail and the bank, a seven-out shake and full-felt washes, all reduced-motion aware.",
+    "House rules panel: limits, odds multiple (1x to 100x), field 2x/3x on the twelve, vig on win vs up front, come-out working defaults, increment snapping, side bets on/off.",
+    "Session persistence to localStorage.",
+    "Keyboard shortcuts (space to roll, 1-7 chips, A/B seats, O max odds, H stats).",
+    "Synthesised audio — dice clacks scaled by impact velocity, chip drops, payout and seven-out calls. No audio assets in the bundle.",
+    "House edge shown in the tooltip on every box number."
+  ],
+  "openItems": [
+    {
+      "priority": "medium",
+      "item": "Listen to the audio.",
+      "detail": "src/lib/audio.ts is synthesised and was never heard. Levels and the seven-out sting are guesses. Nothing was added to it this session, so the new effects — flashes, chip travel, the shake — are silent. A rake sound on a loss and something on a press are the obvious gaps."
+    },
+    {
+      "priority": "medium",
+      "item": "Touch and small-screen support.",
+      "detail": "If they want to play on a tablet, the felt needs a reflowed layout and larger hit targets. The stats panel already becomes a drawer below 1280px, which is the pattern to follow. The action bar has grown and is the first thing that will need rethinking — it now wraps to two rows on a short window."
+    },
+    {
+      "priority": "low",
+      "item": "The setup form and House rules overlap.",
+      "detail": "Setup.tsx and SettingsDialog now offer nearly the same fields, from different components. Setup writes a whole new table; House rules edits the live one, which is why they were not merged outright. Worth folding SettingsDialog onto SetupForm with a read-only flag for the fields that cannot change mid-session."
+    },
+    {
+      "priority": "low",
+      "item": "Online play.",
+      "detail": "The engine is pure, seeded and replayable, and settlements are self-describing, so the natural shape is: one authoritative table applying rolls, broadcasting {roll, settlements} to clients. Nothing in lib/engine needs to change."
+    },
+    {
+      "priority": "low",
+      "item": "A dealer/tutorial mode.",
+      "detail": "The engine already returns a plain-English reason for every refused action, which is most of the work for a coaching layer."
+    },
+    {
+      "priority": "low",
+      "item": "Fire Bet progressive payouts.",
+      "detail": "Currently resolves only at seven-out. Some houses pay as each qualifying point is made."
+    },
+    {
+      "priority": "low",
+      "item": "Idle GPU cost of the always-on canvas.",
+      "detail": "The canvas redraws at 60fps even when nothing moves. On-demand rendering is the obvious fix and it did not work as a one-line prop change (see keyDecisions). If you want it, the likely shape is frameloop='demand' plus an explicit invalidate() from an effect keyed on the animation, and it must be verified visually."
+    }
+  ],
+  "repoNotes": {
+    "git": "The repository is now rooted at KnotzCrapzNCardz and published at https://github.com/KnotEnvy/KnotzCrapzNCardz (public). The nested repository create-next-app had made inside TableGames/craps was removed so the root could track the app's files; it held one commit, the untouched CNA scaffold.",
+    "structure": "Games are self-contained apps under their own folders. TableGames/craps carries its own package.json, .gitignore and README; the root carries a repo-wide .gitignore and an index README. There is no root build.",
+    "siblingAssets": "../../cardArt holds a full 52-card PNG deck. Unused by craps; it is there for the card games the repo name promises. SlotsGames/ is reserved and empty.",
+    "ignored": "stats-run.txt and bench-out.txt are local test artefacts and are gitignored."
+  },
+  "pickUpHere": {
+    "firstCommand": "cd TableGames/craps && npm install && npm run dev",
+    "firstCheck": "npm test, then bet the pass line and press space. Everything was green at handoff, so anything red is something you changed.",
+    "thenRead": [
+      "README.md for how the game plays",
+      "keyDecisions in this file before changing the engine, the dice, or how a wager is sized"
+    ],
+    "safestPlacesToStart": [
+      "src/lib/engine — pure, fully tested, and the tests run in four seconds.",
+      "src/components/table/layout.ts — felt geometry is data; move a rectangle and the hitbox and its flash move with it.",
+      "src/components/table/Fx.tsx — read-only decoration, no store or engine access, and nothing else depends on it."
+    ],
+    "riskiestPlacesToChange": [
+      "src/components/dice/DiceStage.tsx — nothing automated catches a blank canvas.",
+      "src/lib/engine/resolve.ts — the ordering comment at the top of applyRoll is load-bearing; come-bet protection depends on it.",
+      "placeBet in src/lib/engine/table.ts — four adjustments in a deliberate order, and the fromChip flag is silent when misused.",
+      "The persist config in useGame.ts — bump `version` whenever TableState changes shape."
+    ]
+  }
+}
