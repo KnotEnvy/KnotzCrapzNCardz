@@ -9,6 +9,7 @@
 import { produce } from 'immer';
 import {
   betIncrement,
+  betLabel,
   chipToWager,
   maxLayOdds,
   maxPassOdds,
@@ -499,6 +500,46 @@ export function powerPressNumber(
     state: res.state,
     message: `Power pressed the ${number} to $${after?.amount ?? 0}`,
   };
+}
+
+/**
+ * Sets a bet to an exact amount, in either direction.
+ *
+ * Going up is a press, so it hands straight to `placeBet` and inherits the
+ * whole ladder of adjustments — minimum, increment, rack check. Coming down is
+ * a regression, which the felt had no way to say before: "take my thirty-dollar
+ * six down to twelve" returns the difference to the rack and leaves the bet
+ * working. A target of zero or less is simply a take-down.
+ *
+ * Commission already paid on a buy or lay stays paid. The house does not hand
+ * back vig on money that was live, and neither does this.
+ */
+export function setBetAmount(state: TableState, betId: string, amount: number): ActionResult {
+  const bet = state.bets.find((b) => b.id === betId);
+  if (!bet) return refuse('That bet is gone');
+
+  const target = Math.floor(amount);
+  if (target <= 0) return takeDown(state, betId);
+  if (target > bet.amount) return placeBet(state, bet.seat, betSpec(bet), target - bet.amount);
+
+  const can = canTakeDown(bet);
+  if (!can.allowed) return refuse(can.reason!);
+
+  const inc = state.rules.enforceIncrements ? betIncrement(betSpec(bet)) : 1;
+  const exemptFromMinimum = bet.kind === 'PROP' || bet.kind === 'HOP';
+  let settled = inc > 1 ? snapToIncrement(target, inc) : target;
+  if (!exemptFromMinimum && settled < state.rules.minBet) settled = state.rules.minBet;
+
+  if (settled >= bet.amount) return refuse(`The ${betLabel(bet)} is already at $${bet.amount}`);
+
+  const returned = bet.amount - settled;
+  const nextState = produce(state, (draft) => {
+    const b = draft.bets.find((x) => x.id === betId)!;
+    b.amount = settled;
+    draft.seats[b.seat].bankroll += returned;
+  });
+
+  return { ok: true, state: nextState, message: `${betLabel(bet)} down to $${settled}` };
 }
 
 /**

@@ -13,9 +13,9 @@
  */
 
 import * as React from 'react';
-import { Button, Segmented, Toggle, cn, money } from './ui/primitives';
-import { useGame } from '@/lib/store/useGame';
-import type { OddsScheme, TableRules, TableState } from '@/lib/engine/types';
+import { Button, Segmented, Select, Toggle, cn, money } from './ui/primitives';
+import { allStrategies, useGame } from '@/lib/store/useGame';
+import type { OddsScheme, SeatId, TableRules, TableState } from '@/lib/engine/types';
 
 export interface SetupConfig {
   solo: boolean;
@@ -34,12 +34,20 @@ export interface SetupConfig {
   propsRideAfterWin: boolean;
   fireBetEnabled: boolean;
   atsEnabled: boolean;
+  /** Which system each seat opens on, or null to play it by hand. */
+  strategyA: string | null;
+  strategyB: string | null;
 }
 
 /** Seeds the form from whatever table is currently loaded. */
-export function configFromTable(table: TableState): SetupConfig {
+export function configFromTable(
+  table: TableState,
+  strategies?: Partial<Record<SeatId, string | null>>,
+): SetupConfig {
   const r = table.rules;
   return {
+    strategyA: strategies?.A ?? null,
+    strategyB: strategies?.B ?? null,
     solo: table.solo,
     nameA: table.seats.A.name,
     nameB: table.seats.B.name,
@@ -66,6 +74,7 @@ export function toSessionOptions(cfg: SetupConfig): {
   buyIn: number;
   solo: boolean;
   rules: Partial<TableRules>;
+  strategies: Partial<Record<SeatId, string | null>>;
 } {
   const minBet = Math.max(1, Math.round(cfg.minBet));
   return {
@@ -73,6 +82,9 @@ export function toSessionOptions(cfg: SetupConfig): {
     seatBName: cfg.nameB.trim() || 'Player 2',
     buyIn: Math.max(minBet, Math.round(cfg.buyIn)),
     solo: cfg.solo,
+    // A solo table has nobody in seat B, so whatever the form last held for it
+    // must not follow the player into a one-seat game.
+    strategies: { A: cfg.strategyA, B: cfg.solo ? null : cfg.strategyB },
     rules: {
       minBet,
       maxBet: Math.max(minBet, Math.round(cfg.maxBet)),
@@ -146,6 +158,53 @@ function TextField({
   );
 }
 
+/**
+ * Choosing a system at setup rather than after the fact.
+ *
+ * This is the whole reason the strategy layer does not feel bolted on: the
+ * question "who is playing, and what are they playing" is asked once, in the
+ * same breath as the buy-in, before anyone touches a chip.
+ */
+function StrategyField({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const customStrategies = useGame((s) => s.customStrategies);
+  const library = allStrategies(customStrategies);
+  const chosen = library.find((x) => x.id === value);
+
+  return (
+    <label className="block">
+      <span className="stat-label">{label}</span>
+      <div className="mt-1">
+        <Select
+          value={value ?? ''}
+          className="h-8 w-full text-xs"
+          ariaLabel={label}
+          onChange={(v) => onChange(v === '' ? null : v)}
+          options={[
+            { value: '', label: 'Played by hand' },
+            ...library.map((x) => ({
+              value: x.id,
+              label: x.origin === 'HOUSE' ? x.name : `${x.name} (mine)`,
+            })),
+          ]}
+        />
+      </div>
+      <span className="mt-1 block text-[10px] leading-relaxed text-pit-400">
+        {chosen ? chosen.summary : (hint ?? 'You place every bet yourself.')}
+      </span>
+    </label>
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * The form
  * ------------------------------------------------------------------ */
@@ -178,6 +237,29 @@ export function SetupForm({
             <TextField label="Seat B" value={value.nameB} onChange={(v) => set('nameB', v)} />
           )}
         </div>
+      </section>
+
+      <section>
+        <h3 className="stat-label mb-2">Strategies</h3>
+        <div className={cn('grid gap-3', value.solo ? 'grid-cols-1' : 'grid-cols-2')}>
+          <StrategyField
+            label={value.solo ? 'What you are playing' : `${value.nameA.trim() || 'Seat A'} plays`}
+            value={value.strategyA}
+            onChange={(v) => set('strategyA', v)}
+          />
+          {value.solo ? null : (
+            <StrategyField
+              label={`${value.nameB.trim() || 'Seat B'} plays`}
+              hint="Give the other seat a system and play against it."
+              value={value.strategyB}
+              onChange={(v) => set('strategyB', v)}
+            />
+          )}
+        </div>
+        <p className="mt-2 text-[10px] leading-relaxed text-pit-400">
+          A seat with a system placed on it bets for itself after every roll. You can switch it to
+          on-call, change it, or take it off at any time from the Strategies panel.
+        </p>
       </section>
 
       <section>
@@ -292,7 +374,10 @@ export function SetupForm({
 export function StartScreen() {
   const table = useGame((s) => s.table);
   const newSession = useGame((s) => s.newSession);
-  const [cfg, setCfg] = React.useState<SetupConfig>(() => configFromTable(table));
+  const seatStrategy = useGame((s) => s.seatStrategy);
+  const [cfg, setCfg] = React.useState<SetupConfig>(() =>
+    configFromTable(table, { A: seatStrategy.A.strategyId, B: seatStrategy.B.strategyId }),
+  );
 
   return (
     <div className="thin-scroll h-full overflow-y-auto">

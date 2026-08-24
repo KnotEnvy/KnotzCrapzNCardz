@@ -37,15 +37,32 @@ import {
   type BetSpec,
 } from '@/lib/engine/table';
 import { createRng, randomSeed, rollDice, type Rng } from '@/lib/engine/rng';
+import { atRisk } from '@/lib/engine/table';
 import type {
   PointNumber,
   Roll,
+  RollRecord,
   SeatId,
   Settlement,
   TableRules,
   TableState,
 } from '@/lib/engine/types';
 import { POINT_NUMBERS } from '@/lib/engine/types';
+import {
+  HOUSE_STRATEGIES,
+  duplicateStrategy,
+  emptyStrategy,
+  isStrategy,
+} from '@/lib/strategy/library';
+import { runStrategy } from '@/lib/strategy/run';
+import {
+  emptyMemory,
+  emptySeatStrategy,
+  type SeatStrategy,
+  type Strategy,
+  type StrategyLogEntry,
+  type StrategyMemory,
+} from '@/lib/strategy/types';
 
 export type NumberMode = 'PLACE' | 'BUY' | 'LAY';
 
@@ -110,6 +127,30 @@ function clearSettlementHold() {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Strategies
+ * ------------------------------------------------------------------ */
+
+/**
+ * The house systems are code and the player's are data, so the library is the
+ * two concatenated rather than one persisted list. Keeping the built-ins out
+ * of storage means a fix to one of them reaches a returning player, instead of
+ * being shadowed by the copy their browser saved months ago.
+ */
+export function allStrategies(customs: Strategy[]): Strategy[] {
+  return [...HOUSE_STRATEGIES, ...customs];
+}
+
+export function findStrategy(customs: Strategy[], id: string | null): Strategy | null {
+  if (!id) return null;
+  return allStrategies(customs).find((s) => s.id === id) ?? null;
+}
+
+/** Chips in the rack plus chips on the felt. */
+function equity(table: TableState, seat: SeatId): number {
+  return table.seats[seat].bankroll + atRisk(table, seat);
+}
+
 /** The box number the last roll landed on, or null if it was not one. */
 function hitNumber(roll: Roll | null): PointNumber | null {
   if (!roll) return null;
@@ -152,6 +193,16 @@ interface GameState {
   showHud: boolean;
   soundOn: boolean;
 
+  /* Strategies */
+  /** The player's own systems. The seventeen house ones live in code. */
+  customStrategies: Strategy[];
+  /** Source of ids for new custom strategies; on the store so it survives a reload. */
+  customSeq: number;
+  /** What each seat is playing, and whether it plays itself. */
+  seatStrategy: Record<SeatId, SeatStrategy>;
+  /** What each seat's strategy remembers between rolls. */
+  strategyMemory: Record<SeatId, StrategyMemory>;
+
   /* Transient UI */
   toast: Toast | null;
   /** Bets that came down last roll, per seat, so "same action" can repeat them. */
@@ -165,8 +216,19 @@ interface GameState {
     buyIn: number;
     solo?: boolean;
     rules?: Partial<TableRules>;
+    strategies?: Partial<Record<SeatId, string | null>>;
   }) => void;
   reseed: (seed?: string) => void;
+
+  assignStrategy: (seat: SeatId, strategyId: string | null) => void;
+  setSeatAuto: (seat: SeatId, auto: boolean) => void;
+  /** Apply a seat's strategy once, by hand. */
+  runSeatStrategy: (seat?: SeatId) => void;
+  saveStrategy: (strategy: Strategy) => void;
+  deleteStrategy: (id: string) => void;
+  /** Creates a custom strategy — blank, or a copy of an existing one. */
+  createStrategy: (from?: Strategy) => string;
+  importStrategy: (json: string) => string | null;
 
   setChip: (chip: number) => void;
   setNumberMode: (mode: NumberMode) => void;
@@ -215,6 +277,63 @@ export const useGame = create<GameState>()(
         return true;
       };
 
+      /**
+       * Gives each seat's strategy its turn.
+       *
+       * Runs synchronously the moment a roll settles rather than on a timer.
+       * The bets have to be on the felt before the player can throw again, and
+       * a timer would either fight the settlement animation or lose the race
+       * against someone hammering the roll button in fast mode.
+       *
+       * With `only` it runs that one seat whether or not it plays itself,
+       * which is what the Run button does. Without it, only the seats set to
+       * play themselves act.
+       */
+      const playStrategies = (
+        table: TableState,
+        record: RollRecord | null,
+        settlements: Settlement[],
+        opts: { only?: SeatId; force?: boolean } = {},
+      ): { table: TableState; memory: Record<SeatId, StrategyMemory>; entries: StrategyLogEntry[] } => {
+        const s = get();
+        let working = table;
+        const memory = { ...s.strategyMemory };
+        const entries: StrategyLogEntry[] = [];
+        const seats: SeatId[] = opts.only ? [opts.only] : ['A', 'B'];
+
+        for (const seat of seats) {
+          // Seat B exists in state even in a solo game; it simply never plays.
+          if (working.solo && seat === 'B') continue;
+          const assigned = s.seatStrategy[seat] ?? emptySeatStrategy();
+          if (!opts.only && !assigned.auto) continue;
+
+          const strategy = findStrategy(s.customStrategies, assigned.strategyId);
+          if (!strategy) continue;
+
+          const res = runStrategy({
+            table: working,
+            seat,
+            strategy,
+            memory: memory[seat] ?? emptyMemory(strategy.id, equity(working, seat)),
+            record,
+            settlements,
+            force: opts.force,
+          });
+          working = res.table;
+          memory[seat] = res.memory;
+          entries.push(...res.entries);
+        }
+
+        return { table: working, memory, entries };
+      };
+
+      /** Lays down the opening bets after a new session or a fresh assignment. */
+      const primeStrategies = (only?: SeatId) => {
+        const played = playStrategies(get().table, null, [], { only, force: true });
+        set(() => ({ table: played.table, strategyMemory: played.memory }));
+        return played.entries;
+      };
+
       return {
         table: createTable(),
         seed: randomSeed(),
@@ -234,6 +353,11 @@ export const useGame = create<GameState>()(
         showHud: hudDefault,
         soundOn: true,
 
+        customStrategies: [],
+        customSeq: 0,
+        seatStrategy: { A: emptySeatStrategy(), B: emptySeatStrategy() },
+        strategyMemory: { A: emptyMemory(null), B: emptyMemory(null) },
+
         toast: null,
         lastAction: { A: [], B: [] },
 
@@ -248,8 +372,21 @@ export const useGame = create<GameState>()(
           clearSettlementHold();
           const seed = randomSeed();
           rng = createRng(seed);
+
+          const table = createTable(opts);
+          const previous = get().seatStrategy;
+          const assign = (seat: SeatId): SeatStrategy => {
+            const chosen = opts.strategies?.[seat];
+            // `undefined` means the setup form had nothing to say about this
+            // seat, so it keeps whatever it was playing. `null` means the
+            // player explicitly chose to play it by hand.
+            if (chosen === undefined) return previous[seat] ?? emptySeatStrategy();
+            return { strategyId: chosen, auto: chosen !== null };
+          };
+          const seatStrategy: Record<SeatId, SeatStrategy> = { A: assign('A'), B: assign('B') };
+
           set(() => ({
-            table: createTable(opts),
+            table,
             seed,
             sessionStarted: true,
             animation: null,
@@ -258,7 +395,15 @@ export const useGame = create<GameState>()(
             rolling: false,
             pendingRoll: null,
             lastAction: { A: [], B: [] },
+            seatStrategy,
+            strategyMemory: {
+              A: emptyMemory(seatStrategy.A.strategyId, table.seats.A.bankroll),
+              B: emptyMemory(seatStrategy.B.strategyId, table.seats.B.bankroll),
+            },
           }));
+          // Anything playing itself gets its opening bets down before the
+          // player sees the felt, rather than after the first throw.
+          primeStrategies();
           toast(set, opts.solo ? 'Table is yours. Good luck.' : 'New session. Good luck.', 'ok');
         },
 
@@ -385,6 +530,123 @@ export const useGame = create<GameState>()(
           commit(sameAction(table, table.activeSeat, lastAction[table.activeSeat]));
         },
 
+        /* ---------------- Strategies ---------------- */
+
+        assignStrategy(seat, strategyId) {
+          const { customStrategies, table } = get();
+          const strategy = findStrategy(customStrategies, strategyId);
+          set((s) => ({
+            seatStrategy: {
+              ...s.seatStrategy,
+              [seat]: { strategyId, auto: strategyId === null ? false : s.seatStrategy[seat].auto },
+            },
+            // A different system is a different set of counters. Carrying the
+            // old hit tallies over would have the new one pressing on hits it
+            // never saw.
+            strategyMemory: {
+              ...s.strategyMemory,
+              [seat]: emptyMemory(strategyId, equity(s.table, seat)),
+            },
+          }));
+          toast(
+            set,
+            strategy
+              ? `${table.seats[seat].name} is playing ${strategy.name}`
+              : `${table.seats[seat].name} is back on the controls`,
+            'ok',
+          );
+        },
+
+        setSeatAuto(seat, auto) {
+          set((s) => ({
+            seatStrategy: { ...s.seatStrategy, [seat]: { ...s.seatStrategy[seat], auto } },
+          }));
+          if (auto) primeStrategies(seat);
+        },
+
+        runSeatStrategy(seat) {
+          const state = get();
+          if (state.rolling) {
+            toast(set, 'Dice are out', 'warn');
+            return;
+          }
+          const target = seat ?? state.table.activeSeat;
+          const assigned = state.seatStrategy[target];
+          if (!assigned?.strategyId) {
+            toast(set, 'No strategy on that seat yet', 'warn');
+            return;
+          }
+
+          const played = playStrategies(state.table, state.table.history.at(-1) ?? null, [], {
+            only: target,
+            force: true,
+          });
+          set(() => ({ table: played.table, strategyMemory: played.memory }));
+
+          const last = played.entries.at(-1);
+          if (!last) toast(set, 'Nothing for the strategy to do right now', 'ok');
+          else toast(set, last.text, last.ok ? 'ok' : 'warn');
+        },
+
+        saveStrategy(strategy) {
+          set((s) => {
+            const existing = s.customStrategies.findIndex((x) => x.id === strategy.id);
+            const customStrategies =
+              existing >= 0
+                ? s.customStrategies.map((x, i) => (i === existing ? strategy : x))
+                : [...s.customStrategies, strategy];
+            return { customStrategies };
+          });
+        },
+
+        deleteStrategy(id) {
+          set((s) => {
+            const seatStrategy = { ...s.seatStrategy };
+            const strategyMemory = { ...s.strategyMemory };
+            // A seat cannot go on playing a system that no longer exists.
+            for (const seat of ['A', 'B'] as SeatId[]) {
+              if (seatStrategy[seat].strategyId !== id) continue;
+              seatStrategy[seat] = emptySeatStrategy();
+              strategyMemory[seat] = emptyMemory(null, equity(s.table, seat));
+            }
+            return {
+              customStrategies: s.customStrategies.filter((x) => x.id !== id),
+              seatStrategy,
+              strategyMemory,
+            };
+          });
+        },
+
+        createStrategy(from) {
+          const seq = get().customSeq + 1;
+          const id = `mine-${seq}`;
+          const strategy = from ? duplicateStrategy(from, id) : emptyStrategy(id);
+          set((s) => ({ customSeq: seq, customStrategies: [...s.customStrategies, strategy] }));
+          return id;
+        },
+
+        importStrategy(json) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(json);
+          } catch {
+            toast(set, 'That is not valid JSON', 'warn');
+            return null;
+          }
+          if (!isStrategy(parsed)) {
+            toast(set, 'That JSON is not a strategy', 'warn');
+            return null;
+          }
+          // Imports always land as a new custom strategy, so a pasted copy can
+          // never overwrite something the player already has under that id.
+          const seq = get().customSeq + 1;
+          const id = `mine-${seq}`;
+          const strategy = duplicateStrategy(parsed, id, parsed.name);
+          set((s) => ({ customSeq: seq, customStrategies: [...s.customStrategies, strategy] }));
+          toast(set, `Imported ${strategy.name}`, 'ok');
+          return id;
+        },
+
         throwDice() {
           const state = get();
           if (state.rolling) return;
@@ -394,10 +656,14 @@ export const useGame = create<GameState>()(
           clearSettlementHold();
 
           if (state.fastRoll || !state.physicsReady) {
-            const { state: next, settlements } = applyRoll(state.table, roll);
+            const { state: next, settlements, record } = applyRoll(state.table, roll);
+            // What came down is read from the table the roll produced, before
+            // any strategy puts something new in its place.
             recordAction(set, state.table, next, settlements);
+            const played = playStrategies(next, record, settlements);
             set(() => ({
-              table: next,
+              table: played.table,
+              strategyMemory: played.memory,
               lastRoll: roll,
               settlements,
               animation: null,
@@ -422,10 +688,12 @@ export const useGame = create<GameState>()(
           const state = get();
           if (!state.rolling || !state.pendingRoll) return;
           const roll = state.pendingRoll;
-          const { state: next, settlements } = applyRoll(state.table, roll);
+          const { state: next, settlements, record } = applyRoll(state.table, roll);
           recordAction(set, state.table, next, settlements);
+          const played = playStrategies(next, record, settlements);
           set(() => ({
-            table: next,
+            table: played.table,
+            strategyMemory: played.memory,
             lastRoll: roll,
             settlements,
             rolling: false,
@@ -457,6 +725,15 @@ export const useGame = create<GameState>()(
         fastRoll: s.fastRoll,
         showHud: s.showHud,
         soundOn: s.soundOn,
+        // The strategy layer is deliberately outside TableState — the engine
+        // has no business knowing a bot is playing — so adding it changed the
+        // store's shape without changing the table's, and `version` stays at 3.
+        // An older save simply arrives without these keys and `merge` fills
+        // them in from the defaults below.
+        customStrategies: s.customStrategies,
+        customSeq: s.customSeq,
+        seatStrategy: s.seatStrategy,
+        strategyMemory: s.strategyMemory,
       }),
       /**
        * Belt and braces on top of the version check: if the saved table is
@@ -475,7 +752,26 @@ export const useGame = create<GameState>()(
           Array.isArray(table.bets) &&
           !!table.seats?.A &&
           !!table.seats?.B;
-        return { ...current, ...saved, table: usable ? table : current.table };
+
+        // The same treatment for the strategy layer, which a save from before
+        // it existed simply will not have: take it only if both seats are
+        // there, otherwise deal a fresh set rather than a half-shaped one.
+        const seatStrategy =
+          saved?.seatStrategy?.A && saved.seatStrategy.B ? saved.seatStrategy : current.seatStrategy;
+        const strategyMemory =
+          saved?.strategyMemory?.A && saved.strategyMemory.B
+            ? saved.strategyMemory
+            : current.strategyMemory;
+
+        return {
+          ...current,
+          ...saved,
+          table: usable ? table : current.table,
+          customStrategies: Array.isArray(saved?.customStrategies) ? saved.customStrategies : [],
+          customSeq: typeof saved?.customSeq === 'number' ? saved.customSeq : 0,
+          seatStrategy,
+          strategyMemory,
+        };
       },
       onRehydrateStorage: () => (state) => {
         // Resume the dice stream where the saved session left off.

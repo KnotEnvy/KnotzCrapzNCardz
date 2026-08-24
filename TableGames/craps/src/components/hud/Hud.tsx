@@ -7,9 +7,9 @@
 import * as React from 'react';
 import { DistributionChart, EquityChart } from './Charts';
 import { PipFace } from '@/components/table/Pips';
-import { Panel, Stat, money } from '@/components/ui/primitives';
+import { Panel, Stat, cn, money } from '@/components/ui/primitives';
 import { seatSummary, tableSummary } from '@/lib/engine/stats';
-import { useGame } from '@/lib/store/useGame';
+import { allStrategies, useGame } from '@/lib/store/useGame';
 import type { RollOutcome, RollRecord, SeatId } from '@/lib/engine/types';
 
 const OUTCOME_TONE: Record<RollOutcome, string> = {
@@ -66,6 +66,85 @@ function RollHistory({ history }: { history: RollRecord[] }) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Strategy log
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the strategies actually did, newest first.
+ *
+ * A bot that presses a number silently is indistinguishable from a bug, so
+ * every call a strategy makes — and every one the table refused — turns up
+ * here against the roll it happened on, next to the rule that made it.
+ */
+function StrategyLog({ seats }: { seats: SeatId[] }) {
+  const table = useGame((s) => s.table);
+  const seatStrategy = useGame((s) => s.seatStrategy);
+  const strategyMemory = useGame((s) => s.strategyMemory);
+  const customStrategies = useGame((s) => s.customStrategies);
+  const library = allStrategies(customStrategies);
+
+  const live = seats.filter((seat) => seatStrategy[seat].strategyId);
+  if (live.length === 0) return null;
+
+  const rows = live
+    .flatMap((seat) =>
+      (strategyMemory[seat]?.log ?? []).map((entry, i) => ({ seat, entry, i })),
+    )
+    // Newest roll at the top, but the calls within one roll keep the order
+    // they were made in so a multi-action rule still reads downwards.
+    .sort((a, b) => b.entry.roll - a.entry.roll || a.i - b.i)
+    .slice(0, 16);
+
+  const names = live
+    .map((seat) => {
+      const strategy = library.find((x) => x.id === seatStrategy[seat].strategyId);
+      const stopped = strategyMemory[seat]?.stopped;
+      return `${table.seats[seat].name}: ${strategy?.name ?? '—'}${stopped ? ' (stopped)' : ''}`;
+    })
+    .join(' · ');
+
+  return (
+    <Panel title="Strategy log" bodyClassName="p-2">
+      <p className="mb-2 px-1 text-[10px] leading-relaxed text-pit-400">{names}</p>
+      {rows.length === 0 ? (
+        <p className="px-1 pb-1 text-[11px] text-pit-400">
+          Nothing called yet. The strategy acts when the dice do.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {rows.map(({ seat, entry, i }) => (
+            <li
+              key={`${seat}-${entry.roll}-${i}`}
+              className="flex items-baseline gap-2 rounded px-1 py-0.5 odd:bg-white/[0.02]"
+            >
+              <span
+                className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: seat === 'A' ? 'var(--color-seat-a)' : 'var(--color-seat-b)' }}
+                aria-label={table.seats[seat].name}
+              />
+              <span className="tabular shrink-0 text-[10px] text-pit-400">{entry.roll}</span>
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    'block truncate text-[11px] leading-tight',
+                    entry.ok ? 'text-pit-100' : 'text-lose',
+                  )}
+                >
+                  {entry.text}
+                </span>
+                <span className="block truncate text-[10px] leading-tight text-pit-400">
+                  {entry.rule}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  * The panel
  * ------------------------------------------------------------------ */
 
@@ -80,6 +159,8 @@ export function Hud() {
       <Panel title="Roll history" bodyClassName="p-2">
         <RollHistory history={table.history} />
       </Panel>
+
+      <StrategyLog seats={seatIds} />
 
       <Panel title="Dice distribution">
         <DistributionChart stats={table.stats} />

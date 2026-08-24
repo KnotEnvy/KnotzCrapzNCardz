@@ -5,6 +5,7 @@ import * as React from 'react';
 import { ActionBar, ChipRack, RollButton, SeatBar } from '@/components/Controls';
 import { HopDialog, NewSessionDialog, SettingsDialog } from '@/components/Dialogs';
 import { StartScreen } from '@/components/Setup';
+import { StrategyWorkshop } from '@/components/strategy/Workshop';
 import { DiceStage } from '@/components/dice/DiceStage';
 import { Hud } from '@/components/hud/Hud';
 import { Felt } from '@/components/table/Felt';
@@ -18,6 +19,18 @@ export default function Page() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [newOpen, setNewOpen] = React.useState(false);
   const [newSessionKey, setNewSessionKey] = React.useState(0);
+  const [strategyOpen, setStrategyOpen] = React.useState(false);
+  /** Which system the workshop should land on — a seat badge names its own. */
+  const [strategyFocus, setStrategyFocus] = React.useState<string | null>(null);
+  const [strategyKey, setStrategyKey] = React.useState(0);
+
+  const openStrategy = React.useCallback((id: string | null = null) => {
+    setStrategyFocus(id);
+    // Bumping the key remounts the workshop, which is how it lands on the
+    // strategy the caller named without an effect syncing it afterwards.
+    setStrategyKey((k) => k + 1);
+    setStrategyOpen(true);
+  }, []);
 
   // The saved session only exists on the client, so the first paint waits for
   // the store to rehydrate rather than flashing a default table and correcting
@@ -37,6 +50,7 @@ export default function Page() {
   const setChip = useGame((s) => s.setChip);
   const setActiveSeat = useGame((s) => s.setActiveSeat);
   const maxOdds = useGame((s) => s.maxOdds);
+  const runSeatStrategy = useGame((s) => s.runSeatStrategy);
   const rolling = useGame((s) => s.rolling);
   // Kept in the store rather than local state so the choice survives a reload.
   const hudOpen = useGame((s) => s.showHud);
@@ -72,10 +86,12 @@ export default function Page() {
       else if (e.key.toLowerCase() === 'b' && !solo) setActiveSeat('B');
       else if (e.key.toLowerCase() === 'o') maxOdds();
       else if (e.key.toLowerCase() === 'h') toggleHud();
+      // The call a player on a strategy makes most: put my system on the felt.
+      else if (e.key.toLowerCase() === 's') runSeatStrategy();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [throwDice, setChip, setActiveSeat, maxOdds, toggleHud, solo]);
+  }, [throwDice, setChip, setActiveSeat, maxOdds, toggleHud, runSeatStrategy, solo]);
 
   if (!hydrated) {
     return (
@@ -92,6 +108,7 @@ export default function Page() {
     <div className="flex h-full flex-col">
       <TopBar
         onSettings={() => setSettingsOpen(true)}
+        onStrategies={() => openStrategy(null)}
         onNew={() => {
           setNewSessionKey((k) => k + 1);
           setNewOpen(true);
@@ -107,7 +124,7 @@ export default function Page() {
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
-          <SeatBar />
+          <SeatBar onOpenStrategy={openStrategy} />
 
           <div className="relative min-h-0 flex-1">
             <div className="absolute inset-0">
@@ -129,7 +146,7 @@ export default function Page() {
             <ChipRack />
             <RollButton />
           </div>
-          <ActionBar onOpenHop={() => setHopOpen(true)} />
+          <ActionBar onOpenHop={() => setHopOpen(true)} onOpenStrategy={() => openStrategy(null)} />
         </div>
 
         {/* Wide: a column beside the felt. Narrower: a drawer over it, so the
@@ -152,6 +169,12 @@ export default function Page() {
       </main>
 
       <HopDialog open={hopOpen} onClose={() => setHopOpen(false)} />
+      <StrategyWorkshop
+        key={strategyKey}
+        open={strategyOpen}
+        initialId={strategyFocus}
+        onClose={() => setStrategyOpen(false)}
+      />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       {/* Keyed on each opening so its fields start from the current table
           without an effect having to reset them. */}
@@ -166,11 +189,13 @@ export default function Page() {
 
 function TopBar({
   onSettings,
+  onStrategies,
   onNew,
   hudOpen,
   onToggleHud,
 }: {
   onSettings: () => void;
+  onStrategies: () => void;
   onNew: () => void;
   hudOpen: boolean;
   onToggleHud: () => void;
@@ -207,6 +232,9 @@ function TopBar({
       <div className="ml-auto flex items-center gap-2">
         <Button size="sm" variant="ghost" onClick={onToggleHud}>
           {hudOpen ? 'Hide stats' : 'Show stats'}
+        </Button>
+        <Button size="sm" onClick={onStrategies} title="Assign a system to a seat, or build your own">
+          Strategies
         </Button>
         <Button size="sm" onClick={onSettings}>
           House rules

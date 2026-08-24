@@ -1,7 +1,8 @@
 # Knotz Craps
 
-A full craps table for one or two players at one screen, with real dice physics
-and true casino odds.
+A full craps table for one or two players at one screen, with real dice physics,
+true casino odds, and a strategy workshop for building systems and playing
+against them.
 
 ```bash
 npm install
@@ -10,11 +11,11 @@ npm run dev        # http://localhost:3000
 
 ## Setting up
 
-The first thing you see is the setup screen: solo or two players, names,
-buy-in, re-buy, table minimum and maximum, the odds multiple, and the house
-rules. Whatever you choose is what the table opens with — there is no second
-trip through **House rules** to make it stick. **New session** later opens the
-same form.
+The first thing you see is the setup screen: solo or two players, names, what
+each seat is playing, buy-in, re-buy, table minimum and maximum, the odds
+multiple, and the house rules. Whatever you choose is what the table opens with
+— there is no second trip through **House rules** to make it stick. **New
+session** later opens the same form.
 
 ## Playing
 
@@ -30,6 +31,7 @@ exactly as they would in a casino.
 | `A` / `B` | Arm seat A or seat B |
 | `O` | Take or lay full odds behind every line bet |
 | `H` | Show or hide the stats panel |
+| `S` | Run the armed seat's strategy once |
 
 Click a betting area to put the armed chip on it. Click a chip already on the
 felt to add odds behind it; right-click a chip to take it down. The **Place /
@@ -86,6 +88,73 @@ unit; power press doubles it. Neither one reaches across the rest of the layout.
 
 Also there: max odds, same action, all on, all off, and take down.
 
+## Strategies
+
+**Strategies** in the top bar opens the workshop. Seventeen systems ship with
+the game, from the pass line with full odds through the Iron Cross and the
+dark-side Molly to the Fire Bet chaser, and every one of them is written in the
+same rule language the builder gives you — nothing is hard-coded behind the
+scenes. Duplicate one and every rule is there to be pulled apart, which is the
+quickest way to learn the builder.
+
+### Putting a system on a seat
+
+Each strategy names the seats it can go on, in three states:
+
+- **By hand** — no system; you place every bet yourself.
+- **On call** — assigned, but it only bets when you press **Run** (or `S`).
+- **Auto** — it places, presses and takes down its own bets after every roll.
+
+Give seat B a system and you are playing against it. Give seat A one too and you
+can sit two systems down against the same dice and watch the equity curves
+separate. Because the dice run from a named seed, you can put the same seed up
+twice and compare two strategies against identical rolls.
+
+The **Strategy log** panel in the stats column records every call a system
+makes, against the roll it made it on and the rule that made it — including the
+ones the table refused, so a bot that quietly stops betting is never a mystery.
+
+### Building your own
+
+A rule is one sentence: **when** a moment arrives, **if** everything you name
+about the table holds, **then** do these things.
+
+- **When** — the come-out, the point being on, a new shooter, every roll, or the
+  moment something happened: the point set or made, a seven out, a box number
+  hitting, a craps, a natural.
+- **If** — what you already have on a spot and how much of it, how many come
+  bets are travelling, what the point is, which number just hit and how many
+  times it has hit this hand, your rack, what you have at risk, how you are
+  doing this hand or this session, how long the shooter has been rolling.
+- **Then** — bet, take or lay odds, press, regress, take down, turn numbers on
+  or off, or stop for the day.
+
+Rules run top to bottom every time there is a chance to bet, and each one can be
+limited to firing once per roll, per point, per shooter, or per session.
+
+Two ideas do most of the work:
+
+- **Amounts are in units.** A strategy carries a base unit and its rules bet in
+  multiples of it, so the same system plays a $5 table and a $25 one. The
+  engine's own increment rules do the rest — one $5 unit on the six goes up as
+  six dollars, which is exactly how "one unit inside" arrives at **$22 inside**
+  and two units at **$44 inside**, without either figure being written down
+  anywhere.
+- **The point** and **the number that just hit** are things a rule can name.
+  "Press the number that hit by one unit" is an entire place-and-press system in
+  one line, rather than six near-identical rules.
+
+A bet names a *level*, not a helping: a rule that says "twenty-two inside" and
+finds twenty-two inside already sitting there does nothing. That is what you
+mean when you say it — the bets survive a point being made, and calling for them
+again on the next come-out is a re-statement. Tick **on top** when you really do
+want to add to what is there.
+
+Set a **win goal** or a **loss limit** and the system colours up and stops on its
+own. The builder flags rules that cannot do what they look like they do — a pass
+line bet with the point on, a Fire Bet after the shooter has come out — and
+strategies export and import as JSON, so you can pass one to someone else.
+
 ## House rules
 
 Under **House rules** you can set the table minimum and maximum, the odds
@@ -128,20 +197,31 @@ src/lib/engine/     the game, as pure functions over plain data
   table.ts          creating a table and the legal moves between rolls
   stats.ts          the figures behind the HUD
 src/lib/dice/       deterministic physics (see above)
-src/lib/store/      zustand: table + dice animation + preferences
+src/lib/strategy/   the strategy language, also pure
+  types.ts          triggers, conditions, actions — a strategy is plain JSON
+  run.ts            runStrategy: a table in, a table and a log of calls out
+  library.ts        the seventeen house systems, in that same language
+  describe.ts       a rule rendered back into the sentence you would have said
+src/lib/store/      zustand: table + dice animation + strategies + preferences
 src/components/     felt, chips, dice stage, HUD, controls
   Setup.tsx         the start screen and the new-session form, one component
   table/Fx.tsx      what the felt does when a roll resolves
+  strategy/         the workshop and the rule builder
 ```
 
 The engine has no React in it and no I/O. `applyRoll(table, roll)` returns a new
 table, the settlements to animate, and a ledger record, which is what makes the
 whole game replayable from a seed and testable without a browser.
 
+`runStrategy` is the same shape one level up, and it moves money only by calling
+the very legal-move functions the felt calls — so a bot cannot make a bet you
+could not have made by hand, and a strategy can be played over ten thousand
+seeded rolls in a test with no browser anywhere in sight.
+
 ## Tests
 
 ```bash
-npm test           # 112 tests, about four seconds
+npm test           # 189 tests, about ten seconds
 npm run test:stats # long-running house-edge simulations
 npm run typecheck
 npm run lint
@@ -153,6 +233,12 @@ commission handling, the side bets, shooter rotation, solo play, chip
 denomination conversion, the table minimum, the grouped place calls, and an
 invariant that a bankroll never moves except by the settlements the engine
 reports.
+
+It also plays every one of the seventeen house strategies over a seeded
+four-hundred-roll session and checks each one never overdraws a rack and never
+invents a dollar: whatever a strategy does between rolls has to leave a seat
+worth exactly what the settlements left it worth, because all it may do is move
+chips between the rack and the felt.
 
 `npm run test:stats` is the real proof: it plays hundreds of thousands of
 decisions and checks the measured house edge lands where the mathematics says it

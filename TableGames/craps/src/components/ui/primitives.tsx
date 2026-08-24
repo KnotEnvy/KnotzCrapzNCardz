@@ -97,7 +97,7 @@ export function Segmented<T extends string>({
   className,
 }: {
   value: T;
-  options: Array<{ value: T; label: string; title?: string }>;
+  options: ReadonlyArray<{ value: T; label: string; title?: string }>;
   onChange: (v: T) => void;
   className?: string;
 }) {
@@ -120,6 +120,91 @@ export function Segmented<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Select
+ *
+ * A real <select>. The strategy builder is a dense grid of them, and a
+ * hand-rolled listbox would cost keyboard support, type-ahead and the native
+ * picker on every platform to buy nothing the felt needs.
+ * ------------------------------------------------------------------ */
+
+export function Select<T extends string>({
+  value,
+  options,
+  onChange,
+  className,
+  title,
+  ariaLabel,
+}: {
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (v: T) => void;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <select
+      value={value}
+      title={title}
+      aria-label={ariaLabel}
+      onChange={(e) => onChange(e.target.value as T)}
+      className={cn(
+        'h-7 min-w-0 rounded border border-white/10 bg-pit-850 px-1.5 text-[11px] text-pit-100',
+        'hover:border-white/20 focus:border-brass-500/60',
+        className,
+      )}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value} className="bg-pit-850">
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** A compact number box sized to sit in a row of selects. */
+export function NumberBox({
+  value,
+  onChange,
+  min = 0,
+  step = 1,
+  className,
+  title,
+  ariaLabel,
+  prefix,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  step?: number;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+  prefix?: string;
+}) {
+  return (
+    <span className="inline-flex items-center">
+      {prefix ? <span className="mr-0.5 text-[11px] text-pit-400">{prefix}</span> : null}
+      <input
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        title={title}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
+        className={cn(
+          'tabular h-7 w-16 rounded border border-white/10 bg-pit-850 px-1.5 text-[11px] text-pit-100',
+          'hover:border-white/20 focus:border-brass-500/60',
+          className,
+        )}
+      />
+    </span>
   );
 }
 

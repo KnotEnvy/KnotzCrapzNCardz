@@ -21,18 +21,24 @@ import type { DieFace, OddsScheme, PropKind } from '@/lib/engine/types';
  * Shell
  * ------------------------------------------------------------------ */
 
-function Modal({
+export function Modal({
   open,
   onClose,
   title,
   children,
   width = 'max-w-lg',
+  bodyClassName = 'max-h-[70vh] overflow-y-auto thin-scroll p-4',
+  action,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   width?: string;
+  /** The workshop wants a taller body that scrolls its own two columns. */
+  bodyClassName?: string;
+  /** Extra controls beside the close button in the header. */
+  action?: React.ReactNode;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -42,7 +48,7 @@ function Modal({
       if (e.key === 'Escape') onClose();
       if (e.key !== 'Tab' || !ref.current) return;
       const focusable = ref.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input, select, [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -84,11 +90,14 @@ function Modal({
             <Panel
               title={title}
               action={
-                <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close">
-                  Esc
-                </Button>
+                <span className="flex items-center gap-2">
+                  {action}
+                  <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close">
+                    Esc
+                  </Button>
+                </span>
               }
-              bodyClassName="max-h-[70vh] overflow-y-auto thin-scroll p-4"
+              bodyClassName={bodyClassName}
             >
               {children}
             </Panel>
@@ -376,9 +385,12 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
 export function NewSessionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const table = useGame((s) => s.table);
   const newSession = useGame((s) => s.newSession);
+  const seatStrategy = useGame((s) => s.seatStrategy);
   // The parent remounts this dialog every time it is opened, so plain initial
   // state is already the current table and needs no resetting effect.
-  const [cfg, setCfg] = React.useState<SetupConfig>(() => configFromTable(table));
+  const [cfg, setCfg] = React.useState<SetupConfig>(() =>
+    configFromTable(table, { A: seatStrategy.A.strategyId, B: seatStrategy.B.strategyId }),
+  );
 
   return (
     <Modal open={open} onClose={onClose} title="New session" width="max-w-xl">

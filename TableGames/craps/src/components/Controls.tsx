@@ -11,7 +11,7 @@ import { DENOMS, RackChip } from './table/Chip';
 import { Button, Segmented, cn, money } from './ui/primitives';
 import { chipDrop, uiClick } from '@/lib/audio';
 import { atRisk } from '@/lib/engine/table';
-import { useGame, type NumberMode } from '@/lib/store/useGame';
+import { allStrategies, useGame, type NumberMode } from '@/lib/store/useGame';
 import type { SeatId } from '@/lib/engine/types';
 
 const SEAT_ACCENT: Record<SeatId, string> = {
@@ -23,7 +23,7 @@ const SEAT_ACCENT: Record<SeatId, string> = {
  * Seats
  * ------------------------------------------------------------------ */
 
-export function SeatBar() {
+export function SeatBar({ onOpenStrategy }: { onOpenStrategy: (id: string | null) => void }) {
   const table = useGame((s) => s.table);
   const setActiveSeat = useGame((s) => s.setActiveSeat);
   const addChips = useGame((s) => s.addChips);
@@ -77,6 +77,7 @@ export function SeatBar() {
                   {money(net, { sign: true })}
                 </span>
               </span>
+              <SeatStrategyTag seat={id} onOpen={onOpenStrategy} />
             </span>
             {seat.bankroll < 5 ? (
               <span
@@ -101,6 +102,79 @@ export function SeatBar() {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The strategy line on a seat card.
+ *
+ * This is the one place a player watching a bot can see what it is doing
+ * without opening anything: the system's name, whether it is playing itself,
+ * and the last call it made. Every seat shows the invitation even when it has
+ * no strategy, which is what keeps the feature part of the table rather than
+ * something filed away behind a menu.
+ *
+ * It sits inside the seat's own button, so it is a role="button" span rather
+ * than a nested <button> — the same trick the BUY IN chip uses.
+ */
+function SeatStrategyTag({
+  seat,
+  onOpen,
+}: {
+  seat: SeatId;
+  onOpen: (id: string | null) => void;
+}) {
+  const assigned = useGame((s) => s.seatStrategy[seat]);
+  const memory = useGame((s) => s.strategyMemory[seat]);
+  const customStrategies = useGame((s) => s.customStrategies);
+  const strategy = allStrategies(customStrategies).find((x) => x.id === assigned.strategyId);
+  const last = memory?.log.at(-1);
+
+  const open = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    onOpen(strategy?.id ?? null);
+  };
+
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') open(e);
+      }}
+      title={strategy ? `${strategy.name} — open the workshop` : 'Put a strategy on this seat'}
+      className="mt-1 block rounded px-1 py-0.5 -mx-1 hover:bg-white/5"
+    >
+      {strategy ? (
+        <>
+          <span className="flex items-center gap-1">
+            <span className="truncate text-[10px] font-semibold tracking-wide text-brass-300 uppercase">
+              {strategy.name}
+            </span>
+            {assigned.auto ? (
+              <span className="shrink-0 rounded-sm bg-emerald-500/20 px-1 py-px text-[8px] font-bold tracking-widest text-emerald-300">
+                AUTO
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-sm bg-white/10 px-1 py-px text-[8px] font-bold tracking-widest text-pit-300">
+                ON CALL
+              </span>
+            )}
+          </span>
+          <span
+            className={cn(
+              'block truncate text-[10px] leading-tight',
+              memory?.stopped ? 'text-amber-300/80' : last?.ok === false ? 'text-lose/80' : 'text-pit-400',
+            )}
+          >
+            {memory?.stopped ? `Stopped — ${memory.stopReason}` : (last?.text ?? 'Waiting for a spot')}
+          </span>
+        </>
+      ) : (
+        <span className="text-[10px] text-pit-400 hover:text-brass-300">+ Strategy</span>
+      )}
+    </span>
   );
 }
 
@@ -153,8 +227,17 @@ export function ChipRack() {
 
 const BOX_NUMBERS = [4, 5, 6, 8, 9, 10];
 
-export function ActionBar({ onOpenHop }: { onOpenHop: () => void }) {
+export function ActionBar({
+  onOpenHop,
+  onOpenStrategy,
+}: {
+  onOpenHop: () => void;
+  onOpenStrategy: () => void;
+}) {
   const table = useGame((s) => s.table);
+  const seatStrategy = useGame((s) => s.seatStrategy);
+  const customStrategies = useGame((s) => s.customStrategies);
+  const runSeatStrategy = useGame((s) => s.runSeatStrategy);
   const numberMode = useGame((s) => s.numberMode);
   const setNumberMode = useGame((s) => s.setNumberMode);
   const maxOdds = useGame((s) => s.maxOdds);
@@ -180,6 +263,11 @@ export function ActionBar({ onOpenHop }: { onOpenHop: () => void }) {
   const pressable =
     hit !== null &&
     mine.some((b) => b.number === hit && (b.kind === 'PLACE' || b.kind === 'BUY'));
+  // Which system, if any, the seat being driven is carrying.
+  const armed = allStrategies(customStrategies).find(
+    (x) => x.id === seatStrategy[table.activeSeat].strategyId,
+  );
+
   const pressHint =
     hit === null
       ? 'Press works on the number that just hit'
@@ -258,6 +346,26 @@ export function ActionBar({ onOpenHop }: { onOpenHop: () => void }) {
       </Button>
       <Button size="sm" onClick={onOpenHop} disabled={rolling} title="Hop and horn high bets">
         Hop / Horn…
+      </Button>
+
+      <span className="h-6 w-px bg-white/10" aria-hidden />
+
+      {/* The armed strategy sits beside the dealer calls, because that is what
+          it is: one more call, made for you. */}
+      <Button
+        size="sm"
+        onClick={() => runSeatStrategy()}
+        disabled={rolling || !armed}
+        title={
+          armed
+            ? `Put ${armed.name} on the felt now  (S)`
+            : 'No strategy on this seat — open the workshop to pick one'
+        }
+      >
+        {armed ? `Run ${armed.name}` : 'Run Strategy'}
+      </Button>
+      <Button size="sm" onClick={onOpenStrategy} title="Assign a system, or build your own">
+        Strategies…
       </Button>
       <Button size="sm" variant="danger" onClick={clearAll} disabled={rolling || mine.length === 0}>
         Take Down
