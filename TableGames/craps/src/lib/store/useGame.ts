@@ -118,6 +118,13 @@ function clearSettleFallback() {
 const SETTLEMENT_HOLD_MS = 2600;
 const SEVEN_OUT_HOLD_MS = 1800;
 
+/**
+ * One shared empty list. `settlements` is selected straight out of the store by
+ * the felt, so handing it a brand-new `[]` every time the figures are cleared
+ * would re-render the whole table for a value that has not changed.
+ */
+const NO_SETTLEMENTS: Settlement[] = Object.freeze([]) as unknown as Settlement[];
+
 let settlementHold: ReturnType<typeof setTimeout> | null = null;
 
 function clearSettlementHold() {
@@ -131,6 +138,9 @@ function clearSettlementHold() {
  * Strategies
  * ------------------------------------------------------------------ */
 
+let libraryCacheKey: Strategy[] | null = null;
+let libraryCacheValue: Strategy[] = [];
+
 /**
  * The house systems are code and the player's are data, so the library is the
  * two concatenated rather than one persisted list. Keeping the built-ins out
@@ -138,6 +148,18 @@ function clearSettlementHold() {
  * being shadowed by the copy their browser saved months ago.
  */
 export function allStrategies(customs: Strategy[]): Strategy[] {
+  // Four components call this during render and the seat runner used to call
+  // it twice a roll. Handing back the same array for the same customs keeps
+  // `useMemo` deps and list identities stable instead of minting a fresh
+  // seventeen-plus-entry array every time anything on the table changes.
+  if (customs === libraryCacheKey) return libraryCacheValue;
+  const built = buildLibrary(customs);
+  libraryCacheKey = customs;
+  libraryCacheValue = built;
+  return built;
+}
+
+function buildLibrary(customs: Strategy[]): Strategy[] {
   /*
    * A custom strategy can never shadow a house one.
    *
@@ -160,7 +182,13 @@ export function allStrategies(customs: Strategy[]): Strategy[] {
 
 export function findStrategy(customs: Strategy[], id: string | null): Strategy | null {
   if (!id) return null;
-  return allStrategies(customs).find((s) => s.id === id) ?? null;
+  // The house systems come first in the library, so `find` over the two lists
+  // in that order is the same answer allStrategies would give — and a custom
+  // carrying a house id is unreachable either way. This runs once per auto
+  // seat per roll, which is not the place to rebuild the whole library.
+  for (const s of HOUSE_STRATEGIES) if (s.id === id) return s;
+  for (const s of customs) if (s.id === id) return s;
+  return null;
 }
 
 /** Chips in the rack plus chips on the felt. */
@@ -182,7 +210,7 @@ function holdSettlements(
   settlementHold = setTimeout(
     () => {
       settlementHold = null;
-      set(() => ({ settlements: [] }));
+      set(() => ({ settlements: NO_SETTLEMENTS }));
     },
     sevenOut ? SEVEN_OUT_HOLD_MS : SETTLEMENT_HOLD_MS,
   );
@@ -314,7 +342,11 @@ export const useGame = create<GameState>()(
       ): { table: TableState; memory: Record<SeatId, StrategyMemory>; entries: StrategyLogEntry[] } => {
         const s = get();
         let working = table;
-        const memory = { ...s.strategyMemory };
+        // Copied only if a seat's memory actually changes. Most rolls of a
+        // hand-played table change neither, and the HUD selects this record
+        // whole — a fresh object every roll is a re-render for nothing.
+        let memory = s.strategyMemory;
+        let memoryCopied = false;
         const entries: StrategyLogEntry[] = [];
         const seats: SeatId[] = opts.only ? [opts.only] : ['A', 'B'];
 
@@ -337,8 +369,14 @@ export const useGame = create<GameState>()(
             force: opts.force,
           });
           working = res.table;
-          memory[seat] = res.memory;
-          entries.push(...res.entries);
+          if (res.memory !== memory[seat]) {
+            if (!memoryCopied) {
+              memory = { ...memory };
+              memoryCopied = true;
+            }
+            memory[seat] = res.memory;
+          }
+          for (const entry of res.entries) entries.push(entry);
         }
 
         return { table: working, memory, entries };
@@ -828,14 +866,16 @@ function recordAction(
   after: TableState,
   settlements: Settlement[],
 ) {
-  const survivors = new Set(after.bets.map((b) => b.id));
-  const resolved: Record<SeatId, Array<{ spec: BetSpec; amount: number }>> = { A: [], B: [] };
+  const survivors = new Set<string>();
+  for (const bet of after.bets) survivors.add(bet.id);
+  // Contract bets that simply won are worth repeating; the line handles itself.
+  const settled = new Set<string>();
+  for (const s of settlements) settled.add(s.betId);
 
+  const resolved: Record<SeatId, Array<{ spec: BetSpec; amount: number }>> = { A: [], B: [] };
   for (const bet of before.bets) {
     if (survivors.has(bet.id)) continue;
-    // Contract bets that simply won are worth repeating; the line handles itself.
-    const wasSettled = settlements.some((s) => s.betId === bet.id);
-    if (!wasSettled) continue;
+    if (!settled.has(bet.id)) continue;
     resolved[bet.seat].push({ spec: betSpec(bet), amount: bet.amount });
   }
 

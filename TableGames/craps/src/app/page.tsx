@@ -10,9 +10,63 @@ import { DiceStage } from '@/components/dice/DiceStage';
 import { Hud } from '@/components/hud/Hud';
 import { Felt } from '@/components/table/Felt';
 import { Button, cn } from '@/components/ui/primitives';
-import { payout, puckOn, refuse, setSoundEnabled, sevenOut } from '@/lib/audio';
+import {
+  chipDrop,
+  chipSlide,
+  comeTravel,
+  natural,
+  payout,
+  pointMade,
+  puckOff,
+  puckOn,
+  rake,
+  refuse,
+  setSoundEnabled,
+  sevenOut,
+} from '@/lib/audio';
+import { atRisk } from '@/lib/engine/table';
 import { DENOMS } from '@/components/table/Chip';
 import { useGame } from '@/lib/store/useGame';
+
+/*
+ * The beats of a roll, in seconds after it settles.
+ *
+ * Read against Fx.tsx: the loss flights are the shortest thing on the felt and
+ * the rake has to be over before they are, the win flash runs longest and the
+ * payout sits inside it, and the puck lands late enough that it is heard as a
+ * separate event rather than as part of the sting.
+ */
+const RAKE_AT = 0.09;
+const PAYOUT_AT = 0.17;
+const TRAVEL_AT = 0.3;
+const PUCK_OFF_AT = 0.55;
+/** A bot's chips go down after the roll's own sounds have had the floor. */
+const BOT_AT = 0.45;
+
+/**
+ * How tall a drop of chips sounds.
+ *
+ * A dollar figure is not a chip count, but the felt draws a stack the same way:
+ * more money, more chips. Doubling the money adds one chip to the sound, which
+ * keeps a $5 place bet and a $200 one audibly different without letting the
+ * second turn into a landslide.
+ */
+function stackFor(amount: number, unit: number): number {
+  const units = Math.max(1, amount / Math.max(1, unit));
+  return Math.max(1, Math.min(5, Math.round(1 + Math.log2(units))));
+}
+
+/**
+ * How many calls a strategy actually landed on a given roll.
+ *
+ * Only successful entries count. A rule refused for want of chips has not moved
+ * anything and should not sound like it has — the toast already says so.
+ */
+function countCalls(log: ReadonlyArray<{ roll: number; ok: boolean }>, roll: number): number {
+  let n = 0;
+  for (const entry of log) if (entry.roll === roll && entry.ok) n += 1;
+  return n;
+}
 
 export default function Page() {
   const [hopOpen, setHopOpen] = React.useState(false);
@@ -46,6 +100,10 @@ export default function Page() {
   const table = useGame((s) => s.table);
   const solo = table.solo;
   const soundOn = useGame((s) => s.soundOn);
+  // The roll score and the chip cues both need what the last roll actually did
+  // with the money, and settlements carry their own location and amount.
+  const settlements = useGame((s) => s.settlements);
+  const strategyMemory = useGame((s) => s.strategyMemory);
   const throwDice = useGame((s) => s.throwDice);
   const setChip = useGame((s) => s.setChip);
   const setActiveSeat = useGame((s) => s.setActiveSeat);
@@ -59,16 +117,107 @@ export default function Page() {
   React.useEffect(() => void initPhysics(), [initPhysics]);
   React.useEffect(() => setSoundEnabled(soundOn), [soundOn]);
 
-  /* Table talk, tied to the roll rather than to any render. */
-  const lastAnnounced = React.useRef(-1);
+  /*
+   * The score for a roll.
+   *
+   * A settled roll is not one sound, it is four beats in the order a real table
+   * plays them: the call, the stick clearing the losers, the dealers paying the
+   * winners, and the puck coming off. The offsets below are picked against the
+   * effect layers in Fx rather than by feel — the rake sits under the loss
+   * flights, the payout under the win flash, and the puck lands after both.
+   *
+   * This is the only place in the app that decides what a roll sounds like.
+   * Fx.tsx is read-only decoration by design and stays that way; it is handed a
+   * settlement list and draws it, and this is handed the same list and plays it.
+   */
+  const lastAnnounced = React.useRef<number | null>(null);
   React.useEffect(() => {
     const rec = table.history[table.history.length - 1];
-    if (!rec || rec.index === lastAnnounced.current) return;
-    lastAnnounced.current = rec.index;
+    const index = rec?.index ?? -1;
+
+    /*
+     * A restored session arrives with its last roll already in history. Taking
+     * the index present at mount as already-announced is the audio half of
+     * Felt's `openingRoll`: without it, reopening the tab replays yesterday's
+     * seven out into an empty room.
+     */
+    if (lastAnnounced.current === null) {
+      lastAnnounced.current = index;
+      return;
+    }
+    if (!rec || index === lastAnnounced.current) return;
+    lastAnnounced.current = index;
+
+    let wins = 0;
+    let losses = 0;
+    let travelled = false;
+    for (const s of settlements) {
+      if (s.type === 'WIN' && s.credit > 0) wins += 1;
+      else if (s.type === 'LOSE' && s.debit > 0) losses += 1;
+      else if (s.type === 'MOVE') travelled = true;
+    }
+
     if (rec.outcome === 'SEVEN_OUT') sevenOut();
+    else if (rec.outcome === 'POINT_MADE') pointMade();
+    else if (rec.outcome === 'NATURAL') natural();
     else if (rec.outcome === 'POINT_ESTABLISHED') puckOn();
-    else if (rec.net.A + rec.net.B > 0) payout();
-  }, [table.history]);
+
+    if (losses > 0) rake(losses, RAKE_AT);
+    if (wins > 0) payout(wins, PAYOUT_AT);
+    if (travelled) comeTravel(TRAVEL_AT);
+    // The point coming down: made, or sevened off. Both end with the puck
+    // flipped over, and neither is the same event as the sting that preceded it.
+    if (rec.pointBefore !== null && rec.pointAfter === null) puckOff(PUCK_OFF_AT);
+  }, [table.history, settlements]);
+
+  /*
+   * Chips hitting the felt, and chips coming back off it.
+   *
+   * Bets are placed from four different places — a click on the layout, the
+   * grouped dealer calls, the hop dialog and a strategy — and only one of those
+   * is in this file. Rather than sprinkling a call site into each, this watches
+   * the one thing they all move: how much money the seats have at risk. A rise
+   * between rolls is chips going down whoever put them there, and a fall is
+   * chips coming back.
+   *
+   * The roll itself is excluded, because a roll moves money for reasons the
+   * score above has already spoken for. The one thing that leaves uncovered is
+   * a bot betting in the same commit as the roll it is reacting to, which is
+   * exactly what autoplay does, so that case is read off the strategy log and
+   * lands after the sting has cleared.
+   */
+  const chipsRef = React.useRef<{
+    rolls: number;
+    risk: number;
+    tailA: unknown;
+    tailB: unknown;
+  } | null>(null);
+  React.useEffect(() => {
+    const risk = atRisk(table, 'A') + atRisk(table, 'B');
+    const rolls = table.stats.rolls;
+    const tailA = strategyMemory.A.log.at(-1);
+    const tailB = strategyMemory.B.log.at(-1);
+
+    const prev = chipsRef.current;
+    chipsRef.current = { rolls, risk, tailA, tailB };
+    if (!prev) return;
+
+    const spoke = tailA !== prev.tailA || tailB !== prev.tailB;
+
+    if (rolls !== prev.rolls) {
+      if (!spoke) return;
+      const calls =
+        countCalls(strategyMemory.A.log, table.rollCount) +
+        countCalls(strategyMemory.B.log, table.rollCount);
+      // One rule that spoke is one chip. chipDrop caps the stack itself.
+      if (calls > 0) chipDrop(calls, BOT_AT);
+      return;
+    }
+
+    const delta = risk - prev.risk;
+    if (delta > 0) chipDrop(stackFor(delta, table.rules.minBet));
+    else if (delta < 0) chipSlide(stackFor(-delta, table.rules.minBet));
+  }, [table, strategyMemory]);
 
   /* Keyboard: the shortcuts a regular would want. */
   React.useEffect(() => {

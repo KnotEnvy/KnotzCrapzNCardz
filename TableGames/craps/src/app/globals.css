@@ -165,21 +165,35 @@ body {
   stroke-width: 2;
   transition:
     fill 110ms ease,
-    stroke 110ms ease;
+    stroke 110ms ease,
+    stroke-width 110ms ease;
 }
 
 .hit--right:hover {
-  fill: rgb(255 214 120 / 0.1);
-  stroke: rgb(255 214 120 / 0.55);
+  fill: rgb(255 214 120 / 0.12);
+  stroke: rgb(255 214 120 / 0.7);
+  stroke-width: 2.75;
 }
 
 .hit--dont:hover {
-  fill: rgb(214 235 255 / 0.09);
-  stroke: rgb(214 235 255 / 0.5);
+  fill: rgb(214 235 255 / 0.1);
+  stroke: rgb(214 235 255 / 0.62);
+  stroke-width: 2.75;
 }
 
+/*
+ * Pressing a spot.
+ *
+ * The keyline goes white and thick and the wash jumps, with no transition on
+ * the way in — a press has to land on the frame you clicked or it reads as lag,
+ * and it is the only confirmation you get on the felt itself before the chip
+ * arrives. Letting go eases back out through the rule above.
+ */
 .hit:active {
-  fill: rgb(255 255 255 / 0.17);
+  fill: rgb(255 255 255 / 0.22);
+  stroke: rgb(255 255 255 / 0.85);
+  stroke-width: 3.25;
+  transition-duration: 0ms;
 }
 
 .hit--blocked {

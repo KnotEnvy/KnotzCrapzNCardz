@@ -13,6 +13,7 @@ import * as React from 'react';
 import { SetupForm, configFromTable, toSessionOptions, type SetupConfig } from './Setup';
 import { PRINT_DIE_FACE, PRINT_DIE_PIP, PipPair } from './table/Pips';
 import { Button, Panel, Segmented, Toggle, cn, money } from './ui/primitives';
+import { setSoundEnabled, uiClick } from '@/lib/audio';
 import { hopOdds, formatRatio } from '@/lib/engine/odds';
 import { useGame } from '@/lib/store/useGame';
 import type { DieFace, OddsScheme, PropKind } from '@/lib/engine/types';
@@ -92,7 +93,15 @@ export function Modal({
               action={
                 <span className="flex items-center gap-2">
                   {action}
-                  <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      uiClick();
+                      onClose();
+                    }}
+                    aria-label="Close"
+                  >
                     Esc
                   </Button>
                 </span>
@@ -335,12 +344,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
             hint="What a real table does: it pays you and leaves the bet up"
           />
           <Toggle
-            checked={r.enforceIncrements}
-            onChange={(v) => updateRules({ enforceIncrements: v })}
-            label="Snap wagers to payable increments"
-            hint="Rounds the six and eight to multiples of six, and so on"
-          />
-          <Toggle
             checked={r.fireBetEnabled}
             onChange={(v) => updateRules({ fireBetEnabled: v })}
             label="Offer the Fire Bet"
@@ -354,7 +357,20 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
 
         <section>
           <h3 className="stat-label mb-1">Session</h3>
-          <Toggle checked={soundOn} onChange={() => toggleSound()} label="Sound" />
+          <Toggle
+            checked={soundOn}
+            onChange={(on) => {
+              toggleSound();
+              // page.tsx mirrors the flag into audio.ts from an effect, which
+              // has not run yet at this point — so switching sound back on
+              // would be silent, which reads exactly like it did not work.
+              if (on) {
+                setSoundEnabled(true);
+                uiClick();
+              }
+            }}
+            label="Sound"
+          />
           <div className="mt-2 flex items-end gap-2">
             <label className="min-w-0 flex-1">
               <span className="stat-label">Dice seed</span>
@@ -406,6 +422,7 @@ export function NewSessionDialog({ open, onClose }: { open: boolean; onClose: ()
         <Button
           variant="primary"
           onClick={() => {
+            uiClick();
             newSession(toSessionOptions(cfg));
             onClose();
           }}

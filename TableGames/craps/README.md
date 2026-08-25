@@ -58,8 +58,12 @@ would not take it that way either:
 - Both at once round to whatever is payable: a $5 chip on the six of a $15
   table lands on $18.
 
-Turn this off with **Snap wagers to payable increments** if you would rather
-the felt took your number literally.
+This is not optional, and there is no switch for it. A table only books a bet
+it can pay evenly, so every wager is taken at a payable multiple: sixes on the
+six and eight, fives on the other box numbers and on buy and lay, fours on the
+horn, twos on C & E. Rounding is always up, the way a dealer takes the extra
+dollar rather than handing change back. It is also what keeps every payout a
+whole number of dollars.
 
 `FAST` skips the dice animation, which is what you want when testing a betting
 strategy over a few hundred rolls rather than playing.
