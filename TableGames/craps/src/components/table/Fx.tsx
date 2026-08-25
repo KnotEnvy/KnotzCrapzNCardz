@@ -21,8 +21,15 @@
 import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { ChipStack } from './Chip';
-import { BANK, RAIL, VIEW, anchorFor, rectFor, seatOffset, type Rect } from './layout';
+import { BANK, RAIL, VIEW, anchorFor, cellFor, rectFor, seatOffset, type Rect } from './layout';
 import type { RollRecord, SeatId, Settlement } from '@/lib/engine/types';
+
+/*
+ * Each layer's root carries a `data-fx` hook. Nothing in the app reads it; it
+ * exists so that "the win flash fired" can be asserted from outside the React
+ * tree rather than inferred from a screenshot taken at the right millisecond.
+ * A blank effect layer is exactly the class of bug that a green build hides.
+ */
 
 /** Beyond this many chips in the air at once it reads as confetti, not money. */
 const MAX_FLIGHTS = 12;
@@ -52,6 +59,17 @@ export function FxDefs() {
       <radialGradient id="fxWinnerWash" cx="50%" cy="45%" r="70%">
         <stop offset="0%" stopColor="#fde68a" stopOpacity="0.34" />
         <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
+      </radialGradient>
+      {/* The hot core of a burst, at the box the hand was decided on. */}
+      <radialGradient id="fxBurstCore" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+        <stop offset="35%" stopColor="#ffe9a3" stopOpacity="0.6" />
+        <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="fxBurstCoreLose" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#ffe4e4" stopOpacity="0.85" />
+        <stop offset="35%" stopColor="#f87171" stopOpacity="0.5" />
+        <stop offset="100%" stopColor="#7f1d1d" stopOpacity="0" />
       </radialGradient>
     </>
   );
@@ -102,7 +120,7 @@ export function AreaFlashes({
   if (!flashes.length) return null;
 
   return (
-    <g pointerEvents="none">
+    <g pointerEvents="none" data-fx="flashes">
       {flashes.map((f) => {
         const ink = f.win ? WIN_INK : LOSE_INK;
         const r = f.rect;
@@ -165,6 +183,8 @@ interface Flight {
   key: string;
   from: { x: number; y: number };
   to: { x: number; y: number };
+  /** The top of the chip's arc, in view coordinates. */
+  apex: number;
   amount: number;
   win: boolean;
   ring?: string;
@@ -195,10 +215,18 @@ export function ChipFlights({
       if (amount <= 0) continue;
       const base = anchorFor(s.at);
       const nudge = seatOffset(s.seat);
+      const from = { x: base.x + nudge.x, y: base.y + nudge.y };
+      const to = win ? RAIL[s.seat] : BANK;
       out.push({
         key: `${s.betId}-${s.type}`,
-        from: { x: base.x + nudge.x, y: base.y + nudge.y },
-        to: win ? RAIL[s.seat] : BANK,
+        from,
+        to,
+        // A payoff is tossed and a loss is raked, and the two read completely
+        // differently: one arcs over the layout, the other slides flat across
+        // it. Same two endpoints, opposite gesture.
+        apex: win
+          ? Math.min(from.y, to.y) - 78
+          : (from.y + to.y) / 2 - 10,
         amount,
         win,
         ring: win ? SEAT_RING[s.seat] : undefined,
@@ -213,16 +241,17 @@ export function ChipFlights({
   if (reduced || !flights.length) return null;
 
   return (
-    <g pointerEvents="none">
+    <g pointerEvents="none" data-fx="flights">
       {flights.map((f, i) => (
         <motion.g
           key={`${rollId}-${f.key}`}
-          initial={{ x: f.from.x, y: f.from.y, opacity: 0, scale: 0.7 }}
+          initial={{ x: f.from.x, y: f.from.y, opacity: 0, scale: 0.7, rotate: 0 }}
           animate={{
             x: f.to.x,
-            y: f.to.y,
+            y: [f.from.y, f.apex, f.to.y],
             opacity: [0, 1, 1, 0],
             scale: f.win ? [0.7, 1.12, 1, 0.85] : [0.7, 1, 0.9, 0.6],
+            rotate: f.win ? (i % 2 ? 26 : -26) : 0,
           }}
           transition={{
             // Winners get a beat of hang time before they travel; losses are
@@ -231,9 +260,14 @@ export function ChipFlights({
             delay: i * 0.055,
             ease: f.win ? [0.2, 0.7, 0.3, 1] : [0.5, 0, 0.75, 0.4],
             opacity: { times: [0, 0.14, 0.7, 1] },
+            // The horizontal carries straight through while the vertical rises
+            // and falls: two eases on one element is what makes it a throw
+            // rather than a slide along a diagonal.
+            x: { ease: f.win ? 'easeInOut' : [0.5, 0, 0.75, 0.4] },
+            y: { times: [0, 0.44, 1], ease: f.win ? ['easeOut', 'easeIn'] : 'easeInOut' },
           }}
         >
-          <ChipStack x={0} y={0} amount={f.amount} r={13} ring={f.ring} />
+          <ChipStack x={0} y={0} amount={f.amount} r={15} ring={f.ring} />
         </motion.g>
       ))}
     </g>
@@ -266,6 +300,7 @@ export function OutcomeWash({ record, rollId }: { record: RollRecord | null; rol
       rx={18}
       fill={sevenOut ? 'url(#fxSevenOut)' : 'url(#fxWinnerWash)'}
       pointerEvents="none"
+      data-fx="wash"
       initial={{ opacity: 0 }}
       animate={{ opacity: sevenOut ? [0, 1, 0.85, 0] : [0, 0.9, 0] }}
       transition={{
@@ -274,5 +309,129 @@ export function OutcomeWash({ record, rollId }: { record: RollRecord | null; rol
         ease: 'easeOut',
       }}
     />
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * The moment the hand is decided
+ * ------------------------------------------------------------------ */
+
+/** How many sparks fly off a burst. Beyond about twenty it reads as glitter. */
+const SPARKS = 16;
+
+/**
+ * Spark geometry, derived from the index rather than drawn at random.
+ *
+ * Deterministic for the same reason the chip stacks are: this component is
+ * keyed on the roll and may re-render inside its own animation, and a random
+ * spread would jump to a new one every time something else on the table
+ * changed. The small per-index skew is what keeps sixteen evenly spaced spokes
+ * from reading as a mechanical star.
+ */
+function sparkAt(i: number) {
+  const angle = (Math.PI * 2 * i) / SPARKS + (i % 3) * 0.13;
+  return {
+    reach: 118 + ((i * 37) % 58),
+    deg: (angle * 180) / Math.PI,
+    delay: (i % 4) * 0.035,
+  };
+}
+
+/**
+ * A burst at the box that decided the hand: the point when it is made, and the
+ * middle of the layout on a seven out.
+ *
+ * This is the one effect that is allowed to be loud, because it fires at most
+ * once per hand and it marks the only two events in craps that end one. It
+ * drops out completely under reduced motion — the outcome wash and the
+ * settlement figures already carry the same information without it.
+ */
+export function OutcomeBurst({ record, rollId }: { record: RollRecord | null; rollId: number }) {
+  const reduced = useReducedMotion() ?? false;
+
+  const outcome = record?.outcome;
+  const made = outcome === 'POINT_MADE';
+  const sevenOut = outcome === 'SEVEN_OUT';
+  if (reduced || !record || (!made && !sevenOut)) return null;
+
+  // A made point bursts out of its own box; a seven out has no number of its
+  // own, so it goes off over the middle of the layout.
+  const box = made && record.pointBefore !== null ? cellFor(record.pointBefore) : null;
+  const at = box
+    ? { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+    : { x: VIEW.w * 0.36, y: VIEW.h * 0.45 };
+
+  const ink = made ? '#ffe9a3' : '#fca5a5';
+  const core = made ? 'url(#fxBurstCore)' : 'url(#fxBurstCoreLose)';
+
+  return (
+    <g pointerEvents="none" data-fx="burst" transform={`translate(${at.x} ${at.y})`}>
+      {/* The core going off. */}
+      <motion.circle
+        key={`${rollId}-core`}
+        r={70}
+        fill={core}
+        initial={{ scale: 0.2, opacity: 0 }}
+        animate={{ scale: [0.2, 1.5, 2.1], opacity: [0, 1, 0] }}
+        transition={{ duration: made ? 0.85 : 0.7, times: [0, 0.22, 1], ease: 'easeOut' }}
+      />
+
+      {/* Two rings, offset in time, so the shock has a leading and a trailing
+          edge instead of being one expanding circle. */}
+      {[0, 1].map((k) => (
+        <motion.circle
+          key={`${rollId}-ring-${k}`}
+          r={34}
+          fill="none"
+          stroke={ink}
+          strokeWidth={k ? 2 : 3.5}
+          initial={{ scale: 0.3, opacity: 0 }}
+          animate={{ scale: [0.3, 3.4 + k * 0.9], opacity: [0, 0.85, 0] }}
+          transition={{
+            duration: 0.9 + k * 0.22,
+            delay: k * 0.11,
+            times: [0, 0.18, 1],
+            ease: 'easeOut',
+          }}
+        />
+      ))}
+
+      {/*
+        Sparks.
+
+        The spoke's angle lives on a plain wrapper rather than on the animated
+        element: motion drives an SVG transform through `style`, and a CSS
+        transform beats the transform *attribute*, so a rotate written next to
+        an animated x is silently thrown away. Rotating the parent and
+        travelling along the child's own x avoids the collision entirely.
+      */}
+      {Array.from({ length: SPARKS }, (_, i) => {
+        const sp = sparkAt(i);
+        return (
+          <g key={`${rollId}-spark-${i}`} transform={`rotate(${sp.deg})`}>
+            <motion.rect
+              x={0}
+              y={-1.6}
+              width={16}
+              height={3.2}
+              rx={1.6}
+              fill={ink}
+              initial={{ x: 12, opacity: 0, scaleX: 0.4 }}
+              animate={{
+                x: [12, sp.reach],
+                opacity: [0, 1, 0],
+                scaleX: [0.4, 1.5, 0.2],
+              }}
+              transition={{
+                duration: made ? 0.78 : 0.62,
+                delay: sp.delay,
+                times: [0, 0.25, 1],
+                ease: 'easeOut',
+              }}
+            />
+          </g>
+        );
+      })}
+    </g>
   );
 }

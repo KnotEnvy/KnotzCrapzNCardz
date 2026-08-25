@@ -23,6 +23,10 @@
   --color-felt-700: #0b5136;
   --color-felt-600: #0f6544;
   --color-felt-line: #f2ead8;
+  /* The two inks a real layout uses besides white: amber for the box numbers
+     and the payouts, red for the don't side and the seven. */
+  --color-print-amber: #edb43c;
+  --color-print-red: #ef6a52;
 
   --color-brass-500: #d4af37;
   --color-brass-400: #e8c455;
@@ -99,6 +103,21 @@ body {
   letter-spacing: 0.1em;
 }
 
+/*
+ * Anchor modifiers.
+ *
+ * `.felt-text` sets text-anchor in CSS, and a CSS declaration beats the
+ * text-anchor presentation attribute, so a caption that needs to hang off an
+ * edge has to say so in a class rather than on the element.
+ */
+.felt-text--start {
+  text-anchor: start;
+}
+
+.felt-text--end {
+  text-anchor: end;
+}
+
 .felt-num {
   font-family: var(--font-display);
   font-weight: 700;
@@ -109,17 +128,58 @@ body {
   user-select: none;
 }
 
+/*
+ * The box numbers are the largest print on the table and the thing a player
+ * actually aims at, so they get a warmer ink and a dark keyline. The keyline is
+ * painted under the fill, which reads as ink pressed into the nap rather than
+ * as an outlined letter.
+ */
+.felt-num--box {
+  fill: var(--color-print-amber);
+  stroke: rgb(3 22 14 / 0.55);
+  stroke-width: 1.6px;
+  paint-order: stroke fill;
+}
+
+/* The don't side, and the props that bet with the seven. */
+.felt-text--red {
+  fill: var(--color-print-red);
+}
+
 /* ------------------------------------------------------------------ *
  * Interaction
  * ------------------------------------------------------------------ */
 
+/*
+ * Betting zones.
+ *
+ * Every clickable region announces itself with both a wash and a keyline, and
+ * the two sides of the layout are tinted apart: the right side warm, the don't
+ * side cool. A box number is three stacked zones, so the tint is what tells you
+ * which of them you are about to bet before you commit a chip to it.
+ */
 .hit {
   cursor: pointer;
-  transition: fill 120ms ease;
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+  transition:
+    fill 110ms ease,
+    stroke 110ms ease;
 }
 
-.hit:hover {
-  fill: rgb(255 255 255 / 0.07);
+.hit--right:hover {
+  fill: rgb(255 214 120 / 0.1);
+  stroke: rgb(255 214 120 / 0.55);
+}
+
+.hit--dont:hover {
+  fill: rgb(214 235 255 / 0.09);
+  stroke: rgb(214 235 255 / 0.5);
+}
+
+.hit:active {
+  fill: rgb(255 255 255 / 0.17);
 }
 
 .hit--blocked {
@@ -127,7 +187,8 @@ body {
 }
 
 .hit--blocked:hover {
-  fill: rgb(0 0 0 / 0.18);
+  fill: rgb(0 0 0 / 0.22);
+  stroke: transparent;
 }
 
 /* Focus ring that reads against the felt. */

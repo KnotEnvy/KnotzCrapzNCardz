@@ -10,6 +10,16 @@
 
 import type { DieFace } from '@/lib/engine/types';
 
+/**
+ * The dice printed on the felt.
+ *
+ * Crimson with white pips, matching both what a real layout prints and the
+ * actual dice the table throws — a printed white die next to a thrown red one
+ * is a small inconsistency you notice without being able to name.
+ */
+export const PRINT_DIE_FACE = '#c8102e';
+export const PRINT_DIE_PIP = '#fbf7f0';
+
 const PIP_LAYOUT: Record<DieFace, Array<[number, number]>> = {
   1: [[0.5, 0.5]],
   2: [

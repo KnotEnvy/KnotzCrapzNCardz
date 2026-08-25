@@ -138,7 +138,24 @@ function clearSettlementHold() {
  * being shadowed by the copy their browser saved months ago.
  */
 export function allStrategies(customs: Strategy[]): Strategy[] {
-  return [...HOUSE_STRATEGIES, ...customs];
+  /*
+   * A custom strategy can never shadow a house one.
+   *
+   * The id is the identity used for seat assignment, for findStrategy and for
+   * React keys, so a custom carrying a house id is worse than untidy: the
+   * library puts the house systems first, `find` returns the house version,
+   * and the player's saved edits silently never run. Filtering here also
+   * repairs sessions that already have such a strategy persisted, which is
+   * what saving over a house system used to produce.
+   */
+  const seen = new Set(HOUSE_STRATEGIES.map((s) => s.id));
+  const safe: Strategy[] = [];
+  for (const c of customs) {
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    safe.push(c);
+  }
+  return [...HOUSE_STRATEGIES, ...safe];
 }
 
 export function findStrategy(customs: Strategy[], id: string | null): Strategy | null {
@@ -590,6 +607,20 @@ export const useGame = create<GameState>()(
 
         saveStrategy(strategy) {
           set((s) => {
+            // Saving under a house id would create a custom that can never be
+            // reached — see allStrategies. An edit to a house system becomes a
+            // copy of it instead, which is what the player meant anyway.
+            if (HOUSE_STRATEGIES.some((h) => h.id === strategy.id)) {
+              const seq = s.customSeq + 1;
+              const id = `mine-${seq}`;
+              return {
+                customSeq: seq,
+                customStrategies: [
+                  ...s.customStrategies,
+                  duplicateStrategy(strategy, id, strategy.name),
+                ],
+              };
+            }
             const existing = s.customStrategies.findIndex((x) => x.id === strategy.id);
             const customStrategies =
               existing >= 0

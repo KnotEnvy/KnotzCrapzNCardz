@@ -34,8 +34,15 @@ exactly as they would in a casino.
 | `S` | Run the armed seat's strategy once |
 
 Click a betting area to put the armed chip on it. Click a chip already on the
-felt to add odds behind it; right-click a chip to take it down. The **Place /
-Buy / Lay** switch decides what clicking a box number means.
+felt to add odds behind it; right-click a chip to take it down.
+
+Each box number is divided into three bands, the way a dealer divides it. The
+top band, under **LAY**, lays against the number; the bottom band, under
+**PLACE**, places it; the number itself takes whatever the **Place / Buy / Lay**
+switch has armed. Hovering tints the band you are about to bet, warm for the
+right side and cool for the don't side, and the tooltip names the bet and quotes
+the house edge. `D/C` and `COME` mark where a travelling bet's chips come to
+rest, so you can always find your money.
 
 ### What a chip is actually worth
 
@@ -69,9 +76,9 @@ Everything a real layout carries:
   to their number and are protected on the come-out seven, as they should be.
 - **Box numbers** — place, buy (true odds less 5%), and lay against.
 - **Field**, **Big 6 / Big 8**, and the **hardways**.
-- **Propositions** — any seven, any craps, the four horn numbers, horn, world
-  and C & E on the felt; **horn high** and all 21 **hop** bets behind the
-  `Hop / Horn…` button.
+- **Propositions** — any seven, any craps, the four horn numbers, the four
+  **horn high** calls, horn, world and C & E, all printed on the felt; all 21
+  **hop** bets behind the `Hop / Horn…` button.
 - **Side bets** — the Fire Bet (24 / 249 / 999 to 1 for four, five, or six
   unique points) and All / Tall / Small.
 

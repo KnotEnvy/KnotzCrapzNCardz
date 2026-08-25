@@ -11,7 +11,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import * as React from 'react';
 import { SetupForm, configFromTable, toSessionOptions, type SetupConfig } from './Setup';
-import { PipPair } from './table/Pips';
+import { PRINT_DIE_FACE, PRINT_DIE_PIP, PipPair } from './table/Pips';
 import { Button, Panel, Segmented, Toggle, cn, money } from './ui/primitives';
 import { hopOdds, formatRatio } from '@/lib/engine/odds';
 import { useGame } from '@/lib/store/useGame';
@@ -170,7 +170,7 @@ export function HopDialog({ open, onClose }: { open: boolean; onClose: () => voi
             title={`Horn high ${label}`}
           >
             <svg width={40} height={18} viewBox="-20 -9 40 18" aria-hidden>
-              <PipPair x={0} y={0} size={16} a={pair[0]} b={pair[1]} face="#f2ead8" pip="#12160f" />
+              <PipPair x={0} y={0} size={16} a={pair[0]} b={pair[1]} face={PRINT_DIE_FACE} pip={PRINT_DIE_PIP} />
             </svg>
             <span className="text-[10px] font-semibold text-pit-300">high {label}</span>
           </button>
@@ -210,7 +210,7 @@ export function HopDialog({ open, onClose }: { open: boolean; onClose: () => voi
                     )}
                   >
                     <svg width={40} height={18} viewBox="-20 -9 40 18" aria-hidden>
-                      <PipPair x={0} y={0} size={16} a={a} b={b} face="#f2ead8" pip="#12160f" />
+                      <PipPair x={0} y={0} size={16} a={a} b={b} face={PRINT_DIE_FACE} pip={PRINT_DIE_PIP} />
                     </svg>
                     <span className="text-[9px] font-semibold text-pit-400">
                       {formatRatio(hopOdds(a, b))}

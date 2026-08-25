@@ -11,25 +11,51 @@
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { ChipStack } from './Chip';
-import { AreaFlashes, ChipFlights, FxDefs, OutcomeWash } from './Fx';
-import { PipPair } from './Pips';
+import { AreaFlashes, ChipFlights, FxDefs, OutcomeBurst, OutcomeWash } from './Fx';
+import { PRINT_DIE_FACE, PRINT_DIE_PIP, PipPair } from './Pips';
 import {
   AREAS,
   ROWS,
   VIEW,
   anchorFor,
   numberAnchors,
+  numberZones,
   oddsAnchorFor,
+  PROP_BOX,
   puckAnchor,
   seatOffset,
   type FeltArea,
+  type Rect,
 } from './layout';
+import { FeltClip, SurfaceDefs, TableBed, TableLight } from './Surface';
 import { placeEdge, placeOdds, formatRatio } from '@/lib/engine/odds';
 import { canBet, canTakeDown, maxOddsFor, type BetSpec } from '@/lib/engine/table';
-import { useGame } from '@/lib/store/useGame';
+import { useGame, type NumberMode } from '@/lib/store/useGame';
 import type { Bet, DieFace, PointNumber, SeatId } from '@/lib/engine/types';
 
 const SEAT_RING: Record<SeatId, string> = { A: '#f0b429', B: '#38bdf8' };
+
+/** How the armed number mode reads in a tooltip. */
+const MODE_WORD: Record<NumberMode, string> = { PLACE: 'Place', BUY: 'Buy', LAY: 'Lay' };
+
+/**
+ * One clickable region of the felt.
+ *
+ * Most printed areas are a single zone, but a box number is three: the laid
+ * money above the number, the number itself, and the right side below it. That
+ * is how a real layout is divided and how a dealer reads it, so splitting the
+ * cell removes the need to arm a mode before betting the side you meant.
+ */
+interface HitZone {
+  id: string;
+  rect: Rect;
+  spec: BetSpec;
+  area: FeltArea;
+  /** Which side of the layout this zone belongs to; drives the hover tint. */
+  tone: 'right' | 'dont';
+  /** What the tooltip and the screen reader call it. */
+  name: string;
+}
 
 /** Dice combinations printed next to each hardway. */
 const HARD_PAIR: Record<number, DieFace> = { 4: 2, 6: 3, 8: 4, 10: 5 };
@@ -95,18 +121,66 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
     });
   }, [table.history, shake, reducedMotion]);
 
-  const handleArea = (area: FeltArea) => {
-    if (area.action === 'OPEN_HOP') {
+  const handleZone = (zone: HitZone) => {
+    if (zone.area.action === 'OPEN_HOP') {
       onOpenHop();
       return;
     }
-    let spec: BetSpec = area.spec;
-    // The box numbers take whichever of place / buy / lay is armed.
-    if (area.variant === 'number') {
-      spec = { kind: numberMode, number: area.spec.number };
-    }
-    wager(spec);
+    wager(zone.spec);
   };
+
+  /*
+   * Every clickable region on the felt, box numbers already split into their
+   * three bands. Rebuilt only when the armed mode changes, because that is the
+   * one thing outside the static geometry that a zone's meaning depends on.
+   */
+  const zones = React.useMemo<HitZone[]>(() => {
+    const out: HitZone[] = [];
+    for (const area of AREAS) {
+      if (area.variant === 'number') {
+        const n = area.spec.number as PointNumber;
+        const z = numberZones(n);
+        const word = n === 6 ? 'six' : n === 9 ? 'nine' : String(n);
+        out.push(
+          {
+            id: `${area.id}-lay`,
+            rect: z.lay,
+            spec: { kind: 'LAY', number: n },
+            area,
+            tone: 'dont',
+            name: `Lay the ${word}`,
+          },
+          {
+            id: `${area.id}-mid`,
+            rect: z.mid,
+            spec: { kind: numberMode, number: n },
+            area,
+            tone: numberMode === 'LAY' ? 'dont' : 'right',
+            name: `${MODE_WORD[numberMode]} the ${word}`,
+          },
+          {
+            id: `${area.id}-place`,
+            rect: z.place,
+            spec: { kind: 'PLACE', number: n },
+            area,
+            tone: 'right',
+            name: `Place the ${word}`,
+          },
+        );
+        continue;
+      }
+      out.push({
+        id: area.id,
+        rect: area.rect,
+        spec: area.spec,
+        area,
+        tone:
+          area.spec.kind === 'DONT_PASS' || area.spec.kind === 'DONT_COME' ? 'dont' : 'right',
+        name: area.callName ?? area.label,
+      });
+    }
+    return out;
+  }, [numberMode]);
 
   const betsFor = (predicate: (b: Bet) => boolean) => table.bets.filter(predicate);
 
@@ -119,20 +193,8 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
         aria-label="Craps table layout"
       >
         <defs>
-          <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5b3b28" />
-            <stop offset="45%" stopColor="#3a2418" />
-            <stop offset="100%" stopColor="#1d120c" />
-          </linearGradient>
-          <radialGradient id="feltFill" cx="50%" cy="38%" r="78%">
-            <stop offset="0%" stopColor="#126f4a" />
-            <stop offset="55%" stopColor="#0b5136" />
-            <stop offset="100%" stopColor="#05291b" />
-          </radialGradient>
-          <filter id="feltGrain" x="0" y="0" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch" />
-            <feColorMatrix type="saturate" values="0" />
-          </filter>
+          <SurfaceDefs />
+          <FeltClip />
           <filter id="printGlow" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur stdDeviation="6" result="b" />
             <feMerge>
@@ -140,108 +202,57 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f2d97e" />
-            <stop offset="50%" stopColor="#d4af37" />
-            <stop offset="100%" stopColor="#8a6f1c" />
-          </linearGradient>
           <FxDefs />
         </defs>
 
-        {/* Rail and felt */}
-        <rect x={0} y={0} width={VIEW.w} height={VIEW.h} rx={26} fill="url(#wood)" />
-        <rect
-          x={14}
-          y={14}
-          width={VIEW.w - 28}
-          height={VIEW.h - 28}
-          rx={18}
-          fill="url(#feltFill)"
-          stroke="#0a3b27"
-          strokeWidth={2}
-        />
-        <rect
-          x={14}
-          y={14}
-          width={VIEW.w - 28}
-          height={VIEW.h - 28}
-          rx={18}
-          filter="url(#feltGrain)"
-          opacity={0.055}
-          style={{ mixBlendMode: 'overlay' }}
-          pointerEvents="none"
-        />
-        {/* Brass trim between rail and felt */}
-        <rect
-          x={10}
-          y={10}
-          width={VIEW.w - 20}
-          height={VIEW.h - 20}
-          rx={20}
-          fill="none"
-          stroke="url(#brass)"
-          strokeWidth={2.5}
-          opacity={0.55}
-          pointerEvents="none"
-        />
-
-        {/* Divider between the player layout and the proposition box */}
-        <line
-          x1={1160}
-          y1={40}
-          x2={1160}
-          y2={VIEW.h - 44}
-          stroke="#f2ead8"
-          strokeWidth={2}
-          opacity={0.35}
-        />
+        {/* ---- Wood, bumper, cloth ---- */}
+        <TableBed />
 
         {/* ---- Printed layout ---- */}
-        <g pointerEvents="none">
-          {AREAS.map((area) => (
-            <AreaArt key={`art-${area.id}`} area={area} />
-          ))}
-          <FieldArt />
-          <DontPassArt />
-        </g>
+        <PrintedLayout />
+
+        {/* ---- The lamp, and the dark it leaves in the corners ----
+            Over the print rather than under it: screen-printed ink is lit and
+            shaded along with the cloth it sits in, and a layout that stays
+            uniformly bright while the felt falls away reads as a sticker. */}
+        <TableLight />
 
         {/* ---- The ON / OFF puck ---- */}
         <Puck point={table.point} />
 
         {/* ---- Hitboxes ---- */}
         <g>
-          {AREAS.map((area) => {
-            const spec: BetSpec =
-              area.variant === 'number' ? { kind: numberMode, number: area.spec.number } : area.spec;
-            const avail = area.action ? { allowed: true } : canBet(table, spec);
+          {zones.map((zone) => {
+            const avail = zone.area.action ? { allowed: true } : canBet(table, zone.spec);
             const blocked = !avail.allowed || rolling;
             return (
               <rect
-                key={`hit-${area.id}`}
-                x={area.rect.x}
-                y={area.rect.y}
-                width={area.rect.w}
-                height={area.rect.h}
-                rx={area.rect.rx ?? 4}
-                fill="transparent"
-                className={blocked ? 'hit hit--blocked' : 'hit'}
-                onClick={() => !blocked && handleArea(area)}
+                key={`hit-${zone.id}`}
+                x={zone.rect.x}
+                y={zone.rect.y}
+                width={zone.rect.w}
+                height={zone.rect.h}
+                rx={zone.rect.rx ?? 4}
+                className={
+                  blocked ? 'hit hit--blocked' : `hit hit--${zone.tone === 'dont' ? 'dont' : 'right'}`
+                }
+                onClick={() => !blocked && handleZone(zone)}
                 role="button"
                 tabIndex={blocked ? -1 : 0}
                 onKeyDown={(e) => {
                   if (blocked) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleArea(area);
+                    handleZone(zone);
                   }
                 }}
                 aria-label={
                   blocked
-                    ? `${area.label} — ${avail.reason ?? 'dice are out'}`
-                    : `Bet ${'$'}${chip} on ${area.label}`
+                    ? `${zone.name} — ${avail.reason ?? 'dice are out'}`
+                    : `Bet ${'$'}${chip} on ${zone.name}`
                 }
               >
-                <title>{blocked ? (avail.reason ?? 'Dice are out') : describe(area, spec)}</title>
+                <title>{blocked ? (avail.reason ?? 'Dice are out') : describeZone(zone)}</title>
               </rect>
             );
           })}
@@ -273,6 +284,7 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
                     x={at.x}
                     y={at.y}
                     amount={bet.amount}
+                    r={20}
                     ring={ring}
                     off={!bet.working && ['PLACE', 'BUY', 'HARDWAY'].includes(bet.kind)}
                     label={oddsLabel}
@@ -312,7 +324,7 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
                       y={oddsAnchorFor(bet).y + nudge.y}
                       amount={bet.odds}
                       ring={ring}
-                      r={12}
+                      r={15}
                       off={!bet.oddsWorking}
                       title={`Odds $${bet.odds} — right-click to take down`}
                       onContextMenu={(e) => {
@@ -370,19 +382,75 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
 
         {/* ---- The table as a whole, reacting ---- */}
         <OutcomeWash record={settled} rollId={table.rollCount} />
+        {/* Last, and over everything: the two events that end a hand. */}
+        <OutcomeBurst record={settled} rollId={table.rollCount} />
       </svg>
     </motion.div>
   );
 }
 
 /**
- * Tooltip text. Box numbers quote the house edge, because the whole point of
- * knowing place-6 pays 7:6 is knowing what that costs you.
+ * The screen print.
+ *
+ * Memoised because it is derived entirely from module-level geometry: it takes
+ * no props and can never change, which is what keeps the ink filter over it
+ * from being re-rasterised behind every roll, chip and flash.
  */
-function describe(area: FeltArea, spec: BetSpec): string {
-  if (area.variant === 'number' && spec.kind === 'PLACE') {
-    const n = spec.number as PointNumber;
-    return `Place ${n} — pays ${formatRatio(placeOdds(n))}, house edge ${(placeEdge(n) * 100).toFixed(2)}%`;
+const PrintedLayout = React.memo(function PrintedLayout() {
+  return (
+    <g pointerEvents="none" filter="url(#printInk)">
+      {/* The proposition box, printed as a box. */}
+      <rect
+        x={PROP_BOX.x}
+        y={PROP_BOX.y}
+        width={PROP_BOX.w}
+        height={PROP_BOX.h}
+        rx={PROP_BOX.rx}
+        fill="#01120b"
+        opacity={0.42}
+      />
+      <rect
+        x={PROP_BOX.x}
+        y={PROP_BOX.y}
+        width={PROP_BOX.w}
+        height={PROP_BOX.h}
+        rx={PROP_BOX.rx}
+        fill="none"
+        stroke="#f2ead8"
+        strokeWidth={2}
+        opacity={0.32}
+      />
+      {AREAS.map((area) => (
+        <AreaArt key={`art-${area.id}`} area={area} />
+      ))}
+      <FieldArt />
+      <DontPassArt />
+    </g>
+  );
+});
+
+/**
+ * Tooltip text. Box numbers quote the house edge, because the whole point of
+ * knowing place-6 pays 7:6 is knowing what that costs you. Each band of a box
+ * number says what that band actually does, which is the whole reason for
+ * splitting the cell up in the first place.
+ */
+function describeZone(zone: HitZone): string {
+  const { area, spec } = zone;
+  const n = spec.number as PointNumber | undefined;
+  if (n !== undefined) {
+    if (spec.kind === 'PLACE') {
+      return `Place ${n} — pays ${formatRatio(placeOdds(n))}, house edge ${(placeEdge(n) * 100).toFixed(2)}%`;
+    }
+    if (spec.kind === 'BUY') {
+      return `Buy the ${n} — true odds, less a five percent commission`;
+    }
+    if (spec.kind === 'LAY') {
+      return `Lay the ${n} — true odds against, betting the seven comes first`;
+    }
+  }
+  if (area.callName) {
+    return `${area.callName}${area.sub && area.sub !== 'horn high' ? ` · ${area.sub}` : ''}`;
   }
   return `${area.label}${area.sub ? ` · ${area.sub}` : ''}`;
 }
@@ -398,9 +466,17 @@ function AreaArt({ area }: { area: FeltArea }) {
   if (variant === 'number') {
     const n = area.spec.number as PointNumber;
     const a = numberAnchors(n);
+    const z = numberZones(n);
     const word = n === 6 || n === 9;
+    // Buying is only the better call on the four and the ten, so those are the
+    // only two a real layout bothers to print it on.
+    const buyable = n === 4 || n === 10;
     return (
       <g>
+        {/* The don't side rides on a darker ground, which is the fastest way
+            to read at a glance which half of the box you are pointing at. */}
+        <rect x={z.lay.x} y={z.lay.y} width={z.lay.w} height={z.lay.h} rx={4} fill="#000814" opacity={0.2} />
+
         <rect
           x={rect.x + 3}
           y={rect.y + 3}
@@ -412,28 +488,79 @@ function AreaArt({ area }: { area: FeltArea }) {
           strokeWidth={2}
           opacity={0.85}
         />
-        {/* A hairline splits the don't side above from the right side below. */}
+
+        {/* Two hairlines divide the cell into the three bands a dealer works:
+            laid money above, the number itself, the right side below. */}
         <line
-          x1={rect.x + 10}
-          y1={rect.y + 46}
-          x2={rect.x + rect.w - 10}
-          y2={rect.y + 46}
+          x1={rect.x + 9}
+          y1={z.mid.y}
+          x2={rect.x + rect.w - 9}
+          y2={z.mid.y}
           stroke="#f2ead8"
           strokeWidth={1}
-          opacity={0.22}
+          opacity={0.28}
         />
-        <text className="felt-text felt-text--muted" x={a.lay.x} y={rect.y + 14} fontSize={8}>
+        <line
+          x1={rect.x + 9}
+          y1={z.place.y}
+          x2={rect.x + rect.w - 9}
+          y2={z.place.y}
+          stroke="#f2ead8"
+          strokeWidth={1}
+          opacity={0.28}
+        />
+
+        {/* Band captions. Chips land on top of these, exactly as they cover
+            the print on a real table; they are here to teach an empty box. */}
+        <text
+          className="felt-text felt-text--muted felt-text--start"
+          x={a.layLabel.x}
+          y={a.layLabel.y}
+          fontSize={9}
+        >
           LAY
         </text>
-        <text className="felt-text felt-text--muted" x={a.dontCome.x} y={rect.y + 14} fontSize={8}>
+        <text
+          className="felt-text felt-text--muted felt-text--end"
+          x={a.dcLabel.x}
+          y={a.dcLabel.y}
+          fontSize={9}
+        >
           D/C
         </text>
-        <text className="felt-num" x={a.glyph.x} y={a.glyph.y} fontSize={word ? 42 : 58}>
+        <text
+          className="felt-text felt-text--muted felt-text--start"
+          x={a.placeLabel.x}
+          y={a.placeLabel.y}
+          fontSize={9}
+        >
+          PLACE
+        </text>
+        <text
+          className="felt-text felt-text--muted felt-text--end"
+          x={a.comeLabel.x}
+          y={a.comeLabel.y}
+          fontSize={9}
+        >
+          COME
+        </text>
+
+        <text className="felt-num felt-num--box" x={a.glyph.x} y={a.glyph.y} fontSize={word ? 42 : 58}>
           {label}
         </text>
         <text className="felt-text felt-text--muted" x={a.odds.x} y={a.odds.y} fontSize={13}>
           {formatRatio(placeOdds(n))}
         </text>
+        {buyable ? (
+          <text
+            className="felt-text felt-text--muted felt-text--start"
+            x={a.buyLabel.x}
+            y={a.buyLabel.y}
+            fontSize={9}
+          >
+            BUY
+          </text>
+        ) : null}
       </g>
     );
   }
@@ -454,11 +581,19 @@ function AreaArt({ area }: { area: FeltArea }) {
           strokeWidth={1.6}
           opacity={0.9}
         />
-        <PipPair x={rect.x + 48} y={rect.y + 30} size={20} a={f} b={f} />
-        <text className="felt-text" x={rect.x + 124} y={rect.y + 22} fontSize={15}>
+        <PipPair
+          x={rect.x + 50}
+          y={rect.y + 40}
+          size={21}
+          a={f}
+          b={f}
+          face={PRINT_DIE_FACE}
+          pip={PRINT_DIE_PIP}
+        />
+        <text className="felt-text" x={rect.x + 126} y={rect.y + 30} fontSize={15}>
           {label}
         </text>
-        <text className="felt-text felt-text--gold" x={rect.x + 124} y={rect.y + 42} fontSize={12}>
+        <text className="felt-text felt-text--gold" x={rect.x + 126} y={rect.y + 52} fontSize={13}>
           {sub}
         </text>
       </g>
@@ -467,6 +602,8 @@ function AreaArt({ area }: { area: FeltArea }) {
 
   if (variant === 'prop') {
     const pair = area.spec.prop ? PROP_PAIR[area.spec.prop] : undefined;
+    // Any Seven and Any Craps are printed red, as they are on the felt.
+    const red = area.spec.prop === 'ANY_7' || area.spec.prop === 'ANY_CRAPS';
     return (
       <g>
         <rect
@@ -482,14 +619,27 @@ function AreaArt({ area }: { area: FeltArea }) {
         />
         {pair ? (
           <>
-            <PipPair x={cx} y={rect.y + 22} size={18} a={pair[0]} b={pair[1]} />
-            <text className="felt-text felt-text--gold" x={cx} y={rect.y + 80} fontSize={11}>
+            <PipPair
+              x={cx}
+              y={rect.y + 30}
+              size={19}
+              a={pair[0]}
+              b={pair[1]}
+              face={PRINT_DIE_FACE}
+              pip={PRINT_DIE_PIP}
+            />
+            <text className="felt-text felt-text--gold" x={cx} y={rect.y + 64} fontSize={12}>
               {sub}
             </text>
           </>
         ) : (
           <>
-            <text className="felt-text" x={cx - 26} y={rect.y + rect.h / 2 - 8} fontSize={15}>
+            <text
+              className={`felt-text${red ? ' felt-text--red' : ''}`}
+              x={cx - 26}
+              y={rect.y + rect.h / 2 - 8}
+              fontSize={15}
+            >
               {label}
             </text>
             <text
@@ -502,6 +652,30 @@ function AreaArt({ area }: { area: FeltArea }) {
             </text>
           </>
         )}
+      </g>
+    );
+  }
+
+  if (variant === 'hornhigh') {
+    return (
+      <g>
+        <rect
+          x={rect.x + 3}
+          y={rect.y + 3}
+          width={rect.w - 6}
+          height={rect.h - 6}
+          rx={5}
+          fill="rgba(0,0,0,0.2)"
+          stroke="#f2ead8"
+          strokeWidth={1.3}
+          opacity={0.8}
+        />
+        <text className="felt-text felt-text--muted" x={cx} y={rect.y + 17} fontSize={8}>
+          HORN HIGH
+        </text>
+        <text className="felt-num felt-num--box" x={cx} y={rect.y + 36} fontSize={20}>
+          {label}
+        </text>
       </g>
     );
   }
@@ -547,7 +721,7 @@ function AreaArt({ area }: { area: FeltArea }) {
         <text className="felt-text" x={cx} y={rect.y + 34} fontSize={20}>
           {label}
         </text>
-        <text className="felt-text felt-text--muted" x={cx} y={rect.y + 56} fontSize={11}>
+        <text className="felt-text felt-text--gold" x={cx} y={rect.y + 58} fontSize={13}>
           {sub}
         </text>
       </g>
@@ -556,6 +730,9 @@ function AreaArt({ area }: { area: FeltArea }) {
 
   // Plain bands: come, don't come, pass line.
   const big = area.id === 'pass' || area.id === 'come';
+  // The don't side is printed red on a real layout, and it is the single
+  // cheapest way to stop a player backing the wrong end of the table.
+  const dont = area.spec.kind === 'DONT_PASS' || area.spec.kind === 'DONT_COME';
   return (
     <g>
       <rect
@@ -570,7 +747,7 @@ function AreaArt({ area }: { area: FeltArea }) {
         opacity={0.85}
       />
       <text
-        className="felt-text"
+        className={`felt-text${dont ? ' felt-text--red' : ''}`}
         x={cx}
         y={rect.y + (big ? 40 : 34)}
         fontSize={big ? 30 : 19}
@@ -579,7 +756,12 @@ function AreaArt({ area }: { area: FeltArea }) {
         {label}
       </text>
       {sub ? (
-        <text className="felt-text felt-text--muted" x={cx} y={rect.y + (big ? 68 : 58)} fontSize={12}>
+        <text
+          className={`felt-text ${dont ? 'felt-text--red' : 'felt-text--muted'}`}
+          x={cx}
+          y={rect.y + (big ? 68 : 58)}
+          fontSize={12}
+        >
           {sub}
         </text>
       ) : null}
@@ -591,11 +773,18 @@ function AreaArt({ area }: { area: FeltArea }) {
 function FieldArt() {
   const row = ROWS.field;
   const nums = [2, 3, 4, 9, 10, 11, 12];
-  const startX = 44 + 1106 / 2 - ((nums.length - 1) * 92) / 2 + 44;
+  /*
+   * Centred on the band and spread wide enough to own it. The old spacing was
+   * narrower and pushed 44px to the right to clear the chip anchor, which left
+   * the numbers visibly off-centre in a band that is mostly empty felt. At this
+   * spacing the leftmost number still clears the chips by a wide margin.
+   */
+  const STEP = 104;
+  const startX = 44 + 1106 / 2 - ((nums.length - 1) * STEP) / 2;
   return (
     <g pointerEvents="none">
       {nums.map((n, i) => {
-        const x = startX + i * 92;
+        const x = startX + i * STEP;
         const special = n === 2 || n === 12;
         return (
           <g key={n}>
@@ -619,7 +808,7 @@ function FieldArt() {
       </text>
       <text
         className="felt-text felt-text--muted"
-        x={startX + (nums.length - 1) * 92}
+        x={startX + (nums.length - 1) * STEP}
         y={row.y + 92}
         fontSize={9}
       >
@@ -635,10 +824,10 @@ function DontPassArt() {
   const x = 44 + 216 + 60;
   return (
     <g pointerEvents="none">
-      <text className="felt-num" x={x} y={y} fontSize={22} opacity={0.9}>
+      <text className="felt-num felt-text--red" x={x} y={y} fontSize={22} opacity={0.95}>
         12
       </text>
-      <line x1={x - 20} y1={y} x2={x + 20} y2={y} stroke="#f2ead8" strokeWidth={2.5} opacity={0.9} />
+      <line x1={x - 20} y1={y} x2={x + 20} y2={y} stroke="#ef6a52" strokeWidth={2.5} opacity={0.95} />
     </g>
   );
 }
@@ -659,6 +848,20 @@ function Puck({ point }: { point: PointNumber | null }) {
       pointerEvents="none"
     >
       <ellipse cx={0} cy={4} rx={23} ry={8} fill="#000" opacity={0.45} />
+      {/* A live point breathing.
+          The one piece of ambient motion tied to state rather than to time: it
+          runs only while a point is on, so an idle table still has a pulse and
+          a come-out is genuinely still. */}
+      {on && !reduced ? (
+        <motion.circle
+          r={26}
+          fill="none"
+          stroke="#4ade80"
+          strokeWidth={2}
+          animate={{ opacity: [0.1, 0.32, 0.1], scale: [1, 1.07, 1] }}
+          transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ) : null}
       {/* The puck landing on a new number. Keyed on the point so it replays
           once per point set and stays put for the rest of the cycle. */}
       {on && !reduced ? (

@@ -31,6 +31,16 @@ export const ROWS = {
   pass: { y: 566, h: 122 },
 } as const;
 
+/**
+ * The dealer's proposition box: the whole right-hand column.
+ *
+ * Exported as one rectangle so the felt can print it as a box rather than
+ * implying it with a divider line. On a real layout this area is the stickman's
+ * and is visibly set apart from the players' side; running the two together on
+ * one flat green is the main thing that makes a drawn table read as a diagram.
+ */
+export const PROP_BOX = { x: 1160, y: 34, w: 408, h: 676, rx: 12 } as const;
+
 export const BOX_NUMBERS: PointNumber[] = [4, 5, 6, 8, 9, 10];
 
 const DC_WIDTH = 156;
@@ -49,7 +59,7 @@ export interface Point {
   y: number;
 }
 
-export type AreaVariant = 'number' | 'band' | 'prop' | 'hard' | 'small' | 'side';
+export type AreaVariant = 'number' | 'band' | 'prop' | 'hard' | 'small' | 'side' | 'hornhigh';
 
 export interface FeltArea {
   /** Stable id, also used as the React key. */
@@ -60,6 +70,15 @@ export interface FeltArea {
   /** Second line, usually the payout. */
   sub?: string;
   variant: AreaVariant;
+  /**
+   * What a dealer would call this bet out loud.
+   *
+   * Separate from `label` because `label` is the glyph printed on the felt, and
+   * on the props that glyph is just a number: the horn high two and the two
+   * itself both print "2". The tooltip and the screen reader need the name, not
+   * the print.
+   */
+  callName?: string;
   /** Where a chip stack for this area comes to rest. */
   anchor: Point;
   /** Clicking opens a panel instead of placing a wager. */
@@ -81,19 +100,61 @@ export function cellFor(n: PointNumber): Rect {
 }
 
 /**
+ * The three printed bands inside a box number.
+ *
+ * A real layout stacks the number's business vertically: laid and don't-come
+ * money rides above the number, the number itself carries the payout, and the
+ * right side sits below it. Naming those bands rather than leaving one
+ * undivided cell is what lets each one be labelled and clicked for the bet it
+ * actually holds, instead of the player having to arm a mode first.
+ */
+export const CELL_BANDS = { lay: 48, mid: 72, place: 48 } as const;
+
+export function numberZones(n: PointNumber): { lay: Rect; mid: Rect; place: Rect } {
+  const c = cellFor(n);
+  const pad = 3;
+  const w = c.w - pad * 2;
+  return {
+    lay: { x: c.x + pad, y: c.y + pad, w, h: CELL_BANDS.lay - pad },
+    mid: { x: c.x + pad, y: c.y + CELL_BANDS.lay, w, h: CELL_BANDS.mid },
+    place: { x: c.x + pad, y: c.y + CELL_BANDS.lay + CELL_BANDS.mid, w, h: CELL_BANDS.place - pad },
+  };
+}
+
+/**
  * Sub-anchors inside a box number, arranged the way a dealer actually stacks
- * them: the don't side rides above the number, the right side below it.
+ * them: the don't side rides above the number, the right side below it. Each
+ * one sits in the middle of the band that band's label names.
  */
 export function numberAnchors(n: PointNumber) {
   const c = cellFor(n);
   const cx = c.x + c.w / 2;
   return {
-    glyph: { x: cx, y: c.y + 74 },
-    odds: { x: cx, y: c.y + 106 },
-    lay: { x: cx - 44, y: c.y + 26 },
-    dontCome: { x: cx + 44, y: c.y + 26 },
-    place: { x: cx - 42, y: c.y + 142 },
-    come: { x: cx + 42, y: c.y + 142 },
+    glyph: { x: cx, y: c.y + 76 },
+    odds: { x: cx, y: c.y + 104 },
+    /*
+     * Chip anchors sit a little inside the band's half-width, because each one
+     * is then pushed further out again by the seat offset. Base ±34 plus a
+     * seat spread of ±15 puts the widest stack at ±69 in a cell of half-width
+     * 79 — four stacks across a box number, all inside the printed line.
+     */
+    lay: { x: cx - 34, y: c.y + 26 },
+    dontCome: { x: cx + 34, y: c.y + 26 },
+    place: { x: cx - 34, y: c.y + 142 },
+    come: { x: cx + 34, y: c.y + 142 },
+    /*
+     * Where each band's printed caption sits.
+     *
+     * Pushed hard into the band's outer edge so a resting stack clears it.
+     * Chips covering the print is authentic, but a caption half-hidden behind
+     * one reads as a layout bug rather than as a table in use, and these
+     * captions only earn their place by being legible on an empty box.
+     */
+    layLabel: { x: c.x + 9, y: c.y + 9 },
+    dcLabel: { x: c.x + c.w - 11, y: c.y + 9 },
+    placeLabel: { x: c.x + 9, y: c.y + c.h - 8 },
+    comeLabel: { x: c.x + c.w - 11, y: c.y + c.h - 8 },
+    buyLabel: { x: c.x + 12, y: c.y + 104 },
   };
 }
 
@@ -130,15 +191,40 @@ function band(
 const hardRow1 = PROP.x;
 const hardCellW = PROP.w / 2;
 
+/**
+ * The proposition column's row grid.
+ *
+ * Written out rather than scattered through the area list because the column
+ * is packed to the millimetre: every row's y is the previous row's y plus its
+ * height plus a gutter, and a hand-tuned constant in the middle of that chain
+ * is how a felt ends up with two cells overlapping and nothing to catch it.
+ */
+const PROP_ROWS = {
+  hardTop: 48,
+  hardBottom: 132,
+  hardH: 80,
+  singles: 222,
+  singlesH: 80,
+  hornHigh: 312,
+  hornHighH: 52,
+  anySeven: 374,
+  anyCraps: 436,
+  pairRow: 498,
+  hornHop: 560,
+  bandH: 52,
+  side: 622,
+  sideH: 76,
+} as const;
+
 /** Opening the hop panel is an action, not a wager, so it carries a flag. */
 export const HOP_AREA: FeltArea = {
   id: 'hop',
   spec: { kind: 'HOP' },
-  rect: { x: PROP.x + hardCellW, y: 546, w: hardCellW, h: 56, rx: 4 },
+  rect: { x: PROP.x + hardCellW, y: PROP_ROWS.hornHop, w: hardCellW, h: PROP_ROWS.bandH, rx: 4 },
   label: 'HOP',
   sub: '15 / 30 to 1',
   variant: 'prop',
-  anchor: { x: PROP.x + hardCellW * 2 - 30, y: 546 + 28 },
+  anchor: { x: PROP.x + hardCellW * 2 - 30, y: PROP_ROWS.hornHop + 26 },
   action: 'OPEN_HOP',
 };
 
@@ -228,106 +314,109 @@ export const AREAS: FeltArea[] = [
   ),
 
   /* ---- Hardways ---- */
-  band(
-    'hard-4',
-    { kind: 'HARDWAY', number: 4 },
-    { x: hardRow1, y: 44, w: hardCellW, h: 96, rx: 4 },
-    'HARD 4',
-    '7 to 1',
-    { x: hardRow1 + hardCellW / 2, y: 44 + 74 },
-    'hard',
-  ),
-  band(
-    'hard-10',
-    { kind: 'HARDWAY', number: 10 },
-    { x: hardRow1 + hardCellW, y: 44, w: hardCellW, h: 96, rx: 4 },
-    'HARD 10',
-    '7 to 1',
-    { x: hardRow1 + hardCellW * 1.5, y: 44 + 74 },
-    'hard',
-  ),
-  band(
-    'hard-6',
-    { kind: 'HARDWAY', number: 6 },
-    { x: hardRow1, y: 144, w: hardCellW, h: 96, rx: 4 },
-    'HARD 6',
-    '9 to 1',
-    { x: hardRow1 + hardCellW / 2, y: 144 + 74 },
-    'hard',
-  ),
-  band(
-    'hard-8',
-    { kind: 'HARDWAY', number: 8 },
-    { x: hardRow1 + hardCellW, y: 144, w: hardCellW, h: 96, rx: 4 },
-    'HARD 8',
-    '9 to 1',
-    { x: hardRow1 + hardCellW * 1.5, y: 144 + 74 },
-    'hard',
+  ...([
+    [4, '7 to 1', PROP_ROWS.hardTop, 0],
+    [10, '7 to 1', PROP_ROWS.hardTop, 1],
+    [6, '9 to 1', PROP_ROWS.hardBottom, 0],
+    [8, '9 to 1', PROP_ROWS.hardBottom, 1],
+  ] as const).map<FeltArea>(([n, sub, y, col]) =>
+    band(
+      `hard-${n}`,
+      { kind: 'HARDWAY', number: n },
+      { x: hardRow1 + col * hardCellW, y, w: hardCellW, h: PROP_ROWS.hardH, rx: 4 },
+      `HARD ${n}`,
+      sub,
+      { x: hardRow1 + col * hardCellW + hardCellW / 2, y: y + 62 },
+      'hard',
+    ),
   ),
 
   /* ---- Single number props ---- */
   ...([
-    ['TWO', '2', '30 to 1'],
-    ['THREE', '3', '15 to 1'],
-    ['YO', '11', '15 to 1'],
-    ['TWELVE', '12', '30 to 1'],
-  ] as const).map<FeltArea>(([prop, label, sub], i) => {
+    ['TWO', '2', '30 to 1', 'the two, aces'],
+    ['THREE', '3', '15 to 1', 'the three'],
+    ['YO', '11', '15 to 1', 'the yo, eleven'],
+    ['TWELVE', '12', '30 to 1', 'the twelve, boxcars'],
+  ] as const).map<FeltArea>(([prop, label, sub, callName], i) => {
     const w = PROP.w / 4;
     return {
       id: `prop-${prop}`,
       spec: { kind: 'PROP', prop },
-      rect: { x: PROP.x + i * w, y: 250, w, h: 88, rx: 4 },
+      rect: { x: PROP.x + i * w, y: PROP_ROWS.singles, w, h: PROP_ROWS.singlesH, rx: 4 },
       label,
       sub,
+      callName,
       variant: 'prop',
-      anchor: { x: PROP.x + i * w + w / 2, y: 250 + 48 },
+      anchor: { x: PROP.x + i * w + w / 2, y: PROP_ROWS.singles + 46 },
+    };
+  }),
+
+  /* ---- Horn highs ----
+     Four of the most-called bets at a live table, and until now they were
+     reachable only from inside the hop dialog. A real layout prints them. */
+  ...([
+    ['HORN_HIGH_2', '2'],
+    ['HORN_HIGH_3', '3'],
+    ['HORN_HIGH_YO', '11'],
+    ['HORN_HIGH_12', '12'],
+  ] as const).map<FeltArea>(([prop, label], i) => {
+    const w = PROP.w / 4;
+    return {
+      id: `prop-${prop}`,
+      spec: { kind: 'PROP', prop },
+      rect: { x: PROP.x + i * w, y: PROP_ROWS.hornHigh, w, h: PROP_ROWS.hornHighH, rx: 4 },
+      label,
+      sub: 'horn high',
+      callName: `horn high ${label}`,
+      variant: 'hornhigh',
+      anchor: { x: PROP.x + i * w + w / 2, y: PROP_ROWS.hornHigh + 30 },
     };
   }),
 
   band(
     'any-seven',
     { kind: 'PROP', prop: 'ANY_7' },
-    { x: PROP.x, y: 348, w: PROP.w, h: 56, rx: 4 },
+    { x: PROP.x, y: PROP_ROWS.anySeven, w: PROP.w, h: PROP_ROWS.bandH, rx: 4 },
     'ANY SEVEN',
     '4 to 1',
-    { x: PROP.x + PROP.w - 34, y: 348 + 28 },
+    { x: PROP.x + PROP.w - 34, y: PROP_ROWS.anySeven + 26 },
     'prop',
   ),
   band(
     'any-craps',
     { kind: 'PROP', prop: 'ANY_CRAPS' },
-    { x: PROP.x, y: 414, w: PROP.w, h: 56, rx: 4 },
+    { x: PROP.x, y: PROP_ROWS.anyCraps, w: PROP.w, h: PROP_ROWS.bandH, rx: 4 },
     'ANY CRAPS',
     '7 to 1',
-    { x: PROP.x + PROP.w - 34, y: 414 + 28 },
+    { x: PROP.x + PROP.w - 34, y: PROP_ROWS.anyCraps + 26 },
     'prop',
   ),
   band(
     'c-and-e',
     { kind: 'PROP', prop: 'C_AND_E' },
-    { x: PROP.x, y: 480, w: hardCellW, h: 56, rx: 4 },
+    { x: PROP.x, y: PROP_ROWS.pairRow, w: hardCellW, h: PROP_ROWS.bandH, rx: 4 },
     'C & E',
     '7 / 15',
-    { x: PROP.x + hardCellW - 30, y: 480 + 28 },
+    { x: PROP.x + hardCellW - 30, y: PROP_ROWS.pairRow + 26 },
     'prop',
   ),
   band(
     'world',
     { kind: 'PROP', prop: 'WORLD' },
-    { x: PROP.x + hardCellW, y: 480, w: hardCellW, h: 56, rx: 4 },
+    { x: PROP.x + hardCellW, y: PROP_ROWS.pairRow, w: hardCellW, h: PROP_ROWS.bandH, rx: 4 },
     'WORLD',
     'push on 7',
-    { x: PROP.x + hardCellW * 2 - 30, y: 480 + 28 },
+    { x: PROP.x + hardCellW * 2 - 30, y: PROP_ROWS.pairRow + 26 },
     'prop',
   ),
   HOP_AREA,
   band(
     'horn',
     { kind: 'PROP', prop: 'HORN' },
-    { x: PROP.x, y: 546, w: hardCellW, h: 56, rx: 4 },
+    { x: PROP.x, y: PROP_ROWS.hornHop, w: hardCellW, h: PROP_ROWS.bandH, rx: 4 },
     'HORN',
     '2 3 11 12',
-    { x: PROP.x + hardCellW - 30, y: 546 + 28 },
+    { x: PROP.x + hardCellW - 30, y: PROP_ROWS.hornHop + 26 },
     'prop',
   ),
 
@@ -335,10 +424,10 @@ export const AREAS: FeltArea[] = [
   band(
     'fire',
     { kind: 'FIRE' },
-    { x: PROP.x, y: 612, w: hardCellW, h: 88, rx: 4 },
+    { x: PROP.x, y: PROP_ROWS.side, w: hardCellW, h: PROP_ROWS.sideH, rx: 4 },
     'FIRE BET',
     '24 / 249 / 999',
-    { x: PROP.x + hardCellW / 2, y: 612 + 64 },
+    { x: PROP.x + hardCellW / 2, y: PROP_ROWS.side + 54 },
     'side',
   ),
   ...([
@@ -350,11 +439,11 @@ export const AREAS: FeltArea[] = [
     return {
       id: `ats-${ats}`,
       spec: { kind: 'ATS', ats },
-      rect: { x: PROP.x + hardCellW + i * w, y: 612, w, h: 88, rx: 4 },
+      rect: { x: PROP.x + hardCellW + i * w, y: PROP_ROWS.side, w, h: PROP_ROWS.sideH, rx: 4 },
       label,
       sub,
       variant: 'side',
-      anchor: { x: PROP.x + hardCellW + i * w + w / 2, y: 612 + 62 },
+      anchor: { x: PROP.x + hardCellW + i * w + w / 2, y: PROP_ROWS.side + 52 },
     };
   }),
 ];
@@ -403,7 +492,7 @@ export function anchorFor(bet: BetLocation): Point {
       return numberAnchors(bet.number as PointNumber).lay;
 
     case 'HOP':
-      return { x: PROP.x + hardCellW * 2 - 30, y: 546 + 28 };
+      return HOP_AREA.anchor;
 
     default:
       return AREA_BY_KEY.get(areaKey(bet))?.anchor ?? { x: VIEW.w / 2, y: VIEW.h / 2 };
@@ -411,19 +500,35 @@ export function anchorFor(bet: BetLocation): Point {
 }
 
 /**
- * Both seats can have money on the same spot, so each is nudged off the shared
- * anchor in its own direction. Combined with the coloured rim it stays obvious
- * whose chips are whose.
+ * How far each seat's money sits from the shared anchor for a spot.
+ *
+ * Tuned against the chip radius the felt actually draws (20), so two seats on
+ * the same spot come out just touching rather than a quarter overlapped. On the
+ * narrowest cells — Small / Tall / All at 64 wide — a pair does overhang the
+ * printed line slightly, which is what happens on a real layout too.
+ */
+const SEAT_SPREAD = 19;
+
+/**
+ * Both seats can have money on the same spot, so each is pushed off the shared
+ * anchor in its own direction: the first seat's money to the left, the second
+ * seat's to the right.
+ *
+ * Purely horizontal, which matters. The old diagonal nudge read as one stack
+ * sitting on another, so telling the two apart came down to squinting at the
+ * rim colour. Left and right is a distinction you can make at a glance and
+ * without knowing the colour code, and it matches how the two seats are laid
+ * out everywhere else in the app.
  */
 export function seatOffset(seat: 'A' | 'B'): Point {
-  return seat === 'A' ? { x: -7, y: -5 } : { x: 7, y: 5 };
+  return seat === 'A' ? { x: -SEAT_SPREAD, y: 0 } : { x: SEAT_SPREAD, y: 0 };
 }
 
 /** Odds ride offset on top of the flat bet, the way a dealer stacks them. */
 export function oddsAnchorFor(bet: Bet): Point {
   const base = anchorFor(bet);
   const rightSide = bet.kind === 'PASS' || bet.kind === 'COME';
-  return { x: base.x + (rightSide ? 20 : -20), y: base.y - 15 };
+  return { x: base.x + (rightSide ? 23 : -23), y: base.y - 17 };
 }
 
 /* ------------------------------------------------------------------ *
@@ -461,11 +566,12 @@ function propRectId(prop: PropKind | undefined): string | null {
     case 'TWELVE':
       return `prop-${prop}`;
     case 'HORN':
+      return 'horn';
     case 'HORN_HIGH_2':
     case 'HORN_HIGH_3':
     case 'HORN_HIGH_YO':
     case 'HORN_HIGH_12':
-      return 'horn';
+      return `prop-${prop}`;
     default:
       return null;
   }

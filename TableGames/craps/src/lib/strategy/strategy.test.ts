@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { allStrategies } from '@/lib/store/useGame';
 import { applyRoll } from '@/lib/engine/resolve';
 import { createRng, rollDice } from '@/lib/engine/rng';
 import { atRisk, createTable, placeBet, setBetAmount, takeDown } from '@/lib/engine/table';
@@ -819,5 +820,34 @@ describe('duplicating and importing', () => {
     expect(isStrategy({ name: 'nope' })).toBe(false);
     expect(isStrategy(null)).toBe(false);
     expect(isStrategy('{}')).toBe(false);
+  });
+});
+
+describe('the library a player actually sees', () => {
+  /*
+   * Saving an edit straight onto a house system used to persist a custom
+   * carrying the house id. The library concatenates house first, so `find`
+   * returned the house version and the player's edits silently never ran —
+   * and every list rendering the library got duplicate React keys for free.
+   */
+  it('never lets a custom strategy shadow a house one', () => {
+    const house = HOUSE_STRATEGIES.find((s) => s.id === 'inside-22')!;
+    const impostor: Strategy = { ...house, name: 'Mine, secretly', origin: 'CUSTOM' };
+
+    const list = allStrategies([impostor]);
+
+    expect(list.filter((s) => s.id === 'inside-22')).toHaveLength(1);
+    expect(list.find((s) => s.id === 'inside-22')!.name).toBe(house.name);
+  });
+
+  it('issues every strategy in the library a unique id', () => {
+    const mine = duplicateStrategy(HOUSE_STRATEGIES[0], 'mine-1');
+    const ids = allStrategies([mine, mine]).map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('keeps the custom strategies that do not collide', () => {
+    const mine = duplicateStrategy(HOUSE_STRATEGIES[0], 'mine-7', 'Something of my own');
+    expect(allStrategies([mine]).some((s) => s.id === 'mine-7')).toBe(true);
   });
 });

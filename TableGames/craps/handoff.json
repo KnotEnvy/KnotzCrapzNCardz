@@ -1,36 +1,48 @@
 {
   "project": "Knotz Craps",
   "path": "TableGames/craps",
-  "oneLine": "A full craps table for one or two players sharing one screen, with rigid-body dice physics, true casino odds, and a strategy workshop for building systems and playing against them.",
+  "oneLine": "A full craps table for one or two players sharing one screen, with rigid-body dice physics, true casino odds, a strategy workshop for building systems and playing against them, and a felt that looks like cloth under a lamp rather than a diagram.",
   "handoffDate": "2026-08-24",
-  "status": "Feature complete and play-tested. Everything is green: 190 unit tests (112 engine, 4 dice, 74 strategy), typecheck, lint with zero warnings, and a production build. The strategy layer was driven through the real UI this session — two bots played 75 rolls head to head, the builder was used to duplicate and edit a system, and the seat cards were cross-checked against the engine's own bookkeeping. One pre-existing React duplicate-key warning is known and documented below; it is not from this session's work.",
+  "status": "Feature complete and play-tested. Everything is green: 193 unit tests (112 engine, 4 dice, 77 strategy), typecheck, lint with zero warnings, and a production build. This session was a visuals and layout pass, driven through the live app the whole way: dice screenshotted in flight and at rest, every effect layer sampled from the DOM across 40 rolls, and the felt read back at three viewport widths. The long-standing duplicate React key warning is fixed, and a second, more serious id collision was found and fixed while verifying it. The console is clean on a fresh load, including with the strategy workshop open.",
   "whatChangedThisSession": {
-    "summary": "Strategies. A pure rule language, seventeen house systems written in it, a workshop and visual builder, and per-seat autoplay so you can put a system on the other seat and play against it.",
-    "engine": [
-      "New src/lib/strategy/ — four files, all pure, no React: types.ts (the language), run.ts (the runner), library.ts (the seventeen house systems), describe.ts (a rule rendered back into English).",
-      "New setBetAmount in src/lib/engine/table.ts. The felt could take a bet up but never bring one down; regression systems need that. Going up delegates to placeBet and inherits every adjustment; coming down returns the difference to the rack.",
-      "runStrategy(table, seat, strategy, memory, record, settlements) returns a new table, new memory, and a log of the calls it made. It is to a strategy what applyRoll is to a roll."
+    "summary": "Visuals. The table got a real surface, the chips got mass, the box numbers got divided the way a dealer divides them, the proposition column got rebuilt against a live reference, and the two events that end a hand got a payoff worth watching. The reference was a screenshot of Crapsee, a commercial craps app the owner used to play on; the brief was to match its layout structure and typography while keeping our own lit green felt rather than its flat black. That choice was put to the owner explicitly, because repainting the surface would have thrown away the lighting work.",
+    "surface": [
+      "New src/components/table/Surface.tsx - the furniture: wood with long-grain turbulence, a padded leather bumper that casts a blurred shadow inward onto the cloth, the felt's radial fill, a fine nap and a coarser mottle, the lamp cone, and the corner falloff. Read-only decoration in the same spirit as Fx.tsx: it knows nothing about bets, seats or the store.",
+      "TableBed draws under the printed layout and TableLight draws over it. That split is the whole point - light falls on ink, so the corner falloff dims the lettering along with the cloth it sits in. A layout that stays uniformly bright while the felt falls away reads as a sticker.",
+      "The lamp sways a few pixels over nineteen seconds, and a live point breathes on the puck. Ambient motion tied to state rather than to a clock, so a come-out is genuinely still."
     ],
-    "store": [
-      "useGame gained customStrategies, customSeq, seatStrategy and strategyMemory, plus assignStrategy / setSeatAuto / runSeatStrategy / saveStrategy / deleteStrategy / createStrategy / importStrategy.",
-      "playStrategies runs synchronously at the end of settleDice and the fast-roll path, so a bot's bets are on the felt before the player can throw again.",
-      "newSession takes an optional strategies map and primes the opening bets before the player sees the felt."
+    "layout": [
+      "A box number is now three printed bands - LAY and D/C above, the number and its payout, PLACE and COME below - and each band is its own hitbox with its own bet kind. 47 clickable zones, up from 31. A player no longer arms a mode before betting the side they meant.",
+      "Hover tints the two sides of the layout apart: warm for the right side, cool for the don't side.",
+      "Amber box numbers and red don't-side lettering (DON'T COME, DON'T PASS BAR, the barred twelve, ANY SEVEN, ANY CRAPS), matching the reference and real felt. New --color-print-amber and --color-print-red tokens.",
+      "The proposition column is printed as a box on darker cloth rather than implied by a hairline, and rebuilt on a named PROP_ROWS grid.",
+      "Horn High 2 / 3 / 11 / 12 now have felt cells. They were reachable only from inside the hop dialog before, and the engine already supported them in full.",
+      "The dice printed on the hardways and props are crimson with white pips (PRINT_DIE_FACE / PRINT_DIE_PIP in Pips.tsx), matching both the reference and the actual dice the table throws.",
+      "Field numbers are centred on their band and spread wider; they used to sit 44px right of centre."
     ],
-    "ui": [
-      "New src/components/strategy/Workshop.tsx — library down the left, selected system down the right, with seat assignment, warnings, JSON export/import and a search box.",
-      "New src/components/strategy/RuleEditor.tsx — the when/if/then builder. Every control is a plain select or number box.",
-      "The setup screen and the new-session dialog both ask what each seat is playing, in the same breath as the buy-in. That is the main reason it does not read as bolted on.",
-      "Seat cards carry a strategy tag (name, AUTO or ON CALL) and a live ticker of the last call that system made. A seat with no system shows '+ Strategy' as an invitation.",
-      "The action bar gained 'Run <name>' and 'Strategies…'; the top bar gained 'Strategies'; 'S' runs the armed seat's strategy.",
-      "New 'Strategy log' panel in the stats column: every call, against the roll it happened on and the rule that made it, including the ones the table refused.",
-      "primitives.tsx gained Select and NumberBox; Dialogs.tsx exports Modal and takes bodyClassName so the workshop can own its own scrolling."
+    "chips": [
+      "A stack is no longer the top chip drawn five times. Every chip below the top renders as a side wall - its own colour in shadow, with contrasting edge spots moulded through - and each is turned by a deterministic hash so the spots never line up into a stripe.",
+      "Felt bets went 17 to 20, odds 12 to 15, chips in flight 13 to 15, with a tighter two-part contact shadow.",
+      "seatOffset is now purely horizontal: the first seat's money to the left, the second seat's to the right."
+    ],
+    "dice": [
+      "Contact-shadow blobs under each die that tighten and darken as it falls, driven straight off the die's height. The mapped shadow alone barely changes weight between resting and airborne, which is the opposite of what sells contact.",
+      "A bounce light off the cloth, so the crimson picks up green along its lower edges.",
+      "A conservative material polish. See keyDecisions - clearcoat has a ceiling here for a physical reason."
+    ],
+    "fx": [
+      "New OutcomeBurst: a hot core, two offset shock rings and sixteen sparks, fired at the box that decided the hand - the point's own box when it is made, the middle of the layout on a seven out. Drops out entirely under reduced motion.",
+      "Chip flights arc. A payoff is tossed with hang time and a little rotation; a loss slides flat and briskly. Same two endpoints, opposite gesture, achieved with separate eases on x and y.",
+      "Every effect layer's root carries an inert data-fx hook so a layer can be asserted from outside React."
     ],
     "bugsFoundAndFixed": [
-      "BET used to add to a spot, so $22 Inside became $44 on the second point of a hand — place bets survive a point being made. A bet now names a level, not a helping. Found by probing two point cycles, which the first pass of tests never did.",
-      "`once` was stamped on attempt rather than on success, which meant a rule that found nothing to do burned the budget a later roll needed. It now counts successes.",
-      "The generated prose read 'if I have no the pass line'. Conditions now use a separate noun form: 'if my pass line bet is not up'.",
-      "House systems keyed their opening bets off POINT_SET, the event, so dropping one onto a seat mid-hand left it idle for the rest of the hand. They now key off POINT_ON, the state, paired with once-per-point.",
-      "Duplicate made a copy but left you looking at the original. It now opens the copy."
+      "The duplicate React key warning that had been open for two sessions. It was not in the felt at all: StrategyWorkshop and NewSessionDialog are siblings in one children array and both remount counters start at 0, so the two collided on key `0` at first mount. Found by walking the live fiber tree for parents with duplicate sibling keys, after captureOwnerStack pointed only as far as Page.",
+      "A custom strategy could shadow a house one. saveStrategy appended any strategy whose id was not already in customStrategies, without checking whether that id belonged to a house system, so saving an edit to a house system persisted a custom under the house id. The duplicate key was the mild symptom; the serious one is that allStrategies puts house first, so findStrategy returned the house version and the player's saved edits silently never ran. Fixed at both ends and covered by three new tests.",
+      "Sparks were rotated with a transform attribute next to an animated x. motion drives SVG transforms through style, and a CSS transform beats the presentation attribute, so the rotation was being thrown away silently. The angle moved to a plain wrapper element.",
+      "Both dice contact blobs shared one material instance, so writing opacity per die would have left both wearing whichever was updated last.",
+      "Collecting the two blob refs into an array to map over read refs during render; eslint's react-hooks/refs caught it. They are written out explicitly now.",
+      "The horn-high cells and the single-number props both printed bare numbers, so their tooltips and aria-labels were identical and ambiguous. FeltArea gained an optional callName - what a dealer would call the bet - separate from the glyph printed on the felt.",
+      "anchorFor duplicated the hop cell's coordinates as literals instead of reading HOP_AREA.anchor, so moving the cell would have left hop chips behind. It reads the anchor now."
     ]
   },
   "origin": {
@@ -115,7 +127,11 @@
       },
       {
         "path": "src/components/table/layout.ts",
-        "role": "Single source of truth for felt geometry — where each betting area sits, where its chips land (anchorFor), and which box lights up when it resolves (rectFor)."
+        "role": "Single source of truth for felt geometry - where each betting area sits, where its chips land (anchorFor), which box lights up when it resolves (rectFor), the three bands inside a box number (numberZones), and the proposition column's row grid (PROP_ROWS)."
+      },
+      {
+        "path": "src/components/table/Surface.tsx",
+        "role": "The table's furniture: wood, bumper, cloth and the light over it. Read-only, like Fx. TableBed goes under the printed layout and TableLight over it, which is what keeps the print lit and shaded with the cloth."
       },
       {
         "path": "src/components/table/Fx.tsx",
@@ -136,6 +152,62 @@
     ]
   },
   "keyDecisions": [
+    {
+      "topic": "The table is painted in the order light arrives",
+      "where": "src/components/table/Surface.tsx, and where TableBed / TableLight sit in Felt.tsx",
+      "decision": "Wood, then the padded bumper and the shadow it throws inward, then the cloth and its nap, then the printed layout, then the lamp cone, then the corner falloff. TableLight is rendered after the print, not before it.",
+      "why": "Screen-printed ink is lit and shaded along with the cloth it sits in. Put the falloff under the print and the lettering stays uniformly bright while the felt darkens around it, which reads instantly as a sticker laid on top of a table rather than a layout printed into one. Everything else in the file is conventional gradient work; this ordering is the part that actually makes it a surface.",
+      "doNot": "Do not move TableLight above the printed layout to 'stop the print being dimmed'. The dimming is the effect."
+    },
+    {
+      "topic": "A stack is chips, not one chip repeated",
+      "where": "ChipWall and the spin() hash in src/components/table/Chip.tsx",
+      "decision": "Only the top chip of a stack draws an inlaid face. Every chip under it draws a side wall - its own colour in shadow, with contrasting edge spots moulded through - and takes a deterministic rotation derived from its index and the stack's value.",
+      "why": "Looking down at a real stack you see one face and a crescent of each chip's edge below it. Drawing the crescent is most of the difference between a stack of chips and a stack of circles. The rotation is hashed rather than random because this component re-renders whenever anything else on the table changes, and Math.random would make every stack on the felt shimmer on an unrelated state change.",
+      "doNot": "Do not reach for Math.random here, or in Fx. Hash the index."
+    },
+    {
+      "topic": "A box number is three bands, and each band is its own bet",
+      "where": "numberZones in layout.ts, and the zones memo in Felt.tsx",
+      "decision": "The cell is split into LAY, the number, and PLACE. Each is a separate hitbox: the top band lays, the bottom band places, and the middle band takes whichever mode the toolbar has armed. Hover tints the don't side cool and the right side warm.",
+      "why": "It is how a real layout is divided and how a dealer reads it, and it removes the need to arm a mode before betting the side you meant. The captions teach an empty box; chips cover them once money is down, exactly as they do on a table.",
+      "note": "CELL_BANDS must keep summing to ROWS.numbers.h (168). The band heights were rebalanced from 46/76/46 to 48/72/48 purely to give the larger chip room to sit inside a band without touching the printed line."
+    },
+    {
+      "topic": "Seat money goes left and right, and the spread is tuned to the chip radius",
+      "where": "SEAT_SPREAD and seatOffset in layout.ts",
+      "decision": "The first seat's chips sit 19 units left of the shared anchor, the second seat's 19 right.",
+      "why": "The old offset was diagonal, which read as one stack sitting on another and left the rim colour as the only way to tell them apart. Left and right is a distinction you can make at a glance without knowing the colour code. 19 is not arbitrary: the felt draws bets at r=20, so 19 puts a pair just touching. At 15 they overlapped by a quarter.",
+      "doNot": "Do not change the chip radius in Felt.tsx without re-tuning SEAT_SPREAD, and vice versa. Nothing type-checks the relationship and the failure is silent overlap.",
+      "note": "On the narrowest cells - Small / Tall / All at 64 wide - a pair does overhang the printed line. That was accepted; it happens on a real layout too."
+    },
+    {
+      "topic": "motion writes style.transform, which beats the transform attribute",
+      "where": "the spark wrapper in OutcomeBurst, src/components/table/Fx.tsx",
+      "decision": "Anything static that positions an animated SVG element - a rotation, a translation - goes on a plain parent element, never alongside motion's own animated transform on the same node.",
+      "why": "motion drives SVG transforms through the style property, and a CSS transform overrides the transform presentation attribute entirely. Writing rotate() next to an animated x does not merge them; it silently discards the rotate. This cost a debugging pass and it fails without any error - the sparks simply all fly the same way."
+    },
+    {
+      "topic": "Clearcoat without an environment map darkens rather than polishes",
+      "where": "useDieMaterials in src/components/dice/DiceStage.tsx",
+      "decision": "clearcoat is held at 0.8 with clearcoatRoughness 0.12, not 1.0 and 0.08.",
+      "why": "There is no environment map in this scene. A full-strength coat has nothing to reflect and only costs the diffuse its brightness, so the dice go dark instead of glossy. The higher values were tried, screenshotted, and backed out.",
+      "doNot": "Do not raise clearcoat toward 1 on the strength of it being 'more physical'. If you want a real polish, add an environment first, and check it on screen."
+    },
+    {
+      "topic": "Effect layers carry a data-fx hook",
+      "where": "the roots of AreaFlashes, ChipFlights, OutcomeBurst and OutcomeWash",
+      "decision": "Each layer's root element has an inert data-fx attribute. Nothing in the app reads it; it exists so a layer can be asserted from outside the React tree.",
+      "why": "A blank effect layer is exactly the class of bug a green build hides, and catching one in a screenshot means taking it on the right millisecond. With the hooks you can poll the DOM across a run of rolls and count what actually mounted.",
+      "note": "Presence is not visibility. These layers deliberately end at zero opacity and stay mounted until the next hand-ending roll replaces them, so a sampler that counts presence will report them as permanently on. Check the opacity too."
+    },
+    {
+      "topic": "A custom strategy can never shadow a house one",
+      "where": "allStrategies and saveStrategy in src/lib/store/useGame.ts",
+      "decision": "allStrategies filters out any custom whose id is already a house id, and saveStrategy mints a fresh mine-N id rather than writing a custom under a house id.",
+      "why": "The library concatenates house first, so findStrategy returns the house version. A custom carrying a house id is therefore unreachable: the player's saved edits silently never run, and every list rendering the library gets duplicate React keys. The filter also repairs sessions that already have such a strategy persisted, which is what saving over a house system used to produce - the owner's session had exactly that.",
+      "note": "Regression tests: the 'the library a player actually sees' block."
+    },
     {
       "topic": "A strategy is a list of when / if / then sentences",
       "where": "src/lib/strategy/types.ts",
@@ -299,6 +371,13 @@
     }
   ],
   "gotchas": [
+    "fastRoll is persisted, and the fast path in throwDice deliberately sets animation to null. If the dice never appear, check the FAST button before you go looking at the canvas - a saved session with fast mode left on looks exactly like a broken renderer. This cost real debugging time this session.",
+    "SEAT_SPREAD in layout.ts is tuned against the chip radius Felt.tsx passes to ChipStack (20). Change one without the other and the two seats' stacks silently overlap again.",
+    "CELL_BANDS must sum to ROWS.numbers.h. PROP_ROWS is a chain of hand-checked offsets and the proposition column is packed to within a few pixels; add a row and something has to give height back.",
+    "PrintedLayout is React.memo'd and carries the printInk filter. It takes no props on purpose. Put per-roll state inside that group and you will re-rasterise a filter over the whole table on every roll.",
+    "The .felt-text class sets text-anchor in CSS, and a CSS declaration beats the text-anchor presentation attribute. A caption that needs to hang off an edge has to use .felt-text--start / --end, not textAnchor.",
+    "FeltArea.label is the glyph printed on the felt; FeltArea.callName is what the bet is called. On the props those differ - the horn high two and the two both print '2' - and the zone name, tooltip and aria-label all read callName first. Add a prop cell without a callName and it will be indistinguishable to a screen reader.",
+    "When verifying in the browser pane, the console buffer survives a reload. Stale duplicate-key errors will sit there long after the fix. Use a fresh tab, or walk the fiber tree for parents with duplicate sibling keys - that is ground truth, and it is how both of this session's key bugs were located.",
     "src/lib/dice/simulate.ts FACE_AXES and src/components/dice/DiceStage.tsx MATERIAL_ORDER encode the same die convention (+X=1, -X=6, +Y=2, -Y=5, +Z=3, -Z=4). If they disagree, every roll renders a face that does not match the result the engine settled. Nothing type-checks this; the dice test suite does.",
     "Changing the shape of TableState requires bumping `version` in the persist config in useGame.ts. It is still 3 — the strategy layer was deliberately kept off TableState, so adding it changed the store's shape without changing the table's. There is a `merge` guard that falls back to fresh defaults for anything missing or half-shaped.",
     "placeBet's `opts.fromChip` is the difference between a rack denomination and an amount already in the spot's units. Getting it wrong does not fail typecheck and does not look wrong on screen — it just quietly bets more than the player asked for. Nothing in src/lib/strategy sets it, and nothing should.",
@@ -316,28 +395,29 @@
   "verification": {
     "automated": {
       "unit": "112 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports.",
-      "strategy": "74 tests. Unit arithmetic reproducing $22/$44 inside and $32 across; bring-up-to versus top-up across two point cycles; the line and its odds on both sides; the Molly's two-come cap; number-scoped pressing and its ceiling; the regression's do-not-fire-on-the-point-set-roll behaviour and its once-per-point limit; two-hits-and-down; the iron cross's exact $27 exposure; the hedge coming off when a point is set; the Fire Bet chaser's once-per-hand; the 5-count sitting out; state versus event triggers on a forced re-run; mid-hand assignment; win goals and loss limits; setBetAmount in both directions including its refusal on a contract bet; memory reset on a strategy swap and on a seven out; the log window and its refusal dedupe; the describer's exact prose; the warnings; duplicate and import. Plus two invariant sweeps: every one of the seventeen house systems over a seeded 400-roll session, and two systems head to head over 300 rolls, both asserting that a strategy never overdraws a rack, never leaves a zero-amount bet, and leaves each seat worth exactly what the settlements left it worth.",
+      "strategy": "77 tests. Everything the previous session covered, plus a new 'the library a player actually sees' block: a custom carrying a house id never shadows the house version, every id in the library is unique, and a custom with its own id survives.",
       "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
       "statistical": "npm run test:stats — 6 tests, ~165s. Not re-run this session; the strategy layer cannot change a payout, because it only moves chips between a rack and the felt through calls the felt already made. Worth a run before shipping anyway.",
-      "static": "tsc --noEmit clean; eslint clean (0 errors, 0 warnings); next build succeeds (4 static routes)."
+      "static": "tsc --noEmit clean; eslint clean (0 errors, 0 warnings - it caught a refs-during-render bug this session); next build succeeds (4 static routes)."
     },
     "manual": [
-      "Strategy picked on the start screen: all seventeen systems in the dropdown, seat B set to Iron Cross, and the bot's opening pass-line bet was on the felt before the first throw.",
-      "Iron Cross verified on the felt with a point of 8: chips on the 5, 6, 8, the field and the line, $27 at risk — the same figure the unit test asserts.",
-      "Strategy log read back from the DOM: 'Place 5 — $5 / Place the five', 'Place 6 — $6', 'Place 8 — $6', 'Field — $5', each against its roll number and rule, plus the pass-line calls on the earlier come-outs.",
-      "Builder driven end to end: duplicated $22 Inside, landed on the editable copy, expanded the rule, changed 1 unit to 3, and watched the generated sentence become 'bring place inside up to 3 units ($15)' and the change land in localStorage in the same tick.",
-      "Mid-hand assignment: with the point already on 8, switching seat A to Auto put $22 inside on the felt immediately — the bug that the POINT_SET to POINT_ON change fixed.",
-      "Two bots head to head for 75 rolls in fast mode. Seat cards cross-checked against the engine's own bookkeeping: bankroll, at-risk and net matched exactly on both seats. No new console errors.",
-      "Session persistence: reloaded with strategies assigned and both the assignment and the custom strategies came back.",
-      "Previously: dice confirmed rendering in flight and at rest; win and loss flashes screenshotted in both polarities; seven out sampled frame by frame; chip and minimum rules driven through the real UI; press verified scoped; layout checked for overflow at 1680x980, 1366x768 and 1024x680."
+      "Duplicate React key warning: located by walking the live fiber tree, fixed, and confirmed gone - zero duplicate-keyed parents in the tree, and a clean console on a fresh tab with the strategy workshop open, which is where the second collision rendered.",
+      "Dice screenshotted mid-tumble and at rest, with the new contact shadows visible under both. Re-checked after the ref restructure, because nothing automated catches a blank canvas.",
+      "Dice material: clearcoat 1.0 was tried, screenshotted, judged too dark, and backed out to 0.8.",
+      "Effect layers sampled from the DOM via their data-fx hooks across 40 rolls: point-made cores 3, seven-out cores 16, sparks 19, rings 19, washes 23, box flashes 51, and up to 9 chips airborne at once mid-arc.",
+      "Seat split verified by reading chip transforms back: on every box number, seat A at x and seat B at x+38, identical y.",
+      "Horn high driven end to end: clicked on the felt, accepted by the engine, chip landed in the new cell at the correct seat offset.",
+      "Layout measured at 1366x768 and 1024x680: no horizontal or vertical overflow, roll button inside the viewport at both.",
+      "Previously: strategy layer driven through the real UI; dice confirmed rendering in flight and at rest; win and loss flashes screenshotted in both polarities; chip and minimum rules driven through the real UI."
     ],
     "notVerified": [
-      "Touch input. The game is mouse-and-keyboard; no tap targets were sized for touch, and the rule builder is the densest thing on the screen by a wide margin.",
-      "Any viewport narrower than ~1000px. The workshop collapses to one column below md but was only read at desktop width.",
+      "Reduced motion. The paths are written - OutcomeBurst returns null, the lamp goes static, the puck pulse is guarded - but they were not exercised with the media query actually on. This is the most likely place for a visual regression to hide.",
+      "Motion blur on the dice in flight was deliberately not attempted. Real blur needs post-processing, and a ghost trail on fast-tumbling dice reads as a rendering fault rather than speed.",
+      "Screenshots were all taken at the browser pane's own viewport (around 830px wide). Wider layouts were checked by DOM measurement, not by eye, because the pane would not composite an emulated viewport.",
+      "Touch input, and any viewport narrower than ~1000px.",
       "Safari and Firefox. Only Chrome was used.",
-      "Audio was never listened to — it is synthesised WebAudio and was verified only by reading the code. The strategy layer adds no sound at all.",
-      "Long-session memory behaviour beyond the 600-roll history window.",
-      "The expected value of each house system is not measured anywhere. The tests prove the seventeen play legally and honestly, not that any of them is any good."
+      "Audio was never listened to; nothing was added to it this session, so every new effect is silent.",
+      "The expected value of each house system is still not measured anywhere."
     ]
   },
   "deviationsFromSpec": [
@@ -365,68 +445,91 @@
     "A start screen and setup form covering seats, strategies, buy-in, re-buy, limits, odds multiple and every house rule.",
     "Solo play.",
     "Grouped place calls: inside, outside, across.",
-    "Table juice: box flashes, chips travelling to the rail and the bank, a seven-out shake and full-felt washes, all reduced-motion aware.",
     "House rules panel: limits, odds multiple (1x to 100x), field 2x/3x on the twelve, vig on win vs up front, come-out working defaults, increment snapping, side bets on/off.",
     "Session persistence to localStorage.",
     "Keyboard shortcuts (space to roll, 1-7 chips, A/B seats, O max odds, H stats, S run strategy).",
     "Synthesised audio — dice clacks scaled by impact velocity, chip drops, payout and seven-out calls. No audio assets in the bundle.",
-    "House edge shown in the tooltip on every box number."
+    "House edge shown in the tooltip on every box number.",
+    "A painted table surface: wood with grain, a padded bumper casting onto the cloth, felt nap and mottle, an overhead lamp that sways, and corner falloff that dims the print with the cloth.",
+    "Table juice: box flashes, chips arcing to the rail and raked to the bank, a seven-out shake, full-felt washes, and a burst of rings and sparks at the box that decided the hand. All reduced-motion aware.",
+    "Box numbers divided into three labelled, separately clickable bands, so laying, buying and placing are distinct targets rather than a mode you arm first.",
+    "Horn High bets printed on the felt."
   ],
   "openItems": [
     {
+      "priority": "high",
+      "item": "Audio has fallen a long way behind the visuals.",
+      "detail": "src/lib/audio.ts is synthesised and has still never been listened to. Nothing was added to it this session, so the box flashes, the chip flights, the outcome burst, the seven-out shake and every strategy call are all silent. The visuals now carry a lot of weight the sound does not, and that gap is the single most noticeable thing missing from the polish. A rake on a loss, a chip drop on a press, and something with real low end on the burst are the obvious gaps. Levels and the seven-out sting are still guesses."
+    },
+    {
+      "priority": "high",
+      "item": "Exercise reduced motion for real.",
+      "detail": "Every new effect has a reduced-motion path and none of them were run with the media query actually on. Chrome devtools can force prefers-reduced-motion. Check: OutcomeBurst disappears entirely, the lamp stops swaying and renders as a plain rect, the puck stops breathing, chip flights drop out, and the flashes become cross-fades. This is the likeliest place for a regression to be sitting right now."
+    },
+    {
       "priority": "medium",
-      "item": "A pre-existing duplicate React key warning on the table.",
-      "detail": "The table logs 'Encountered two children with the same key, `0`' every time it mounts. It predates this session's work — it reproduces with no strategy assigned to either seat, and the start screen is clean, so it is somewhere in the felt, chip, pip or dice-stage rendering. React dedupes it, so an interceptor installed after mount will not catch it again; instrument before the app mounts. Harmless in production but it hides real warnings during development."
+      "item": "Dice motion blur, or a better idea.",
+      "detail": "Deliberately skipped. Real blur needs post-processing and a naive ghost trail on tumbling dice reads as a rendering fault. If someone wants to take it on, the honest options are a postprocessing pass (new dependency, and the canvas is already always-on) or shaping the tumble so the fastest part of the throw is shorter. Do not ship a trail without looking at it frame by frame."
+    },
+    {
+      "priority": "medium",
+      "item": "The hop bets are still behind a dialog.",
+      "detail": "The reference app prints a full hop grid and a hardway-hops block on the felt. We have a HOP cell that opens a dialog instead. The proposition column is now packed, so putting 21 hop cells on the felt means either reclaiming space or widening the column, which pushes into the player layout. Worth doing only if the owner wants it; the dialog is genuinely easier to use."
     },
     {
       "priority": "medium",
       "item": "Measure what the seventeen systems actually cost.",
-      "detail": "The natural next step for the strategy layer, and the infrastructure is already there: the engine is seeded and pure, runStrategy is pure, and the stats config already runs long simulations. A test that plays each system over a few hundred thousand rolls and reports net per roll against total action would turn the workshop from a toy into a lab. It would also give the workshop somewhere to show an expected-value figure per system."
-    },
-    {
-      "priority": "medium",
-      "item": "Listen to the audio.",
-      "detail": "src/lib/audio.ts is synthesised and was never heard. Levels and the seven-out sting are guesses. Nothing was added to it this session, so the flashes, chip travel, the shake and every strategy call are silent. A rake sound on a loss and something on a press are the obvious gaps."
+      "detail": "Unchanged from last session and still the natural next step for the strategy layer. The engine is seeded and pure, runStrategy is pure, and the stats config already runs long simulations. A test that plays each system over a few hundred thousand rolls and reports net per roll against total action would turn the workshop from a toy into a lab, and give it somewhere to show an expected-value figure."
     },
     {
       "priority": "medium",
       "item": "Touch and small-screen support.",
-      "detail": "If they want to play on a tablet, the felt needs a reflowed layout and larger hit targets. The stats panel already becomes a drawer below 1280px, which is the pattern to follow. The rule builder is now the densest thing in the app and would need its own treatment."
+      "detail": "Still unaddressed, and the felt got denser this session rather than looser: a box number is now three stacked hit zones roughly 48 units tall, which at a phone width is well under a comfortable tap target. The stats panel already becomes a drawer below 1280px, which is the pattern to follow. The rule builder remains the densest thing in the app."
+    },
+    {
+      "priority": "low",
+      "item": "A felt colour option.",
+      "detail": "The owner was offered black-felt and dual-palette options this session and chose to keep the green and match the reference's structure instead. If it ever comes back, the groundwork is done: the surface is one module and the print colours are tokens (--color-print-amber, --color-print-red, --color-felt-line), so a second palette is a token swap plus new gradient stops in Surface.tsx, not a rewrite."
+    },
+    {
+      "priority": "low",
+      "item": "Chips overhang the narrowest side-bet cells.",
+      "detail": "Small / Tall / All are 64 units wide and a two-seat pair spans about 78. Accepted deliberately - it happens on a real layout - but if it ever looks wrong, the fix is a smaller radius for the 'side' variant rather than a narrower seat spread, which is tuned for the box numbers."
+    },
+    {
+      "priority": "low",
+      "item": "Idle GPU cost of the always-on canvas.",
+      "detail": "Unchanged. The canvas redraws at 60fps even when nothing moves, and the felt now also runs a slow lamp sway and a puck pulse, though those are cheap CSS-level animations rather than GPU work. On-demand rendering did not work as a one-line prop change (see keyDecisions); the likely shape is frameloop='demand' plus an explicit invalidate() from an effect keyed on the animation, and it must be verified with a screenshot of settled dice."
     },
     {
       "priority": "low",
       "item": "The strategy language has no OR inside a rule.",
-      "detail": "Deliberate — an or is two rules, and that reads better in the workshop than a nested tree. But some systems genuinely want it and end up as near-duplicate rules. If it is ever added, a flat 'any of these' list alongside `all` is the shape that would not wreck the describer."
+      "detail": "Deliberate - an or is two rules, and that reads better in the workshop than a nested tree. If it is ever added, a flat 'any of these' list alongside `all` is the shape that would not wreck the describer."
     },
     {
       "priority": "low",
       "item": "A strategy cannot control come odds working through the come-out.",
-      "detail": "Bet.oddsWorking is engine-managed and applyPhaseDefaults sleeps come odds through a come-out, which is correct default behaviour. There is no action to override it, so a system that wants its come odds working on the come-out cannot say so. The WORKING action only reaches place, buy and hardway bets."
+      "detail": "Bet.oddsWorking is engine-managed and applyPhaseDefaults sleeps come odds through a come-out, which is correct default behaviour. There is no action to override it. The WORKING action only reaches place, buy and hardway bets."
     },
     {
       "priority": "low",
       "item": "The setup form and House rules overlap.",
-      "detail": "Setup.tsx and SettingsDialog offer nearly the same fields, from different components. Setup writes a whole new table; House rules edits the live one. Worth folding SettingsDialog onto SetupForm with a read-only flag for the fields that cannot change mid-session. Note that Setup now also owns strategy assignment, which SettingsDialog does not."
+      "detail": "Setup.tsx and SettingsDialog offer nearly the same fields from different components. Setup writes a whole new table; House rules edits the live one. Worth folding SettingsDialog onto SetupForm with a read-only flag for the fields that cannot change mid-session."
     },
     {
       "priority": "low",
       "item": "Online play.",
-      "detail": "The engine is pure, seeded and replayable, and settlements are self-describing, so the natural shape is: one authoritative table applying rolls, broadcasting {roll, settlements} to clients. Nothing in lib/engine needs to change. The strategy layer is a client concern and would not need to move."
+      "detail": "The engine is pure, seeded and replayable, and settlements are self-describing, so the natural shape is one authoritative table applying rolls and broadcasting {roll, settlements} to clients. Nothing in lib/engine needs to change, and the strategy layer is a client concern."
     },
     {
       "priority": "low",
       "item": "A dealer/tutorial mode.",
-      "detail": "Closer than it was. The engine returns a plain-English reason for every refused action, and describe.ts now renders any rule as a sentence, so a coaching layer could narrate a house system's reasoning while the player watches it run."
+      "detail": "Closer than ever. The engine returns a plain-English reason for every refused action, describe.ts renders any rule as a sentence, and the felt now labels its own bands and names every bet through callName, so a coaching layer has real copy to draw on."
     },
     {
       "priority": "low",
       "item": "Fire Bet progressive payouts.",
       "detail": "Currently resolves only at seven-out. Some houses pay as each qualifying point is made."
-    },
-    {
-      "priority": "low",
-      "item": "Idle GPU cost of the always-on canvas.",
-      "detail": "The canvas redraws at 60fps even when nothing moves. On-demand rendering is the obvious fix and it did not work as a one-line prop change (see keyDecisions). If you want it, the likely shape is frameloop='demand' plus an explicit invalidate() from an effect keyed on the animation, and it must be verified visually."
     }
   ],
   "repoNotes": {
@@ -437,23 +540,25 @@
   },
   "pickUpHere": {
     "firstCommand": "cd TableGames/craps && npm install && npm run dev",
-    "firstCheck": "npm test, then open Strategies, put Iron Cross on seat B with Auto, and press space a few times. Everything was green at handoff, so anything red is something you changed.",
+    "firstCheck": "npm test, then open the app and press space a few times. If the dice do not appear, check the FAST button before anything else - fast mode is persisted and deliberately skips the animation. Everything was green at handoff, so anything red is something you changed.",
     "thenRead": [
       "README.md for how the game plays and how to build a strategy",
       "keyDecisions in this file before changing the engine, the dice, the strategy runner, or how a wager is sized"
     ],
     "safestPlacesToStart": [
-      "src/lib/strategy/library.ts — adding a house system is data, and the whole library is checked by an invariant sweep the moment you add it.",
-      "src/lib/engine — pure, fully tested, and the tests run in seconds.",
-      "src/components/table/layout.ts — felt geometry is data; move a rectangle and the hitbox and its flash move with it.",
-      "src/components/table/Fx.tsx — read-only decoration, no store or engine access, and nothing else depends on it."
+      "src/components/table/Surface.tsx - the whole table surface is gradients and filters in one read-only file, and nothing depends on it.",
+      "src/components/table/Fx.tsx - read-only decoration, no store or engine access, and each layer now carries a data-fx hook you can assert against.",
+      "src/lib/strategy/library.ts - adding a house system is data, and the whole library is checked by an invariant sweep the moment you add it.",
+      "src/lib/engine - pure, fully tested, and the tests run in seconds.",
+      "src/components/table/layout.ts - felt geometry is data, but read the CELL_BANDS and SEAT_SPREAD notes first; several constants in there are tuned against each other."
     ],
     "riskiestPlacesToChange": [
-      "src/components/dice/DiceStage.tsx — nothing automated catches a blank canvas.",
-      "src/lib/engine/resolve.ts — the ordering comment at the top of applyRoll is load-bearing; come-bet protection depends on it.",
-      "src/lib/strategy/run.ts — three things in here are subtle and only one of them will fail a test loudly: the level-versus-delta split in the BET action, the success-only `once` stamp, and the state-versus-event trigger split.",
-      "placeBet in src/lib/engine/table.ts — four adjustments in a deliberate order, and the fromChip flag is silent when misused.",
-      "The persist config in useGame.ts — bump `version` whenever TableState changes shape."
+      "src/components/dice/DiceStage.tsx - nothing automated catches a blank canvas, and the material values are tuned by eye against a scene with no environment map.",
+      "src/lib/engine/resolve.ts - the ordering comment at the top of applyRoll is load-bearing; come-bet protection depends on it.",
+      "src/lib/strategy/run.ts - the level-versus-delta split in BET, the success-only `once` stamp, and the state-versus-event trigger split are all subtle and only one fails loudly.",
+      "placeBet in src/lib/engine/table.ts - four adjustments in a deliberate order, and fromChip is silent when misused.",
+      "The persist config in useGame.ts - bump `version` whenever TableState changes shape.",
+      "Anything animated with motion inside the SVG - motion writes style.transform, which silently overrides a transform attribute on the same element."
     ]
   }
 }

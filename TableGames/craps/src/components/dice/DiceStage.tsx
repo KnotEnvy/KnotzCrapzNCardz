@@ -109,15 +109,66 @@ function useDieMaterials() {
       (face) =>
         new THREE.MeshPhysicalMaterial({
           map: faceTexture(face),
-          roughness: 0.22,
+          // Casino dice are polished to a near-mirror finish, which is most of
+          // why they read as glass rather than plastic. The clearcoat is what
+          // carries that: a tight, bright specular sitting on top of a fairly
+          // matte crimson body.
+          roughness: 0.19,
           metalness: 0,
-          clearcoat: 0.7,
-          clearcoatRoughness: 0.15,
-          reflectivity: 0.4,
+          // Clearcoat is kept well under 1. There is no environment map in this
+          // scene, so a full-strength coat has nothing to reflect and only
+          // costs the diffuse its brightness — the dice go dark rather than
+          // glossy. Verified on screen, not from the numbers.
+          clearcoat: 0.8,
+          clearcoatRoughness: 0.12,
+          reflectivity: 0.5,
         }),
     );
     return mats;
   }, []);
+}
+
+/* ------------------------------------------------------------------ *
+ * Contact shadow
+ * ------------------------------------------------------------------ */
+
+/**
+ * The dark pool directly under a die.
+ *
+ * The shadow map already puts the die's cast shadow on the felt, but a mapped
+ * shadow of a small object at this light distance stays roughly the same
+ * weight whether the die is resting or six units up. What sells contact is the
+ * opposite: a tight, dark blob when it lands and a wide, faint one while it is
+ * in the air. This is that, driven straight off the die's height.
+ */
+function useContactBlobs(count: number) {
+  return React.useMemo(
+    () =>
+      Array.from(
+        { length: count },
+        () =>
+          new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+          }),
+      ),
+    [count],
+  );
+}
+
+/** Height above the felt at which a die stops darkening the cloth under it. */
+const CONTACT_FADE = 5.5;
+
+function applyContact(blob: THREE.Mesh | null, p: readonly number[], dieHalf: number) {
+  if (!blob) return;
+  const h = Math.max(0, p[1] - dieHalf);
+  const k = Math.max(0, 1 - h / CONTACT_FADE);
+  blob.position.set(p[0], 0.015, p[2]);
+  const spread = 1 + h * 0.16;
+  blob.scale.set(spread, spread, spread);
+  (blob.material as THREE.MeshBasicMaterial).opacity = 0.44 * k * k;
 }
 
 /* ------------------------------------------------------------------ *
@@ -136,8 +187,13 @@ const DICE_X_OFFSET = -2.7;
 
 function Dice({ animation, onSettled }: { animation: RollAnimation | null; onSettled: () => void }) {
   const materials = useDieMaterials();
+  // One material per blob: opacity is written per die every frame, so a shared
+  // instance would leave both dice wearing whichever one was updated last.
+  const blobMaterials = useContactBlobs(2);
   const a = React.useRef<THREE.Mesh>(null);
   const b = React.useRef<THREE.Mesh>(null);
+  const blobA = React.useRef<THREE.Mesh>(null);
+  const blobB = React.useRef<THREE.Mesh>(null);
   const clock = React.useRef(0);
   const settledAt = React.useRef<number | null>(null);
   const lastImpactFrame = React.useRef(-10);
@@ -177,6 +233,9 @@ function Dice({ animation, onSettled }: { animation: RollAnimation | null; onSet
     b.current.position.fromArray(frame.b.p);
     b.current.quaternion.fromArray(frame.b.q);
 
+    applyContact(blobA.current, frame.a.p, TABLE.dieHalf);
+    applyContact(blobB.current, frame.b.p, TABLE.dieHalf);
+
     if (soundOn && index > lastImpactFrame.current + 3 && impacts.has(index)) {
       lastImpactFrame.current = index;
       // Earlier bounces in a throw carry more energy than the last few taps.
@@ -197,6 +256,15 @@ function Dice({ animation, onSettled }: { animation: RollAnimation | null; onSet
   const size: [number, number, number] = [half * 2, half * 2, half * 2];
   return (
     <>
+      {/* Written out rather than mapped: collecting the two refs into an array
+          to loop over reads them during render, which is what
+          react-hooks/refs is there to stop. */}
+      <mesh ref={blobA} material={blobMaterials[0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[half * 1.5, 24]} />
+      </mesh>
+      <mesh ref={blobB} material={blobMaterials[1]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[half * 1.5, 24]} />
+      </mesh>
       <mesh ref={a} material={materials} castShadow receiveShadow>
         <boxGeometry args={size} />
       </mesh>
@@ -210,11 +278,24 @@ function Dice({ animation, onSettled }: { animation: RollAnimation | null; onSet
 /** The dice at rest from the previous throw, so the table is never empty. */
 function RestingDice({ animation }: { animation: RollAnimation | null }) {
   const materials = useDieMaterials();
+  // Resting dice never move, so their blobs never change weight and one shared
+  // material is right.
+  const [blobMaterial] = useContactBlobs(1);
   const half = TABLE.dieHalf;
   if (!animation) return null;
   const frame = animation.frames[animation.restIndex];
   return (
     <>
+      {([frame.a, frame.b] as const).map((pose, i) => (
+        <mesh
+          key={`blob-${i}`}
+          material={blobMaterial}
+          position={[pose.p[0], 0.015, pose.p[2]]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <circleGeometry args={[half * 1.5, 24]} />
+        </mesh>
+      ))}
       {([frame.a, frame.b] as const).map((pose, i) => (
         <mesh
           key={i}
@@ -310,6 +391,10 @@ export function DiceStage() {
           shadow-bias={-0.0008}
         />
         <directionalLight position={[-10, 8, -6]} intensity={0.35} color="#ffe6b0" />
+        {/* Bounce off the cloth. A die sitting on a green table picks up green
+            along its lower edges, and without it the crimson reads as if the
+            dice were photographed against nothing. */}
+        <directionalLight position={[0, -6, 3]} intensity={0.3} color="#2f9c62" />
 
         {/* The whole box sits forward of centre so the dice land on the open
             felt below the box numbers rather than on top of them. */}

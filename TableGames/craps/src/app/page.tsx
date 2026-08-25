@@ -170,15 +170,21 @@ export default function Page() {
 
       <HopDialog open={hopOpen} onClose={() => setHopOpen(false)} />
       <StrategyWorkshop
-        key={strategyKey}
+        key={`workshop-${strategyKey}`}
         open={strategyOpen}
         initialId={strategyFocus}
         onClose={() => setStrategyOpen(false)}
       />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       {/* Keyed on each opening so its fields start from the current table
-          without an effect having to reset them. */}
-      <NewSessionDialog key={newSessionKey} open={newOpen} onClose={() => setNewOpen(false)} />
+          without an effect having to reset them. The key is prefixed because
+          these remount counters are siblings in one children array and both
+          start at zero -- two bare counters collide on `0` at first mount. */}
+      <NewSessionDialog
+        key={`new-session-${newSessionKey}`}
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+      />
     </div>
   );
 }
