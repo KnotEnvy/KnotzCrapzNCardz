@@ -9,6 +9,7 @@ import {
   setWorking,
   takeDown,
   takeDownAll,
+  setBetAmount,
   pressNumber,
   powerPressNumber,
   placeGroup,
@@ -961,3 +962,113 @@ describe('solo play', () => {
 });
 
 
+
+/* ------------------------------------------------------------------ *
+ * Increments are not optional
+ * ------------------------------------------------------------------ */
+
+/*
+ * The table only books a bet it can pay evenly. There is no rule to turn this
+ * off — there used to be, and with it off the resolver paid 7:6 on a literal
+ * $10 six, which put $11.666666666666668 into a bankroll and float dust into
+ * every figure downstream of it. The wager is snapped instead, which is both
+ * what a dealer does and what keeps the money in whole dollars.
+ */
+describe('every wager is taken at a payable multiple', () => {
+  const live = (): TableState => {
+    // A point on, so place, buy and lay are all live.
+    let s = table();
+    s = applyRoll(s, soft(4)).state;
+    return s;
+  };
+
+  const put = (s: TableState, spec: BetSpec, amount: number) => {
+    const res = placeBet(s, 'A', spec, amount);
+    expect(res.ok).toBe(true);
+    return (res as { state: TableState }).state;
+  };
+
+  it.each([
+    // spec,                                     asked, taken, why
+    [{ kind: 'PLACE', number: 6 }, 5, 6, 'the six is bet in sixes'],
+    [{ kind: 'PLACE', number: 8 }, 25, 30, 'a quarter on the eight is thirty'],
+    [{ kind: 'PLACE', number: 5 }, 7, 10, 'the five pays 7:5 and is bet in fives'],
+    [{ kind: 'PLACE', number: 9 }, 11, 15, 'so is the nine'],
+    [{ kind: 'PLACE', number: 4 }, 12, 15, 'the outside numbers are bet in fives'],
+    [{ kind: 'PLACE', number: 10 }, 1, 5, 'and never below one unit'],
+    [{ kind: 'BUY', number: 4 }, 7, 10, 'buy carries the same five-dollar unit'],
+    [{ kind: 'LAY', number: 10 }, 22, 25, 'and so does lay'],
+    [{ kind: 'PROP', prop: 'HORN' }, 3, 4, 'the horn is four numbers, so it rides in fours'],
+    [{ kind: 'PROP', prop: 'WORLD' }, 6, 10, 'the world is five'],
+    [{ kind: 'PROP', prop: 'C_AND_E' }, 3, 4, 'C & E splits in two'],
+    [{ kind: 'PROP', prop: 'HORN_HIGH_YO' }, 6, 10, 'a horn high is five units'],
+  ] as [BetSpec, number, number, string][])(
+    'takes $%s as $%s — %s',
+    (spec, asked, taken) => {
+      const s = put(live(), spec, asked);
+      const placed = s.bets.find((b) => b.kind === spec.kind);
+      expect(placed?.amount).toBe(taken);
+    },
+  );
+
+  it('never lets a fractional dollar reach a bankroll, whatever is on the felt', () => {
+    // The regression this guards: a place six taken literally at $10 pays
+    // 7:6 = $11.666…, and that used to land straight in the rack.
+    const specs: BetSpec[] = [
+      { kind: 'PLACE', number: 4 },
+      { kind: 'PLACE', number: 5 },
+      { kind: 'PLACE', number: 6 },
+      { kind: 'PLACE', number: 8 },
+      { kind: 'PLACE', number: 9 },
+      { kind: 'PLACE', number: 10 },
+      { kind: 'BUY', number: 4 },
+      { kind: 'BUY', number: 10 },
+      { kind: 'LAY', number: 5 },
+      { kind: 'FIELD' },
+      { kind: 'PROP', prop: 'HORN' },
+      { kind: 'PROP', prop: 'WORLD' },
+      { kind: 'PROP', prop: 'C_AND_E' },
+      { kind: 'PROP', prop: 'ANY_7' },
+      { kind: 'PROP', prop: 'ANY_CRAPS' },
+      { kind: 'HARDWAY', number: 6 },
+      { kind: 'HARDWAY', number: 8 },
+    ];
+
+    // Awkward amounts on purpose: none of these is a payable multiple of
+    // anything, so every one of them has to be snapped on the way in.
+    for (const asked of [1, 3, 7, 11, 13, 17, 23]) {
+      let s = live();
+      for (const spec of specs) {
+        const res = placeBet(s, 'A', spec, asked);
+        if (res.ok) s = (res as { state: TableState }).state;
+      }
+      for (const b of s.bets) {
+        expect(Number.isInteger(b.amount)).toBe(true);
+      }
+
+      // Walk a whole hand and check the rack after every settlement.
+      for (const total of [6, 8, 4, 5, 9, 10, 2, 3, 11, 12, 7]) {
+        const out = applyRoll(s, soft(total));
+        s = out.state;
+        for (const st of out.settlements) {
+          expect(Number.isInteger(st.credit)).toBe(true);
+          expect(Number.isInteger(st.debit)).toBe(true);
+          expect(Number.isInteger(st.net)).toBe(true);
+        }
+        expect(Number.isInteger(s.seats.A.bankroll)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps a reduced bet on a payable multiple too', () => {
+    // setBetAmount is the only call that can bring a bet down, and it has its
+    // own increment path separate from placeBet's.
+    let s = put(live(), { kind: 'PLACE', number: 6 }, 60);
+    const bet = s.bets.find((b) => b.kind === 'PLACE')!;
+    const res = setBetAmount(s, bet.id, 25);
+    expect(res.ok).toBe(true);
+    s = (res as { state: TableState }).state;
+    // 25 is not payable in sixes; it lands on the next multiple up.
+    expect(s.bets.find((b) => b.kind === 'PLACE')!.amount).toBe(30);
+  });
+});

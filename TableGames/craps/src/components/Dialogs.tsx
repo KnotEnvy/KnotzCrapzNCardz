@@ -344,12 +344,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
             hint="What a real table does: it pays you and leaves the bet up"
           />
           <Toggle
-            checked={r.enforceIncrements}
-            onChange={(v) => updateRules({ enforceIncrements: v })}
-            label="Snap wagers to payable increments"
-            hint="Rounds the six and eight to multiples of six, and so on"
-          />
-          <Toggle
             checked={r.fireBetEnabled}
             onChange={(v) => updateRules({ fireBetEnabled: v })}
             label="Offer the Fire Bet"

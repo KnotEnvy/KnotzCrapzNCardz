@@ -260,7 +260,7 @@ export function placeBet(
   const rules = state.rules;
   const existingIndex = indexOfSeatBetOn(state.bets, seat, spec);
   const held = existingIndex < 0 ? 0 : state.bets[existingIndex].amount;
-  const inc = rules.enforceIncrements ? betIncrement(spec) : 1;
+  const inc = betIncrement(spec);
   // Props and hops are sold in single units and have never carried the line
   // minimum; a dollar on the yo is a real bet.
   const exemptFromMinimum = spec.kind === 'PROP' || spec.kind === 'HOP';
@@ -595,7 +595,7 @@ export function setBetAmount(state: TableState, betId: string, amount: number): 
   const can = canTakeDown(bet);
   if (!can.allowed) return refuse(can.reason!);
 
-  const inc = state.rules.enforceIncrements ? betIncrement(betSpec(bet)) : 1;
+  const inc = betIncrement(betSpec(bet));
   const exemptFromMinimum = bet.kind === 'PROP' || bet.kind === 'HOP';
   let settled = inc > 1 ? snapToIncrement(target, inc) : target;
   if (!exemptFromMinimum && settled < state.rules.minBet) settled = state.rules.minBet;

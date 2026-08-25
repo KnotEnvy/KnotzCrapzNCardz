@@ -62,8 +62,8 @@
   "commands": {
     "dev": "npm run dev",
     "build": "npm run build",
-    "test": "npm test — 193 tests, ~4s. Run this constantly.",
-    "testStats": "npm run test:stats — 6 seeded house-edge simulations. Now ~29s, down from ~165s after this session's optimization pass, so it is cheap enough to run routinely rather than only before shipping.",
+    "test": "npm test — 207 tests, ~2s. Run this constantly.",
+    "testStats": "npm run test:stats — 6 seeded house-edge simulations, ~18s (was ~165s before this session's optimization pass). Cheap enough to run routinely.",
     "typecheck": "npm run typecheck",
     "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
     "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own."
@@ -146,6 +146,14 @@
     ]
   },
   "keyDecisions": [
+    {
+      "topic": "A wager is always snapped to a payable multiple",
+      "where": "betIncrement in odds.ts, applied unconditionally by placeBet and setBetAmount in table.ts",
+      "decision": "There is no house rule governing this any more. Every wager is rounded up to its bet's own increment: sixes on the six and eight, fives on the other box numbers and on buy and lay, fours on the horn, fives on world and the horn highs, twos on C & E, and singles on everything else.",
+      "why": "A table only books a bet it can pay evenly, and the increments are what make the payout arithmetic land on whole dollars. HORN divides the wager into four legs, WORLD and the horn highs into five, C_AND_E into two - none of those divisions is whole unless the wager was snapped first. The rule used to be optional and the optional path was broken: it skipped the snap on the way in but still paid the true ratio on the way out, so a $10 six paid $11.666666666666668 straight into a bankroll that the HUD renders and localStorage persists.",
+      "doNot": "Do not reintroduce a switch for this, and do not 'simplify' the unconditional betIncrement call back into a conditional. Rounding is up, not down, because a dealer takes the extra dollar rather than handing change back; snapDownToIncrement exists only as the short-rack fallback.",
+      "note": "Removing the field needed no persist `version` bump. A session saved with `enforceIncrements: false` still loads; the engine simply ignores the stale key and snaps anyway, which was verified directly."
+    },
     {
       "topic": "Judge bets against frozen state, not the immer draft",
       "where": "the bet loop at the top of applyRoll, src/lib/engine/resolve.ts",
@@ -386,10 +394,10 @@
     }
   ],
   "gotchas": [
+    "There is no way to turn increment snapping off, and there must not be. `enforceIncrements` was a house rule until this session; with it off, placeBet skipped the snap but the resolver still paid the true ratio, so a literal $10 place bet on the six paid $11.666666666666668 into the bankroll and float dust into everything downstream. The rule is deleted from TableRules and both toggles are gone from the UI. The increments are not cosmetic - HORN divides the wager by 4, WORLD and HORN_HIGH by 5, C_AND_E by 2, and those divisions are only whole because the wager was snapped first. Regression tests: the 'every wager is taken at a payable multiple' block.",
     "On a FRESH CLONE, `npm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `npm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
     "Do not typecheck while `next dev` is running - you will get `.next/dev/types/validator.ts: Unexpected keyword or identifier` from a generated file the dev server is mid-write on. It is transient and not yours.",
     "Frozen arrays are slow. history, bets and anything else immer has auto-frozen must not be fed to slice(), find() or filter() in a hot path - see keyDecisions. Spread, or write the scan out.",
-    "`enforceIncrements: false` lets non-integer money into the bankroll: a $10 place bet on the six pays 11.666666666666668 and the rack becomes 1001.6666666666666, with the settlement credit and the bankroll delta disagreeing in the last digits from float accumulation. This is a real open defect, reachable from a checkbox in Setup.tsx, and it is why the bankroll-ledger invariant uses toBeCloseTo(credited, 6) rather than toBe. Do not 'tighten' that tolerance without fixing the underlying payout rounding first. See openItems.",
     "fastRoll is persisted, and the fast path in throwDice deliberately sets animation to null. If the dice never appear, check the FAST button before you go looking at the canvas - a saved session with fast mode left on looks exactly like a broken renderer. This cost real debugging time this session.",
     "SEAT_SPREAD in layout.ts is tuned against the chip radius Felt.tsx passes to ChipStack (20). Change one without the other and the two seats' stacks silently overlap again.",
     "CELL_BANDS must sum to ROWS.numbers.h. PROP_ROWS is a chain of hand-checked offsets and the proposition column is packed to within a few pixels; add a row and something has to give height back.",
@@ -413,7 +421,7 @@
   ],
   "verification": {
     "automated": {
-      "unit": "112 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports.",
+      "unit": "126 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports. Plus a new 'every wager is taken at a payable multiple' block: the increment table for every bet kind, and an invariant that walks a full hand with seventeen bet types on the felt at seven awkward stake amounts and asserts no settlement credit, debit or net - and no bankroll - is ever fractional.",
       "strategy": "77 tests. Everything the previous session covered, plus a new 'the library a player actually sees' block: a custom carrying a house id never shadows the house version, every id in the library is unique, and a custom with its own id survives.",
       "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
       "statistical": "npm run test:stats — 6 tests, ~29s (was ~165s). RE-RUN THIS SESSION and green: pass line, don't pass, field, any seven and pass-with-full-odds all land inside their theoretical bands, which is what proves the engine optimization did not move money.",
@@ -460,7 +468,7 @@
     "A start screen and setup form covering seats, strategies, buy-in, re-buy, limits, odds multiple and every house rule.",
     "Solo play.",
     "Grouped place calls: inside, outside, across.",
-    "House rules panel: limits, odds multiple (1x to 100x), field 2x/3x on the twelve, vig on win vs up front, come-out working defaults, increment snapping, side bets on/off.",
+    "House rules panel: limits, odds multiple (1x to 100x), field 2x/3x on the twelve, vig on win vs up front, come-out working defaults, side bets on/off.",
     "Session persistence to localStorage.",
     "Keyboard shortcuts (space to roll, 1-7 chips, A/B seats, O max odds, H stats, S run strategy).",
     "Synthesised audio — dice clacks scaled by impact velocity, chip drops, payout and seven-out calls. No audio assets in the bundle.",
@@ -471,11 +479,6 @@
     "Horn High bets printed on the felt."
   ],
   "openItems": [
-    {
-      "priority": "high",
-      "item": "OPEN DEFECT: enforceIncrements: false lets fractional money into the bankroll.",
-      "detail": "With 'Snap wagers to payable increments' unticked - a checkbox in Setup.tsx - placeBet skips the increment snap but the resolver still pays amount * ratio with no rounding. Reproduced directly: a $10 place bet on the six pays 11.666666666666668, the rack becomes 1001.6666666666666, and the settlement credit and the bankroll delta disagree in the last digits from float accumulation. That lands in seats[x].bankroll, which the HUD renders and which persists to localStorage. Every other path in the engine keeps money in whole dollars. THIS NEEDS AN OWNER DECISION, which is why it was not fixed: (a) round the payout the way buyVig already rounds, keeping the toggle's stated purpose that the felt takes your number literally; (b) refuse the wager, which is what a real table would do but makes the toggle nearly pointless; or (c) leave the math and document it. No test pins the current fractional behaviour, deliberately - pinning it would make it harder to fix."
-    },
     {
       "priority": "high",
       "item": "Listen to the audio.",

@@ -120,8 +120,6 @@ export interface TableRules {
   placeOffOnComeOut: boolean;
   /** Hardways default to OFF on the come-out roll. */
   hardwaysOffOnComeOut: boolean;
-  /** Snap wagers to dealer-friendly increments (6/8 by $6, 5/9 by $5, etc). */
-  enforceIncrements: boolean;
   /**
    * Field and proposition bets stay on the felt after a win, with only the
    * winnings paid out. This is what a real table does; turn it off if you would
@@ -154,7 +152,6 @@ export const DEFAULT_RULES: TableRules = {
   vigOnWin: true,
   placeOffOnComeOut: true,
   hardwaysOffOnComeOut: true,
-  enforceIncrements: true,
   propsRideAfterWin: true,
   fireBetEnabled: true,
   atsEnabled: true,

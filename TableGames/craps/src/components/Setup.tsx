@@ -30,7 +30,6 @@ export interface SetupConfig {
   vigOnWin: boolean;
   placeOffOnComeOut: boolean;
   hardwaysOffOnComeOut: boolean;
-  enforceIncrements: boolean;
   propsRideAfterWin: boolean;
   fireBetEnabled: boolean;
   atsEnabled: boolean;
@@ -60,7 +59,6 @@ export function configFromTable(
     vigOnWin: r.vigOnWin,
     placeOffOnComeOut: r.placeOffOnComeOut,
     hardwaysOffOnComeOut: r.hardwaysOffOnComeOut,
-    enforceIncrements: r.enforceIncrements,
     propsRideAfterWin: r.propsRideAfterWin,
     fireBetEnabled: r.fireBetEnabled,
     atsEnabled: r.atsEnabled,
@@ -94,7 +92,6 @@ export function toSessionOptions(cfg: SetupConfig): {
       vigOnWin: cfg.vigOnWin,
       placeOffOnComeOut: cfg.placeOffOnComeOut,
       hardwaysOffOnComeOut: cfg.hardwaysOffOnComeOut,
-      enforceIncrements: cfg.enforceIncrements,
       propsRideAfterWin: cfg.propsRideAfterWin,
       fireBetEnabled: cfg.fireBetEnabled,
       atsEnabled: cfg.atsEnabled,
@@ -340,12 +337,6 @@ export function SetupForm({
           checked={value.propsRideAfterWin}
           onChange={(v) => set('propsRideAfterWin', v)}
           label="Single-roll bets ride after a win"
-        />
-        <Toggle
-          checked={value.enforceIncrements}
-          onChange={(v) => set('enforceIncrements', v)}
-          label="Snap wagers to payable increments"
-          hint="A quarter on the six goes up as thirty, the way it is bet"
         />
         <Toggle
           checked={value.fireBetEnabled}
