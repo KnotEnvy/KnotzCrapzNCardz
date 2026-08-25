@@ -21,7 +21,17 @@
 import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { ChipStack } from './Chip';
-import { BANK, RAIL, VIEW, anchorFor, cellFor, rectFor, seatOffset, type Rect } from './layout';
+import {
+  BANK,
+  RAIL,
+  VIEW,
+  anchorFor,
+  cellFor,
+  rectFor,
+  seatOffset,
+  type Point,
+  type Rect,
+} from './layout';
 import type { RollRecord, SeatId, Settlement } from '@/lib/engine/types';
 
 /*
@@ -48,7 +58,13 @@ export function FxDefs() {
   return (
     <>
       <filter id="fxGlow" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="9" />
+        <feGaussianBlur stdDeviation="11" />
+      </filter>
+      {/* A loss gets a tighter, harder edge than a win. Same construction, a
+          third of the bloom: light arriving spreads, light being taken away
+          does not. */}
+      <filter id="fxGlowTight" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3.5" />
       </filter>
       {/* Seven out: the light goes out at the edges first. */}
       <radialGradient id="fxSevenOut" cx="50%" cy="52%" r="74%">
@@ -93,6 +109,14 @@ interface Flash {
  * that both won and lost on the same roll — two seats on opposite sides of the
  * same number — reads as a win, because that is the brighter, rarer event and
  * the losing seat still gets its own raked chip and its own red figure.
+ *
+ * Win and loss are deliberately opposite gestures rather than the same flash in
+ * two colours. A win is light *arriving*: it blooms wide, holds while the payoff
+ * is counted, and eases away over more than a second. A loss is light being
+ * *taken*: one hard frame with a tight edge, then it drains and the box is
+ * empty. You can tell which happened from the corner of your eye, without
+ * reading the colour — which is the whole point, and is also what keeps the two
+ * legible to a red-green colour-blind player.
  */
 export function AreaFlashes({
   settlements,
@@ -129,11 +153,21 @@ export function AreaFlashes({
           <motion.g
             key={`${rollId}-${f.key}`}
             initial={{ opacity: 0 }}
-            animate={reduced ? { opacity: [0, 0.9, 0] } : { opacity: [0, 1, 0.72, 0] }}
+            animate={
+              reduced
+                ? { opacity: [0, 0.9, 0] }
+                : f.win
+                  ? // Blooms, holds through the payoff, then eases off.
+                    { opacity: [0, 1, 0.82, 0] }
+                  : // On in a frame, then gone.
+                    { opacity: [0, 1, 0] }
+            }
             transition={
               reduced
                 ? { duration: 0.9, times: [0, 0.25, 1], ease: 'easeOut' }
-                : { duration: f.win ? 1.2 : 0.8, times: [0, 0.1, 0.38, 1], ease: 'easeOut' }
+                : f.win
+                  ? { duration: 1.3, times: [0, 0.1, 0.46, 1], ease: 'easeOut' }
+                  : { duration: 0.56, times: [0, 0.04, 1], ease: 'easeIn' }
             }
           >
             <rect
@@ -143,7 +177,9 @@ export function AreaFlashes({
               height={r.h - 6}
               rx={rx}
               fill={ink}
-              opacity={0.17}
+              // A win paints the box; a loss only outlines it, because a box
+              // full of red reads as a warning rather than as money leaving.
+              opacity={f.win ? 0.2 : 0.09}
             />
             {/* The blurred copy is what makes it read as light rather than paint. */}
             <rect
@@ -154,8 +190,8 @@ export function AreaFlashes({
               rx={rx}
               fill="none"
               stroke={ink}
-              strokeWidth={4}
-              filter="url(#fxGlow)"
+              strokeWidth={f.win ? 4.5 : 2.5}
+              filter={f.win ? 'url(#fxGlow)' : 'url(#fxGlowTight)'}
             />
             <rect
               x={r.x + 3}
@@ -165,7 +201,7 @@ export function AreaFlashes({
               rx={rx}
               fill="none"
               stroke={ink}
-              strokeWidth={2.5}
+              strokeWidth={f.win ? 2.5 : 2}
               opacity={0.95}
             />
           </motion.g>
@@ -270,6 +306,102 @@ export function ChipFlights({
           <ChipStack x={0} y={0} amount={f.amount} r={15} ring={f.ring} />
         </motion.g>
       ))}
+    </g>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * A bet being moved to its number
+ * ------------------------------------------------------------------ */
+
+interface Trail {
+  key: string;
+  from: Point;
+  to: Point;
+  ink: string;
+}
+
+/** How long a bet takes to travel, shared with the chip itself in Felt. */
+export const TRAVEL_MS = 620;
+
+/**
+ * The track a come bet takes when the dealer pushes it up to its box.
+ *
+ * A bet moving across the layout is one of the few things on a craps table that
+ * happens *to* your money without you touching it, and until now the chip
+ * simply appeared in its new home between one frame and the next. The chip
+ * itself now travels (see Felt); this draws the line it travels along, so the
+ * eye is already looking at the number before the chip lands on it.
+ *
+ * Fed by the MOVE settlement, which is the engine telling us exactly this and
+ * was previously drawn nowhere. `at` is the bet's location *after* the move, so
+ * the destination comes straight off it and the origin is the same bet kind
+ * with no number — the band it was sitting in.
+ *
+ * Pure travel, so like the chip flights it goes away entirely under reduced
+ * motion rather than degrading: the chip is already in its new place and the
+ * layout says which number it is on.
+ */
+export function MoveTrails({
+  settlements,
+  rollId,
+}: {
+  settlements: Settlement[];
+  rollId: number;
+}) {
+  const reduced = useReducedMotion() ?? false;
+
+  const trails = React.useMemo<Trail[]>(() => {
+    const out: Trail[] = [];
+    for (const s of settlements) {
+      if (s.type !== 'MOVE' || s.at.number === undefined) continue;
+      const nudge = seatOffset(s.seat);
+      const from = anchorFor({ kind: s.at.kind });
+      const to = anchorFor(s.at);
+      out.push({
+        key: s.betId,
+        from: { x: from.x + nudge.x, y: from.y + nudge.y },
+        to: { x: to.x + nudge.x, y: to.y + nudge.y },
+        ink: SEAT_RING[s.seat],
+      });
+    }
+    return out;
+  }, [settlements]);
+
+  if (reduced || !trails.length) return null;
+
+  const seconds = TRAVEL_MS / 1000;
+
+  return (
+    <g pointerEvents="none" data-fx="moves">
+      {trails.map((t) => {
+        const geom = { x1: t.from.x, y1: t.from.y, x2: t.to.x, y2: t.to.y };
+        // Drawn in the seat's own colour, so on a two-seat table you can see
+        // whose bet just moved without following it to the end.
+        return (
+          <React.Fragment key={`${rollId}-${t.key}`}>
+            <motion.line
+              {...geom}
+              stroke={t.ink}
+              strokeWidth={8}
+              strokeLinecap="round"
+              filter="url(#fxGlowTight)"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: [0, 1, 1], opacity: [0, 0.3, 0] }}
+              transition={{ duration: seconds, times: [0, 0.45, 1], ease: 'easeOut' }}
+            />
+            <motion.line
+              {...geom}
+              stroke={t.ink}
+              strokeWidth={2}
+              strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: [0, 1, 1], opacity: [0, 0.75, 0] }}
+              transition={{ duration: seconds, times: [0, 0.45, 1], ease: 'easeOut' }}
+            />
+          </React.Fragment>
+        );
+      })}
     </g>
   );
 }

@@ -2,47 +2,41 @@
   "project": "Knotz Craps",
   "path": "TableGames/craps",
   "oneLine": "A full craps table for one or two players sharing one screen, with rigid-body dice physics, true casino odds, a strategy workshop for building systems and playing against them, and a felt that looks like cloth under a lamp rather than a diagram.",
-  "handoffDate": "2026-08-24",
-  "status": "Feature complete and play-tested. Everything is green: 193 unit tests (112 engine, 4 dice, 77 strategy), typecheck, lint with zero warnings, and a production build. This session was a visuals and layout pass, driven through the live app the whole way: dice screenshotted in flight and at rest, every effect layer sampled from the DOM across 40 rolls, and the felt read back at three viewport widths. The long-standing duplicate React key warning is fixed, and a second, more serious id collision was found and fixed while verifying it. The console is clean on a fresh load, including with the strategy workshop open.",
+  "handoffDate": "2026-08-25",
+  "status": "Feature complete, play-tested, and now measured. Everything is green: 193 unit tests, typecheck, lint with zero warnings, a production build, and the six seeded house-edge simulations. This session closed the loose ends: audio was rebuilt from 8 sounds to 15 and wired to every effect that was silent, the table got another round of juice, the engine took its first real optimization pass (applyRoll is 4x faster and the stats suite went from ~165s to ~29s), and the test suite was re-cut for value density rather than count. prefers-reduced-motion was finally exercised in a real browser across 45 rolls in both polarities, which was the single biggest unverified risk at last handoff. Two latent bugs were found and fixed, two tests were found to be silently inert, and one genuine defect in the money path was found and is still OPEN pending an owner decision - see openItems.",
   "whatChangedThisSession": {
-    "summary": "Visuals. The table got a real surface, the chips got mass, the box numbers got divided the way a dealer divides them, the proposition column got rebuilt against a live reference, and the two events that end a hand got a payoff worth watching. The reference was a screenshot of Crapsee, a commercial craps app the owner used to play on; the brief was to match its layout structure and typography while keeping our own lit green felt rather than its flat black. That choice was put to the owner explicitly, because repainting the surface would have thrown away the lighting work.",
-    "surface": [
-      "New src/components/table/Surface.tsx - the furniture: wood with long-grain turbulence, a padded leather bumper that casts a blurred shadow inward onto the cloth, the felt's radial fill, a fine nap and a coarser mottle, the lamp cone, and the corner falloff. Read-only decoration in the same spirit as Fx.tsx: it knows nothing about bets, seats or the store.",
-      "TableBed draws under the printed layout and TableLight draws over it. That split is the whole point - light falls on ink, so the corner falloff dims the lettering along with the cloth it sits in. A layout that stays uniformly bright while the felt falls away reads as a sticker.",
-      "The lamp sways a few pixels over nineteen seconds, and a live point breathes on the puck. Ambient motion tied to state rather than to a clock, so a come-out is genuinely still."
+    "summary": "Four parallel workstreams under an orchestrator: audio, visual juice, engine optimization, and test refinement. Each ran in a strict file lane so they could not clobber one another, and each was QA'd against the live app or a measurement rather than against a green build. The session was interrupted once by an API limit that killed all four agents mid-edit; the incomplete resolve.ts refactor that left behind is documented under keyDecisions because the finished version is a large win.",
+    "audio": [
+      "src/lib/audio.ts went from 8 synthesised sounds to 15: diceClack, chipPick, chipDrop, chipSlide, payout, rake, pointMade, natural, sevenOut, puckOn, puckOff, comeTravel, uiClick, refuse, plus setSoundEnabled.",
+      "Everything that was silent now has a voice: a rake on a losing settlement, chips landing when a bot or a group call puts money up, chips sliding back when a bet comes down, a whoosh when a come bet travels, the puck going OFF, and separate stings for a point made versus a seven out.",
+      "The levels were measured rather than guessed. A band-energy analysis found sevenOut was 92% below 120Hz - inaudible on a laptop speaker - and diceClack was 65% low-mid, reading as a thud rather than plastic. Both were retuned against spectral targets.",
+      "The root cause of the bad levels: filtered noise arrives an order of magnitude quieter than an oscillator on the same envelope, so `gain` silently meant something different at every call site. A noiseTrim() helper now divides the filter's noise bandwidth out, so gain means 'peak amplitude this voice contributes' everywhere.",
+      "A soft-clip waveshaper sits on the master bus as insurance. With the trim fixed at source it is idle on everything real (at most 0.35dB on any realistic case), and it is kept only for pile-ups nobody enumerated.",
+      "Fixed a latent bug: lastAnnounced started at -1, so a restored session replayed its last roll's audio on load. This is the audio twin of the openingRoll bug already fixed visually. It records the index present at mount now."
     ],
-    "layout": [
-      "A box number is now three printed bands - LAY and D/C above, the number and its payout, PLACE and COME below - and each band is its own hitbox with its own bet kind. 47 clickable zones, up from 31. A player no longer arms a mode before betting the side they meant.",
-      "Hover tints the two sides of the layout apart: warm for the right side, cool for the don't side.",
-      "Amber box numbers and red don't-side lettering (DON'T COME, DON'T PASS BAR, the barred twelve, ANY SEVEN, ANY CRAPS), matching the reference and real felt. New --color-print-amber and --color-print-red tokens.",
-      "The proposition column is printed as a box on darker cloth rather than implied by a hairline, and rebuilt on a named PROP_ROWS grid.",
-      "Horn High 2 / 3 / 11 / 12 now have felt cells. They were reachable only from inside the hop dialog before, and the engine already supported them in full.",
-      "The dice printed on the hardways and props are crimson with white pips (PRINT_DIE_FACE / PRINT_DIE_PIP in Pips.tsx), matching both the reference and the actual dice the table throws.",
-      "Field numbers are centred on their band and spread wider; they used to sit 44px right of centre."
+    "juice": [
+      "New MoveTrails layer in Fx.tsx (data-fx='moves'): a come bet travelling to its number is now telegraphed rather than teleporting.",
+      "Press and hover feedback on felt areas in globals.css. The press has a deliberate 0ms transition on the way in - a press must land on the frame it was clicked or it reads as lag - and eases back out through the hover rule.",
+      "Reduced-motion branches threaded through the chip entrance, chip travel and the settlement figures in Felt.tsx, and a data-fx='puck' hook added so the puck can be asserted from outside React."
     ],
-    "chips": [
-      "A stack is no longer the top chip drawn five times. Every chip below the top renders as a side wall - its own colour in shadow, with contrasting edge spots moulded through - and each is turned by a deterministic hash so the spots never line up into a stripe.",
-      "Felt bets went 17 to 20, odds 12 to 15, chips in flight 13 to 15, with a tighter two-part contact shadow.",
-      "seatOffset is now purely horizontal: the first seat's money to the left, the second seat's to the right."
+    "optimization": [
+      "applyRoll now judges bets against the frozen `state.bets` rather than `draft.bets`. Immer builds a proxy for every element of a draft array it is asked to walk; measured in isolation that is 48,006 ops/sec versus 1,145,308 for the plain frozen array, a 23.9x difference. Unchanged bets are carried across by reference and only a bet that actually changes - a travelling come bet - allocates a new object.",
+      "A second cliff of the same family: Array.prototype.slice on a FROZEN array falls out of V8's fast path, 0.22us to 21.15us, about 96x. The history window was built with [...history.slice(...)] on the frozen window; rewritten as spread-then-trim it went 22.3us to 1.0us per roll.",
+      "find/filter on frozen arrays are hit the same way, which is the whole of the atRisk and placeBet gains.",
+      "Measured: applyRoll 4,604 to 18,654 rolls/sec (4.05x), atRisk 4.65x, autoplay with two bots 1.73x, stats-suite decisions 1.49x. The stats suite itself went from ~165s to ~29s.",
+      "Verified by differential rather than by argument: the pristine git-HEAD engine and the optimised one run in lockstep over 64,800 rolls with random legal moves across all 38 bet specs, 0 mismatches; all 17 house systems over 51,000 rolls, 0 mismatches; 274,742 bet-identity agreements confirming structural sharing is preserved exactly where immer preserved it."
     ],
-    "dice": [
-      "Contact-shadow blobs under each die that tighten and darken as it falls, driven straight off the die's height. The mapped shadow alone barely changes weight between resting and airborne, which is the opposite of what sells contact.",
-      "A bounce light off the cloth, so the crimson picks up green along its lower edges.",
-      "A conservative material polish. See keyDecisions - clearcoat has a ceiling here for a physical reason."
-    ],
-    "fx": [
-      "New OutcomeBurst: a hot core, two offset shock rings and sixteen sparks, fired at the box that decided the hand - the point's own box when it is made, the middle of the layout on a seven out. Drops out entirely under reduced motion.",
-      "Chip flights arc. A payoff is tossed with hang time and a little rotation; a loss slides flat and briskly. Same two endpoints, opposite gesture, achieved with separate eases on x and y.",
-      "Every effect layer's root carries an inert data-fx hook so a layer can be asserted from outside React."
+    "tests": [
+      "Re-cut for value density, not count: 9 tests removed as genuinely subsumed, ~9 added covering real gaps, so the total stayed at 193 while it() blocks fell from 145 to 121 and it.each tables rose from 11 to 16.",
+      "Two tests were found to be silently INERT - passing for the wrong reason. 'keeps the log inside its window' asserted length <= 60 while running a strategy whose loss limit stopped it after 31 entries, so the window was never reached. 'does not repeat the same refusal on every roll' asserted refusals < 4 on a scenario producing zero refusals. Both now construct conditions that actually trigger.",
+      "Weak assertions on real payouts tightened: toBeGreaterThanOrEqual(155) on a 30:1 All/Tall/Small payout became toBe(155); toBeGreaterThan(0) on a lay became toBe(95).",
+      "Big 6 / Big 8 had no test at all despite being drawn on the felt and settled by the resolver. Three added.",
+      "The flaky dice timing test now takes the median of 21 individually-timed throws rather than a mean, keeping the same 60ms bound rather than widening it."
     ],
     "bugsFoundAndFixed": [
-      "The duplicate React key warning that had been open for two sessions. It was not in the felt at all: StrategyWorkshop and NewSessionDialog are siblings in one children array and both remount counters start at 0, so the two collided on key `0` at first mount. Found by walking the live fiber tree for parents with duplicate sibling keys, after captureOwnerStack pointed only as far as Page.",
-      "A custom strategy could shadow a house one. saveStrategy appended any strategy whose id was not already in customStrategies, without checking whether that id belonged to a house system, so saving an edit to a house system persisted a custom under the house id. The duplicate key was the mild symptom; the serious one is that allStrategies puts house first, so findStrategy returned the house version and the player's saved edits silently never ran. Fixed at both ends and covered by three new tests.",
-      "Sparks were rotated with a transform attribute next to an animated x. motion drives SVG transforms through style, and a CSS transform beats the presentation attribute, so the rotation was being thrown away silently. The angle moved to a plain wrapper element.",
-      "Both dice contact blobs shared one material instance, so writing opacity per die would have left both wearing whichever was updated last.",
-      "Collecting the two blob refs into an array to map over read refs during render; eslint's react-hooks/refs caught it. They are written out explicitly now.",
-      "The horn-high cells and the single-number props both printed bare numbers, so their tooltips and aria-labels were identical and ambiguous. FeltArea gained an optional callName - what a dealer would call the bet - separate from the glyph printed on the felt.",
-      "anchorFor duplicated the hop cell's coordinates as literals instead of reading HOP_AREA.anchor, so moving the cell would have left hop chips behind. It reads the anchor now."
+      "applyRoll called locate(bet) on an immer DRAFT proxy, so Settlement.at.hop escaped produce holding a revoked proxy - reading it throws TypeError. A differential hit this on 6,916 of 6,916 hop settlements. It was latent only because anchorFor/rectFor in layout.ts never read .hop; it would have detonated the moment hop bets got their own felt cells, which is an open item. Judging against plain frozen bets fixes it.",
+      "The audio replay-on-load bug described under `audio` above.",
+      "gotcha 7 in the previous handoff claimed the dice test suite guards FACE_AXES against MATERIAL_ORDER. It did not - the dice test never imported DiceStage.tsx, because three.js will not load in the node environment. There is now a real guard that derives the material order from FACE_AXES in BoxGeometry's group order and asserts it equals [1,6,2,5,3,4], plus that opposite faces sum to seven and 1-2-3 are right-handed."
     ]
   },
   "origin": {
@@ -68,8 +62,8 @@
   "commands": {
     "dev": "npm run dev",
     "build": "npm run build",
-    "test": "npm test — 190 tests, ~15s. Run this constantly.",
-    "testStats": "npm run test:stats — seeded house-edge simulations, several minutes. Opt-in, separate vitest config.",
+    "test": "npm test — 193 tests, ~4s. Run this constantly.",
+    "testStats": "npm run test:stats — 6 seeded house-edge simulations. Now ~29s, down from ~165s after this session's optimization pass, so it is cheap enough to run routinely rather than only before shipping.",
     "typecheck": "npm run typecheck",
     "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
     "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own."
@@ -152,6 +146,27 @@
     ]
   },
   "keyDecisions": [
+    {
+      "topic": "Judge bets against frozen state, not the immer draft",
+      "where": "the bet loop at the top of applyRoll, src/lib/engine/resolve.ts",
+      "decision": "applyRoll iterates `state.bets` (frozen) rather than `draft.bets`. Unchanged bets are pushed onto `surviving` by reference; only a bet that genuinely changes - a travelling come bet - allocates a new object via spread.",
+      "why": "Immer builds a proxy for every element of a draft array it is asked to walk. Measured in isolation inside a produce: 48,006 ops/sec over draft.bets versus 1,145,308 over the plain frozen array, 23.9x. Nothing in the judging needs a draft to decide a verdict. This is the same family of problem as the roll-history cliff below, and together they make applyRoll 4.05x faster.",
+      "doNot": "Do not \"simplify\" this back to iterating draft.bets. It will pass every test and quietly cost 4x. It also reintroduces the revoked-proxy bug: locate() called on a draft bet puts a proxy into Settlement.at.hop that throws once produce returns."
+    },
+    {
+      "topic": "slice() on a frozen array is ~96x slower than on a plain one",
+      "where": "the history window rebuild at the end of applyRoll",
+      "decision": "The window is built by spreading and then trimming, not by slicing the frozen history.",
+      "why": "Object.freeze on an array drops it out of V8 fast paths. Measured: slice on a plain array 0.22us, on a frozen array 21.15us, while spread of the same frozen array is 0.27us. The window rebuild went 22.3us to 1.0us per roll. find() and filter() are hit identically, which is where the atRisk (4.65x) and placeBet (1.20x) gains come from - written-out scans beat find() on frozen arrays at 24 bets, 0.17us versus 0.72us.",
+      "note": "The previous handoff already recorded a 21x history cliff from mutating inside the draft. This is a second, independent cliff on the same data, and both are consequences of the deliberate decision to keep auto-freeze ON. That decision is still right - the freeze catches accidental mutation - you just have to know not to use frozen arrays as if they were plain ones."
+    },
+    {
+      "topic": "Audio is driven from the React layer, never from Fx",
+      "where": "the two audio effects in src/app/page.tsx",
+      "decision": "Every sound is fired from page.tsx, which already has the roll-announce effect keyed on table.history and can read the settlement list off the store. Fx.tsx contains no audio call and imports nothing from src/lib/audio.",
+      "why": "Fx.tsx is read-only decoration that touches neither the store nor the engine, and that separation is worth more than the convenience of firing a sound where the animation is written. It also means the whole score is legible in one place rather than scattered across four effect layers.",
+      "note": "The chip cues do not hook the four different places a bet can be made (felt click, group call, hop dialog, strategy). They watch the one thing all four move - total at risk - from a single guarded effect, and exclude the roll itself because the roll score has already spoken for that money. A bot betting in the same commit as the roll is read off the strategy log instead."
+    },
     {
       "topic": "The table is painted in the order light arrives",
       "where": "src/components/table/Surface.tsx, and where TableBed / TableLight sit in Felt.tsx",
@@ -371,6 +386,10 @@
     }
   ],
   "gotchas": [
+    "On a FRESH CLONE, `npm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `npm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
+    "Do not typecheck while `next dev` is running - you will get `.next/dev/types/validator.ts: Unexpected keyword or identifier` from a generated file the dev server is mid-write on. It is transient and not yours.",
+    "Frozen arrays are slow. history, bets and anything else immer has auto-frozen must not be fed to slice(), find() or filter() in a hot path - see keyDecisions. Spread, or write the scan out.",
+    "`enforceIncrements: false` lets non-integer money into the bankroll: a $10 place bet on the six pays 11.666666666666668 and the rack becomes 1001.6666666666666, with the settlement credit and the bankroll delta disagreeing in the last digits from float accumulation. This is a real open defect, reachable from a checkbox in Setup.tsx, and it is why the bankroll-ledger invariant uses toBeCloseTo(credited, 6) rather than toBe. Do not 'tighten' that tolerance without fixing the underlying payout rounding first. See openItems.",
     "fastRoll is persisted, and the fast path in throwDice deliberately sets animation to null. If the dice never appear, check the FAST button before you go looking at the canvas - a saved session with fast mode left on looks exactly like a broken renderer. This cost real debugging time this session.",
     "SEAT_SPREAD in layout.ts is tuned against the chip radius Felt.tsx passes to ChipStack (20). Change one without the other and the two seats' stacks silently overlap again.",
     "CELL_BANDS must sum to ROWS.numbers.h. PROP_ROWS is a chain of hand-checked offsets and the proposition column is packed to within a few pixels; add a row and something has to give height back.",
@@ -397,26 +416,22 @@
       "unit": "112 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports.",
       "strategy": "77 tests. Everything the previous session covered, plus a new 'the library a player actually sees' block: a custom carrying a house id never shadows the house version, every id in the library is unique, and a custom with its own id survives.",
       "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
-      "statistical": "npm run test:stats — 6 tests, ~165s. Not re-run this session; the strategy layer cannot change a payout, because it only moves chips between a rack and the felt through calls the felt already made. Worth a run before shipping anyway.",
-      "static": "tsc --noEmit clean; eslint clean (0 errors, 0 warnings - it caught a refs-during-render bug this session); next build succeeds (4 static routes)."
+      "statistical": "npm run test:stats — 6 tests, ~29s (was ~165s). RE-RUN THIS SESSION and green: pass line, don't pass, field, any seven and pass-with-full-odds all land inside their theoretical bands, which is what proves the engine optimization did not move money.",
+      "static": "tsc --noEmit clean (after one build - see gotchas); eslint clean, 0 errors 0 warnings; next build succeeds."
     },
     "manual": [
-      "Duplicate React key warning: located by walking the live fiber tree, fixed, and confirmed gone - zero duplicate-keyed parents in the tree, and a clean console on a fresh tab with the strategy workshop open, which is where the second collision rendered.",
-      "Dice screenshotted mid-tumble and at rest, with the new contact shadows visible under both. Re-checked after the ref restructure, because nothing automated catches a blank canvas.",
-      "Dice material: clearcoat 1.0 was tried, screenshotted, judged too dark, and backed out to 0.8.",
-      "Effect layers sampled from the DOM via their data-fx hooks across 40 rolls: point-made cores 3, seven-out cores 16, sparks 19, rings 19, washes 23, box flashes 51, and up to 9 chips airborne at once mid-arc.",
-      "Seat split verified by reading chip transforms back: on every box number, seat A at x and seat B at x+38, identical y.",
-      "Horn high driven end to end: clicked on the felt, accepted by the engine, chip landed in the new cell at the correct seat offset.",
-      "Layout measured at 1366x768 and 1024x680: no horizontal or vertical overflow, roll button inside the viewport at both.",
-      "Previously: strategy layer driven through the real UI; dice confirmed rendering in flight and at rest; win and loss flashes screenshotted in both polarities; chip and minimum rules driven through the real UI."
+      "PREFERS-REDUCED-MOTION, FINALLY EXERCISED FOR REAL. Chromium via Playwright with reducedMotion:'reduce', a real session, 45 rolls, money on the pass line, the field and the 6 and 8, sampling every data-fx layer's computed opacity five times per roll. Under reduce: burst, flights and moves do not mount at all (0 of 45 rolls). flashes, wash and puck stay mounted and visible, so the player still gets feedback. Under no-preference all six layers mount and reach opacity 1. Zero page errors in both polarities. Screenshots taken in both; the felt, dice, puck, HUD and settlement figures all render correctly under reduce, and the seven-out wash and burst ring are plainly visible under normal.",
+      "Both audio effects and all 15 sounds were verified reachable by driving the real engine over 4000 seeded rolls and counting branch hits: 4000/4000 rolls made a sound, and the counts reconcile arithmetically (458 seven-outs + 332 points made = 790 = puckOff calls).",
+      "Audio levels measured offline through a Web Audio shim: peak, RMS and duration for all 15 sounds plus composite worst cases. Nothing clips (worst realistic case 0.803, artificial everything-at-once 0.893) and nothing is inaudible (quietest RMS -40.6 dBFS, 21dB under the stings).",
+      "Engine optimization verified by differential against the pristine HEAD engine: 64,800 rolls, 0 mismatches; 17 house systems over 51,000 rolls, 0 mismatches; 274,742 bet-identity agreements.",
+      "Previously: duplicate React key warning located by walking the live fiber tree and confirmed gone; dice screenshotted in flight and at rest; effect layers sampled across 40 rolls; seat split verified by reading chip transforms back; layout measured at 1366x768 and 1024x680."
     ],
     "notVerified": [
-      "Reduced motion. The paths are written - OutcomeBurst returns null, the lamp goes static, the puck pulse is guarded - but they were not exercised with the media query actually on. This is the most likely place for a visual regression to hide.",
-      "Motion blur on the dice in flight was deliberately not attempted. Real blur needs post-processing, and a ghost trail on fast-tumbling dice reads as a rendering fault rather than speed.",
-      "Screenshots were all taken at the browser pane's own viewport (around 830px wide). Wider layouts were checked by DOM measurement, not by eye, because the pane would not composite an emulated viewport.",
+      "AUDIO HAS STILL NEVER BEEN LISTENED TO. It was measured, not heard - that is a real distinction and this is the single most likely place for something to be wrong. The stings and the rake are the likeliest offenders, and pointMade is the loudest thing in the app by about 5dB. If it is harsh, drop MASTER in audio.ts (one number, currently 1) rather than nudging individual gains.",
+      "Motion blur on the dice in flight - deliberately not attempted, see openItems.",
       "Touch input, and any viewport narrower than ~1000px.",
-      "Safari and Firefox. Only Chrome was used.",
-      "Audio was never listened to; nothing was added to it this session, so every new effect is silent.",
+      "Safari and Firefox. Only Chromium was used.",
+      "Wide layouts by eye - measured via DOM, and now screenshotted at 1440x900, but not at 2560 or above.",
       "The expected value of each house system is still not measured anywhere."
     ]
   },
@@ -458,13 +473,28 @@
   "openItems": [
     {
       "priority": "high",
-      "item": "Audio has fallen a long way behind the visuals.",
-      "detail": "src/lib/audio.ts is synthesised and has still never been listened to. Nothing was added to it this session, so the box flashes, the chip flights, the outcome burst, the seven-out shake and every strategy call are all silent. The visuals now carry a lot of weight the sound does not, and that gap is the single most noticeable thing missing from the polish. A rake on a loss, a chip drop on a press, and something with real low end on the burst are the obvious gaps. Levels and the seven-out sting are still guesses."
+      "item": "OPEN DEFECT: enforceIncrements: false lets fractional money into the bankroll.",
+      "detail": "With 'Snap wagers to payable increments' unticked - a checkbox in Setup.tsx - placeBet skips the increment snap but the resolver still pays amount * ratio with no rounding. Reproduced directly: a $10 place bet on the six pays 11.666666666666668, the rack becomes 1001.6666666666666, and the settlement credit and the bankroll delta disagree in the last digits from float accumulation. That lands in seats[x].bankroll, which the HUD renders and which persists to localStorage. Every other path in the engine keeps money in whole dollars. THIS NEEDS AN OWNER DECISION, which is why it was not fixed: (a) round the payout the way buyVig already rounds, keeping the toggle's stated purpose that the felt takes your number literally; (b) refuse the wager, which is what a real table would do but makes the toggle nearly pointless; or (c) leave the math and document it. No test pins the current fractional behaviour, deliberately - pinning it would make it harder to fix."
     },
     {
       "priority": "high",
-      "item": "Exercise reduced motion for real.",
-      "detail": "Every new effect has a reduced-motion path and none of them were run with the media query actually on. Chrome devtools can force prefers-reduced-motion. Check: OutcomeBurst disappears entirely, the lamp stops swaying and renders as a plain rect, the puck stops breathing, chip flights drop out, and the flashes become cross-fades. This is the likeliest place for a regression to be sitting right now."
+      "item": "Listen to the audio.",
+      "detail": "The 15 sounds are measured, wired, and proven reachable, but nobody has heard them. Peak, RMS, duration and band-energy are all in range and the levels were built against spectral targets rather than guesses, so this is much better founded than it was - but measurement is not listening. Start with pointMade and sevenOut (the two stings) and rake. The master level is one number, MASTER in audio.ts, currently 1."
+    },
+    {
+      "priority": "medium",
+      "item": "Six of seven odds schemes are completely untested.",
+      "detail": "Only '3-4-5' is covered. 1x, 2x, 5x, 10x, 20x and 100x are all selectable in Setup.tsx and have no test. maxLayOdds has a double num/den multiply and a `+ 1e-9` fudge - exactly the shape of formula that breaks off its calibration point. All 7 schemes x 6 points were probed end to end this session and every one is correct, so this is regression risk rather than a live bug, but nothing guards it."
+    },
+    {
+      "priority": "medium",
+      "item": "Over half the strategy language is never executed by any test or house system.",
+      "detail": "Every house system happens to use only UNITS, FIXED and MAX, so the workshop ships a much larger language than anything exercises. A 'sizing a bet' block was added this session covering the 7 uncovered amount modes (TABLE_MIN, PCT_BANKROLL, DOUBLE, WIN, HALF_WIN, TO, MULTIPLE) because those size money and a player reaches them from the first dropdown in the Rule Editor. Still uncovered: 7 of 14 conditions (LAST_TOTAL, BANKROLL, AT_RISK, SESSION_NET, HAND_NET, POINTS_THIS_HAND, IM_SHOOTING), 5 of 10 triggers (POINT_SET, POINT_MADE, SEVEN_OUT, CRAPS, NATURAL), the WORKING and STOP actions, and the ROLL and SESSION `once` scopes. All were probed and behave correctly."
+    },
+    {
+      "priority": "medium",
+      "item": "Untested exported functions that move money.",
+      "detail": "sameAction, rebuy and refreshWorkingDefaults are exported, wired to real UI buttons, move money, and have zero tests. All three were probed this session and behave correctly, including sameAction refusing an empty list and an illegal re-bet. Also: maxBet is only ever tested against PASS, never a place, prop or odds bet; fieldPays3OnTwo and the fireBetEnabled/atsEnabled refusals are untested. src/lib/engine/stats.ts is entirely untested - not a money path, but every number a player reads about their session comes from it."
     },
     {
       "priority": "medium",
@@ -479,7 +509,7 @@
     {
       "priority": "medium",
       "item": "Measure what the seventeen systems actually cost.",
-      "detail": "Unchanged from last session and still the natural next step for the strategy layer. The engine is seeded and pure, runStrategy is pure, and the stats config already runs long simulations. A test that plays each system over a few hundred thousand rolls and reports net per roll against total action would turn the workshop from a toy into a lab, and give it somewhere to show an expected-value figure."
+      "detail": "Unchanged from last session and still the natural next step for the strategy layer. The engine is seeded and pure, runStrategy is pure, and the stats config already runs long simulations. A test that plays each system over a few hundred thousand rolls and reports net per roll against total action would turn the workshop from a toy into a lab, and give it somewhere to show an expected-value figure. NOTE: this got much cheaper this session - the stats config now runs in ~29s rather than ~165s, and the strategy layer already has a seeded 400-roll harness. Extending it to accumulate net over ~50k rolls per system would turn 'does this system cheat?' into 'what does this system cost?', and would catch a rule regression that keeps the money conserved but plays a different game."
     },
     {
       "priority": "medium",
@@ -539,8 +569,8 @@
     "ignored": "stats-run.txt and bench-out.txt are local test artefacts and are gitignored."
   },
   "pickUpHere": {
-    "firstCommand": "cd TableGames/craps && npm install && npm run dev",
-    "firstCheck": "npm test, then open the app and press space a few times. If the dice do not appear, check the FAST button before anything else - fast mode is persisted and deliberately skips the animation. Everything was green at handoff, so anything red is something you changed.",
+    "firstCommand": "cd TableGames/craps && npm install && npm run build && npm run dev",
+    "firstCheck": "npm test (193, ~4s), then open the app and press space a few times. Run `npm run build` BEFORE `npm run typecheck` on a fresh clone - LayoutProps is generated into .next/types and typecheck fails without it (see gotchas). If the dice do not appear, check the FAST button before anything else - fast mode is persisted and deliberately skips the animation. Everything was green at handoff, so anything red is something you changed.",
     "thenRead": [
       "README.md for how the game plays and how to build a strategy",
       "keyDecisions in this file before changing the engine, the dice, the strategy runner, or how a wager is sized"
@@ -553,12 +583,13 @@
       "src/components/table/layout.ts - felt geometry is data, but read the CELL_BANDS and SEAT_SPREAD notes first; several constants in there are tuned against each other."
     ],
     "riskiestPlacesToChange": [
+      "src/lib/engine/resolve.ts - applyRoll now reads frozen state rather than the draft for performance, and both the ordering comment and the frozen-vs-draft split are load-bearing. Come-bet protection depends on the ordering; a revoked-proxy bug depends on the split.",
       "src/components/dice/DiceStage.tsx - nothing automated catches a blank canvas, and the material values are tuned by eye against a scene with no environment map.",
-      "src/lib/engine/resolve.ts - the ordering comment at the top of applyRoll is load-bearing; come-bet protection depends on it.",
       "src/lib/strategy/run.ts - the level-versus-delta split in BET, the success-only `once` stamp, and the state-versus-event trigger split are all subtle and only one fails loudly.",
       "placeBet in src/lib/engine/table.ts - four adjustments in a deliberate order, and fromChip is silent when misused.",
       "The persist config in useGame.ts - bump `version` whenever TableState changes shape.",
-      "Anything animated with motion inside the SVG - motion writes style.transform, which silently overrides a transform attribute on the same element."
+      "Anything animated with motion inside the SVG - motion writes style.transform, which silently overrides a transform attribute on the same element.",
+      "src/lib/audio.ts - the levels are built on noiseTrim() making `gain` mean the same thing for a noise burst and an oscillator. Add a voice without it and it will be an order of magnitude out."
     ]
   }
 }

@@ -15,10 +15,11 @@ import {
   atRisk,
   betSpec,
   maxOddsFor,
+  numberBet,
   placeBet,
+  seatBetOn,
   setBetAmount,
   setWorking,
-  specKey,
   takeDown,
   takeDownAll,
   setOdds,
@@ -87,10 +88,16 @@ export interface StrategyRunResult {
   entries: StrategyLogEntry[];
 }
 
-const INSIDE: PointNumber[] = [5, 6, 8, 9];
-const OUTSIDE: PointNumber[] = [4, 5, 9, 10];
-const ACROSS: PointNumber[] = [4, 5, 6, 8, 9, 10];
-const HARD_NUMBERS: PointNumber[] = [4, 6, 8, 10];
+/*
+ * Frozen because `resolveNumbers` hands these straight back rather than
+ * copying them — a group reference is read, never written, and the copy was
+ * one allocation per reference per rule per roll.
+ */
+const INSIDE: readonly PointNumber[] = Object.freeze<PointNumber[]>([5, 6, 8, 9]);
+const OUTSIDE: readonly PointNumber[] = Object.freeze<PointNumber[]>([4, 5, 9, 10]);
+const ACROSS: readonly PointNumber[] = Object.freeze<PointNumber[]>([4, 5, 6, 8, 9, 10]);
+const HARD_NUMBERS: readonly PointNumber[] = Object.freeze<PointNumber[]>([4, 6, 8, 10]);
+const NO_NUMBERS: readonly PointNumber[] = Object.freeze<PointNumber[]>([]);
 
 /** Amount modes that name what a spot should hold rather than what to add. */
 const LEVEL_MODES: ReadonlySet<string> = new Set(['UNITS', 'FIXED', 'TABLE_MIN', 'PCT_BANKROLL']);
@@ -120,13 +127,24 @@ function compare(left: number, op: Comparison, right: number): boolean {
   }
 }
 
+/*
+ * The bet scans below walk `table.bets` with a plain indexed loop. The array
+ * is frozen, and V8 drops frozen arrays out of the fast path for `filter` and
+ * `find` — measured at roughly 8x for a 24-bet array. These run per seat per
+ * roll, so they are written out longhand.
+ */
+
+/** The bet with this id as it stands on a table, or undefined if it is gone. */
+function liveBet(table: TableState, betId: string): Bet | undefined {
+  for (let i = 0; i < table.bets.length; i++) {
+    if (table.bets[i].id === betId) return table.bets[i];
+  }
+  return undefined;
+}
+
 /** Everything a seat is worth: chips in the rack plus chips on the felt. */
 function equity(table: TableState, seat: SeatId): number {
   return table.seats[seat].bankroll + atRisk(table, seat);
-}
-
-function seatBets(table: TableState, seat: SeatId): Bet[] {
-  return table.bets.filter((b) => b.seat === seat);
 }
 
 /* ------------------------------------------------------------------ *
@@ -151,26 +169,26 @@ function resolveNumbers(
   record: RollRecord | null,
   kind?: BetKind,
   exceptPoint?: boolean,
-): PointNumber[] {
-  let out: PointNumber[];
+): readonly PointNumber[] {
+  let out: readonly PointNumber[];
 
   switch (ref) {
     case 'POINT':
-      out = table.point !== null ? [table.point] : [];
+      out = table.point !== null ? [table.point] : NO_NUMBERS;
       break;
     case 'HIT': {
       const n = hitNumber(record);
-      out = n !== null ? [n] : [];
+      out = n !== null ? [n] : NO_NUMBERS;
       break;
     }
     case 'INSIDE':
-      out = [...INSIDE];
+      out = INSIDE;
       break;
     case 'OUTSIDE':
-      out = [...OUTSIDE];
+      out = OUTSIDE;
       break;
     case 'ACROSS':
-      out = [...ACROSS];
+      out = ACROSS;
       break;
     default:
       out = [ref];
@@ -221,17 +239,27 @@ function matchingBets(
   record: RollRecord | null,
 ): Bet[] {
   const specs = resolveSpecs(target, table, record);
-  return seatBets(table, seat).filter((bet) =>
-    specs.some(
-      (spec) =>
+  const out: Bet[] = [];
+  if (specs.length === 0) return out;
+  for (let i = 0; i < table.bets.length; i++) {
+    const bet = table.bets[i];
+    if (bet.seat !== seat) continue;
+    for (let j = 0; j < specs.length; j++) {
+      const spec = specs[j];
+      if (
         spec.kind === bet.kind &&
         (spec.number === undefined || spec.number === bet.number) &&
         (spec.prop === undefined || spec.prop === bet.prop) &&
         (spec.ats === undefined || spec.ats === bet.ats) &&
         (spec.hop === undefined ||
-          (bet.hop !== undefined && spec.hop[0] === bet.hop[0] && spec.hop[1] === bet.hop[1])),
-    ),
-  );
+          (bet.hop !== undefined && spec.hop[0] === bet.hop[0] && spec.hop[1] === bet.hop[1]))
+      ) {
+        out.push(bet);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -240,15 +268,19 @@ function matchingBets(
  * hit into a bigger bet without reaching into their rack.
  */
 function winOn(settlements: Settlement[], seat: SeatId, number: PointNumber): number {
-  return settlements
-    .filter(
-      (s) =>
-        s.seat === seat &&
-        s.type === 'WIN' &&
-        s.at.number === number &&
-        (s.at.kind === 'PLACE' || s.at.kind === 'BUY'),
-    )
-    .reduce((sum, s) => sum + s.net, 0);
+  let total = 0;
+  for (let i = 0; i < settlements.length; i++) {
+    const s = settlements[i];
+    if (
+      s.seat === seat &&
+      s.type === 'WIN' &&
+      s.at.number === number &&
+      (s.at.kind === 'PLACE' || s.at.kind === 'BUY')
+    ) {
+      total += s.net;
+    }
+  }
+  return total;
 }
 
 /* ------------------------------------------------------------------ *
@@ -325,16 +357,19 @@ function evaluate(
 
     case 'BET_AMOUNT': {
       const bets = matchingBets(cond.target, table, seat, record);
-      const total = bets.reduce((sum, b) => sum + b.amount, 0);
+      let total = 0;
+      for (let i = 0; i < bets.length; i++) total += bets[i].amount;
       return compare(total, cond.op, cond.value);
     }
 
-    case 'BET_COUNT':
-      return compare(
-        seatBets(table, seat).filter((b) => b.kind === cond.kind).length,
-        cond.op,
-        cond.value,
-      );
+    case 'BET_COUNT': {
+      let n = 0;
+      for (let i = 0; i < table.bets.length; i++) {
+        const b = table.bets[i];
+        if (b.seat === seat && b.kind === cond.kind) n += 1;
+      }
+      return compare(n, cond.op, cond.value);
+    }
 
     case 'BANKROLL':
       return compare(table.seats[seat].bankroll, cond.op, cond.value);
@@ -356,7 +391,11 @@ function evaluate(
       if (numbers.length === 0) return false;
       // A group reference asks about the busiest of them, which is what "the
       // inside numbers have hit twice" means when you say it out loud.
-      const most = Math.max(...numbers.map((n) => memory.hits[n] ?? 0));
+      let most = 0;
+      for (let i = 0; i < numbers.length; i++) {
+        const h = memory.hits[numbers[i]] ?? 0;
+        if (h > most) most = h;
+      }
       return compare(most, cond.op, cond.value);
     }
 
@@ -452,9 +491,7 @@ function runAction(
         table,
         seat,
         specs.map((spec) => (state: TableState) => {
-          const key = specKey(spec);
-          const held =
-            state.bets.find((b) => b.seat === seat && specKey(betSpec(b)) === key)?.amount ?? 0;
+          const held = seatBetOn(state, seat, spec)?.amount ?? 0;
           const figure = resolveAmount(action.amount, {
             table: state,
             seat,
@@ -488,9 +525,11 @@ function runAction(
 
     case 'ODDS': {
       const kinds = ODDS_KINDS[action.on];
-      const targets = seatBets(table, seat).filter(
-        (b) => kinds.includes(b.kind) && b.number !== undefined,
-      );
+      const targets: Bet[] = [];
+      for (let i = 0; i < table.bets.length; i++) {
+        const b = table.bets[i];
+        if (b.seat === seat && b.number !== undefined && kinds.includes(b.kind)) targets.push(b);
+      }
       if (targets.length === 0) return { table, text: null, ok: true };
 
       let working = table;
@@ -499,7 +538,7 @@ function runAction(
       const before = working.seats[seat].bankroll;
 
       for (const bet of targets) {
-        const live = working.bets.find((b) => b.id === bet.id);
+        const live = liveBet(working, bet.id);
         if (!live) continue;
         const max = maxOddsFor(working, live);
         let want: number;
@@ -559,9 +598,7 @@ function runAction(
       const before = working.seats[seat].bankroll;
 
       for (const number of numbers) {
-        const bet = working.bets.find(
-          (b) => b.seat === seat && b.number === number && (b.kind === 'PLACE' || b.kind === 'BUY'),
-        );
+        const bet = numberBet(working, seat, number);
         if (!bet) {
           if (!refusal) refusal = `Nothing on the ${number} to press`;
           continue;
@@ -608,9 +645,7 @@ function runAction(
       const before = working.seats[seat].bankroll;
 
       for (const number of numbers) {
-        const bet = working.bets.find(
-          (b) => b.seat === seat && b.number === number && (b.kind === 'PLACE' || b.kind === 'BUY'),
-        );
+        const bet = numberBet(working, seat, number);
         if (!bet) continue;
         // Regression amounts name the total to come down *to*, not a delta.
         const target =
@@ -679,13 +714,19 @@ function runAction(
 
     case 'WORKING': {
       const numbers = resolveNumbers(action.number, table, record);
-      const bets = seatBets(table, seat).filter(
-        (b) =>
+      const bets: Bet[] = [];
+      for (let i = 0; i < table.bets.length; i++) {
+        const b = table.bets[i];
+        if (
+          b.seat === seat &&
           (b.kind === 'PLACE' || b.kind === 'BUY' || b.kind === 'HARDWAY') &&
           b.number !== undefined &&
           numbers.includes(b.number as PointNumber) &&
-          b.working !== action.on,
-      );
+          b.working !== action.on
+        ) {
+          bets.push(b);
+        }
+      }
       if (bets.length === 0) return { table, text: null, ok: true };
 
       const res = applyAll(
@@ -734,8 +775,10 @@ function triggerFires(
         return record.outcome === 'SEVEN_OUT';
       case 'NUMBER_HIT':
         return isBoxNumber(record.roll.total);
-      case 'CRAPS':
-        return [2, 3, 12].includes(record.roll.total);
+      case 'CRAPS': {
+        const total = record.roll.total;
+        return total === 2 || total === 3 || total === 12;
+      }
       case 'NATURAL':
         return record.outcome === 'NATURAL';
       default:
@@ -825,8 +868,11 @@ export function runStrategy(input: StrategyRunInput): StrategyRunResult {
       : emptyMemory(strategy.id, equity(startTable, seat));
 
   const fresh = record !== null && startTable.rollCount !== memory.lastRollSeen;
+  // `advance` builds its own copies. On a re-run over a roll this memory has
+  // already folded in there is nothing to fold, and every write below replaces
+  // rather than mutates, so the memory can be carried through untouched — which
+  // also lets the store hand back the identical object and skip a re-render.
   if (fresh && record) memory = advance(memory, startTable, seat, record);
-  else memory = { ...memory, hits: { ...memory.hits }, fired: { ...memory.fired } };
 
   const entries: StrategyLogEntry[] = [];
   const note = (rule: string, text: string, ok: boolean) => {
@@ -867,14 +913,18 @@ export function runStrategy(input: StrategyRunInput): StrategyRunResult {
     const holds = rule.all.every((c) => evaluate(c, table, seat, memory, record));
     if (!holds) continue;
 
-    const title = ruleTitle(rule, strategy.unit);
+    // Rendering the rule back into English is only needed if something is
+    // going to be written to the log, and most firings of most rules find
+    // nothing to do. Worked out once, on first use.
+    let title: string | null = null;
+    const titleOf = () => (title ??= ruleTitle(rule, strategy.unit));
     let acted = false;
 
     for (const action of rule.then) {
       const outcome = runAction(action, table, seat, strategy, record, settlements);
       table = outcome.table;
       if (outcome.text !== null) {
-        note(title, outcome.text, outcome.ok);
+        note(titleOf(), outcome.text, outcome.ok);
         if (outcome.ok) acted = true;
       }
       if (action.t === 'STOP') {

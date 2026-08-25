@@ -105,21 +105,10 @@ describe('pass line', () => {
     expect(res.ok).toBe(false);
   });
 
-  it('pays the flat bet plus true odds when the point is made', () => {
-    // Point 5 with $100 flat and $400 odds at 3-4-5x. Odds pay 3:2 = $600.
-    let s = bet(table(), { kind: 'PASS' }, 100);
-    s = applyRoll(s, soft(5)).state;
-    expect(maxOddsFor(s, s.bets[0])).toBe(400);
-    const odds = setOdds(s, s.bets[0].id, 400);
-    expect(odds.ok).toBe(true);
-    s = (odds as { state: TableState }).state;
-    expect(bank(s)).toBe(9500);
-
-    s = applyRoll(s, soft(5)).state;
-    expect(bank(s)).toBe(9500 + 500 + 100 + 600);
-    expect(s.phase).toBe('COME_OUT');
-  });
-
+  // Every point in one table: the cap the scheme allows, the state-aware
+  // `maxOddsFor` agreeing with the pure `maxPassOdds`, the rack after the odds
+  // go up, the payout when the point repeats, and the table returning to a
+  // come-out with nothing left on it.
   it.each([
     [4, 300, 600],
     [5, 400, 600],
@@ -131,10 +120,18 @@ describe('pass line', () => {
     expect(maxPassOdds(100, point as 4, '3-4-5')).toBe(maxOdds);
     let s = bet(table(), { kind: 'PASS' }, 100);
     s = applyRoll(s, soft(point)).state;
-    s = (setOdds(s, s.bets[0].id, maxOdds) as { state: TableState }).state;
+    expect(maxOddsFor(s, s.bets[0])).toBe(maxOdds);
+
+    const odds = setOdds(s, s.bets[0].id, maxOdds);
+    expect(odds.ok).toBe(true);
+    s = (odds as { state: TableState }).state;
+    expect(bank(s)).toBe(10_000 - 100 - maxOdds);
+
     const before = bank(s);
     s = applyRoll(s, soft(point)).state;
     expect(bank(s) - before).toBe(100 + maxOdds + 100 + win);
+    expect(s.phase).toBe('COME_OUT');
+    expect(s.bets).toHaveLength(0);
   });
 
   it('loses flat and odds on a seven out', () => {
@@ -314,17 +311,30 @@ describe('place bets', () => {
     expect(st.bets.find((b) => b.kind === 'PLACE')!.amount).toBe(12);
   });
 
-  it('is off on the come-out so a seven cannot take it', () => {
-    let s = bet(table(), { kind: 'PASS' }, 10);
-    s = applyRoll(s, soft(4)).state;
-    s = bet(s, { kind: 'PLACE', number: 6 }, 60);
-    s = applyRoll(s, soft(4)).state; // point made, now on come-out
-    expect(s.bets.find((b) => b.kind === 'PLACE')!.working).toBe(false);
-    const before = bank(s);
-    s = applyRoll(s, soft(7)).state; // come-out seven
-    expect(bank(s) - before).toBe(0);
-    expect(s.bets.find((b) => b.kind === 'PLACE')).toBeDefined();
-  });
+  // The house default puts place bets off for a come-out, but the setup screen
+  // lets a player turn that off. Both polarities go through the same
+  // applyPhaseDefaults call, and only the default one used to be covered.
+  it.each([
+    [true, false, 1],
+    [false, true, 0],
+  ])(
+    'placeOffOnComeOut=%s leaves the bet working=%s through a come-out seven',
+    (placeOffOnComeOut, working, survivors) => {
+      let s = table({ placeOffOnComeOut });
+      s = bet(s, { kind: 'PASS' }, 10);
+      s = applyRoll(s, soft(4)).state;
+      s = bet(s, { kind: 'PLACE', number: 6 }, 60);
+      s = applyRoll(s, soft(4)).state; // point made, now on come-out
+      expect(s.bets.find((b) => b.kind === 'PLACE')!.working).toBe(working);
+
+      const before = bank(s);
+      s = applyRoll(s, soft(7)).state; // come-out seven
+      // Either way the rack does not move: a losing stake left it when the bet
+      // was placed. What changes is whether the bet is still on the felt.
+      expect(bank(s) - before).toBe(0);
+      expect(s.bets.filter((b) => b.kind === 'PLACE')).toHaveLength(survivors);
+    },
+  );
 
   it('can be turned on for the come-out by hand', () => {
     let s = bet(table(), { kind: 'PASS' }, 10);
@@ -343,6 +353,30 @@ describe('place bets', () => {
     s = applyRoll(s, soft(4)).state;
     s = bet(s, { kind: 'PLACE', number: 6 }, 60);
     s = applyRoll(s, soft(7)).state;
+    expect(s.bets).toHaveLength(0);
+  });
+});
+
+describe('big 6 and 8', () => {
+  // The felt draws these cells and the resolver settles them, but nothing else
+  // in this file covered them: they were the one gap in the payout table.
+  it.each([6, 8] as const)('pays big %i even money and leaves it up', (n) => {
+    // Deliberately settled on the come-out: a place bet is off for the come-out
+    // by house default, and big 6 and 8 are always live. That is both the
+    // convention and most of why they are the worse bet.
+    let s = bet(table(), { kind: 'BIG', number: n }, 10);
+    expect(s.phase).toBe('COME_OUT');
+    const before = bank(s);
+    s = applyRoll(s, soft(n)).state;
+    expect(bank(s) - before).toBe(10);
+    expect(s.bets.find((b) => b.kind === 'BIG')!.amount).toBe(10);
+  });
+
+  it('loses to the seven', () => {
+    let s = bet(table(), { kind: 'BIG', number: 6 }, 10);
+    s = applyRoll(s, soft(4)).state;
+    s = applyRoll(s, soft(7)).state;
+    expect(bank(s)).toBe(9990);
     expect(s.bets).toHaveLength(0);
   });
 });
@@ -380,13 +414,18 @@ describe('buy and lay', () => {
   });
 
   it('keeps a lay working through the come-out', () => {
+    // Place bets go off for a come-out; a lay does not, and the come-out seven
+    // it survives to see is the roll it was bought for.
     let s = bet(table(), { kind: 'PASS' }, 10);
     s = applyRoll(s, soft(5)).state;
     s = bet(s, { kind: 'LAY', number: 10 }, 200);
     s = applyRoll(s, soft(5)).state; // point made, come-out now
     const before = bank(s);
     s = applyRoll(s, soft(7)).state;
-    expect(bank(s) - before).toBeGreaterThan(0);
+    // $200 laid against the ten wins $100 at 1:2, less $5 commission, and the
+    // lay itself stays on the felt for the next one.
+    expect(bank(s) - before).toBe(95);
+    expect(s.bets.find((b) => b.kind === 'LAY')!.amount).toBe(200);
   });
 });
 
@@ -422,7 +461,11 @@ describe('hardways', () => {
     let s = bet(table(), { kind: 'PASS' }, 10);
     s = applyRoll(s, soft(5)).state;
     s = bet(s, { kind: 'HARDWAY', number: 6 }, 10);
+    const before = bank(s);
     s = applyRoll(s, soft(7)).state;
+    expect(s.bets.find((b) => b.kind === 'HARDWAY')).toBeUndefined();
+    // The seven took the line as well, and neither stake comes back.
+    expect(bank(s) - before).toBe(0);
     expect(s.bets).toHaveLength(0);
   });
 });
@@ -441,6 +484,9 @@ describe('field', () => {
     const before = bank(s);
     s = applyRoll(s, soft(total)).state;
     expect(bank(s) - before).toBe(win);
+    // Only the winnings are paid: the house leaves the bet up, so the delta
+    // above is profit and the same $10 is still sitting in the field.
+    expect(s.bets.find((b) => b.kind === 'FIELD')!.amount).toBe(10);
   });
 
   it.each([5, 6, 7, 8])('loses on %i', (total) => {
@@ -448,12 +494,6 @@ describe('field', () => {
     s = applyRoll(s, soft(total)).state;
     expect(bank(s)).toBe(9990);
     expect(s.bets).toHaveLength(0);
-  });
-
-  it('rides after a win when the house leaves it up', () => {
-    let s = bet(table(), { kind: 'FIELD' }, 10);
-    s = applyRoll(s, soft(4)).state;
-    expect(s.bets.find((b) => b.kind === 'FIELD')!.amount).toBe(10);
   });
 });
 
@@ -579,7 +619,8 @@ describe('all tall small', () => {
     for (const n of [2, 3, 4, 5]) s = applyRoll(s, soft(n)).state;
     before = bank(s);
     s = applyRoll(s, soft(6)).state;
-    expect(bank(s) - before).toBeGreaterThanOrEqual(5 + 150);
+    // The Small pays 30:1, so the $5 bet returns its stake plus $150 exactly.
+    expect(bank(s) - before).toBe(5 + 150);
     expect(s.bets.find((b) => b.kind === 'ATS')).toBeUndefined();
   });
 
@@ -865,40 +906,37 @@ describe('what a chip is worth on the felt', () => {
 });
 
 describe('grouped place calls', () => {
-  it('places the inside numbers at the armed chip', () => {
-    const res = placeGroup(table(), 'A', INSIDE_NUMBERS, 25, 'inside');
+  /** Every place/buy bet a seat holds, as number to amount. */
+  const held = (state: TableState): Record<number, number> =>
+    Object.fromEntries(state.bets.map((b) => [b.number as number, b.amount]));
+
+  // One quarter per number, three calls. The six and eight are bet in sixes,
+  // which is the whole reason $25 across costs $160 rather than $150.
+  it.each([
+    ['inside', INSIDE_NUMBERS, { 5: 25, 6: 30, 8: 30, 9: 25 }, 110],
+    ['outside', OUTSIDE_NUMBERS, { 4: 25, 5: 25, 9: 25, 10: 25 }, 100],
+    ['across', ACROSS_NUMBERS, { 4: 25, 5: 25, 6: 30, 8: 30, 9: 25, 10: 25 }, 160],
+  ] as const)('places the %s numbers at the armed chip', (label, group, expected, spend) => {
+    const start = table();
+    const res = placeGroup(start, 'A', group, 25, label);
     expect(res.ok).toBe(true);
     const st = (res as { state: TableState }).state;
-    expect(st.bets.map((b) => b.number).sort((x, y) => Number(x) - Number(y))).toEqual([5, 6, 8, 9]);
-    expect(st.bets.find((b) => b.number === 6)!.amount).toBe(30);
-    expect(st.bets.find((b) => b.number === 5)!.amount).toBe(25);
-  });
-
-  it('places the outside numbers', () => {
-    const res = placeGroup(table(), 'A', OUTSIDE_NUMBERS, 25, 'outside');
-    const st = (res as { state: TableState }).state;
-    expect(st.bets.map((b) => b.number).sort((x, y) => Number(x) - Number(y))).toEqual([4, 5, 9, 10]);
-  });
-
-  it('goes across all six for the sum of the individual bets', () => {
-    const start = table();
-    const res = placeGroup(start, 'A', ACROSS_NUMBERS, 25, 'across');
-    const st = (res as { state: TableState }).state;
-    expect(st.bets).toHaveLength(6);
-    // 25 + 25 + 30 + 30 + 25 + 25
-    expect(start.seats.A.bankroll - st.seats.A.bankroll).toBe(160);
-    expect(atRisk(st, 'A')).toBe(160);
+    expect(held(st)).toEqual(expected);
+    expect(start.seats.A.bankroll - st.seats.A.bankroll).toBe(spend);
+    expect(atRisk(st, 'A')).toBe(spend);
   });
 
   it('skips what it cannot place rather than sinking the whole call', () => {
-    // Enough for some of the layout but not all of it.
+    // $60 is enough for some of the layout but not all of it, and the tail of
+    // the call also exercises the short-rack step-down: the six cannot take
+    // its full $30, so it takes the largest payable total the rack covers.
     const s = createTable({ buyIn: 60, rules: { minBet: 1 } });
     const res = placeGroup(s, 'A', ACROSS_NUMBERS, 25, 'across');
     expect(res.ok).toBe(true);
     const st = (res as { state: TableState }).state;
-    expect(st.bets.length).toBeGreaterThan(0);
-    expect(st.bets.length).toBeLessThan(6);
-    expect(st.seats.A.bankroll).toBeGreaterThanOrEqual(0);
+    expect(held(st)).toEqual({ 4: 25, 5: 25, 6: 6 });
+    expect(st.seats.A.bankroll).toBe(4);
+    expect(atRisk(st, 'A') + st.seats.A.bankroll).toBe(60);
   });
 });
 
@@ -909,16 +947,17 @@ describe('solo play', () => {
     return s;
   }
 
-  it('keeps the dice with the only player', () => {
-    const s = sevenOutFrom(createTable({ solo: true, buyIn: 1000 }));
-    expect(s.solo).toBe(true);
-    expect(s.shooter).toBe('A');
+  // A solo player keeps the dice on a seven out because there is nobody to
+  // pass them to; a two-handed table hands them on. The pair is the test.
+  it.each([
+    [true, 'A'],
+    [false, 'B'],
+  ] as const)('solo=%s hands the dice to %s after a seven out', (solo, shooter) => {
+    const s = sevenOutFrom(createTable({ solo, buyIn: 1000 }));
+    expect(s.solo).toBe(solo);
+    expect(s.shooter).toBe(shooter);
     expect(s.shooterRollCount).toBe(0);
   });
-
-  it('still passes the dice at a two-handed table', () => {
-    const s = sevenOutFrom(createTable({ buyIn: 1000 }));
-    expect(s.solo).toBe(false);
-    expect(s.shooter).toBe('B');
-  });
 });
+
+

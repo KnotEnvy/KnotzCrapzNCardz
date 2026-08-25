@@ -11,7 +11,15 @@
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { ChipStack } from './Chip';
-import { AreaFlashes, ChipFlights, FxDefs, OutcomeBurst, OutcomeWash } from './Fx';
+import {
+  AreaFlashes,
+  ChipFlights,
+  FxDefs,
+  MoveTrails,
+  OutcomeBurst,
+  OutcomeWash,
+  TRAVEL_MS,
+} from './Fx';
 import { PRINT_DIE_FACE, PRINT_DIE_PIP, PipPair } from './Pips';
 import {
   AREAS,
@@ -120,6 +128,29 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
       transition: { duration: 0.55, ease: 'easeOut' },
     });
   }, [table.history, shake, reducedMotion]);
+
+  /*
+   * The two motions a chip on the felt can be in.
+   *
+   * `entrance` is a chip being put down; `travel` is a chip already on the
+   * table being moved by the dealer. They are separate transitions on separate
+   * nodes because motion drives both through style.transform and one node
+   * cannot carry two of them — the same collision the spark wrapper avoids.
+   *
+   * Under reduced motion the entrance keeps only its fade and the travel snaps:
+   * a bet appearing and a bet arriving are both information, but neither of
+   * them needs to move across the screen to say so.
+   */
+  const entranceIn = reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.4, y: -26 };
+  const entranceTo = reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 };
+  const entrance = reducedMotion
+    ? ({ duration: 0.18, ease: 'easeOut' } as const)
+    : ({ type: 'spring', stiffness: 420, damping: 26 } as const);
+  const travel = reducedMotion
+    ? ({ duration: 0 } as const)
+    : // Slow enough to follow with the eye, and matched to the trail drawn
+      // under it so the chip and its track finish together.
+      ({ duration: TRAVEL_MS / 1000, ease: [0.32, 0.72, 0.28, 1] } as const);
 
   const handleZone = (zone: HitZone) => {
     if (zone.area.action === 'OPEN_HOP') {
@@ -261,12 +292,18 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
         {/* ---- The boxes that just resolved, lit ---- */}
         <AreaFlashes settlements={settlements} rollId={table.rollCount} />
 
+        {/* ---- The track a bet takes when it is moved to its number ----
+            Under the chips, so the chip rides over its own trail. */}
+        <MoveTrails settlements={settlements} rollId={table.rollCount} />
+
         {/* ---- Chips ---- */}
         <g>
           {betsFor(() => true).map((bet) => {
             const base = anchorFor(bet);
             const nudge = seatOffset(bet.seat);
             const at = { x: base.x + nudge.x, y: base.y + nudge.y };
+            const odds = oddsAnchorFor(bet);
+            const oddsAt = { x: odds.x + nudge.x, y: odds.y + nudge.y };
             const ring = SEAT_RING[bet.seat];
             const takeable = canTakeDown(bet).allowed;
             const maxOdds = maxOddsFor(table, bet);
@@ -275,64 +312,87 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
 
             return (
               <g key={bet.id}>
+                {/*
+                  Two nested nodes on purpose. The outer one owns where the bet
+                  *is*, so a come bet moved up to its number travels there
+                  instead of teleporting; the inner one owns the chip being put
+                  down. Both are transforms, and motion writes them through
+                  style, so they cannot share a node.
+                */}
                 <motion.g
-                  initial={{ opacity: 0, scale: 0.4, y: -26 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                  // Inert, and there for the same reason the effect layers
+                  // carry data-fx: whether a bet actually travelled is a
+                  // question you want to answer from outside React, by reading
+                  // the transform back, rather than from a screenshot taken on
+                  // the right millisecond.
+                  data-chip={bet.id}
+                  initial={{ x: at.x, y: at.y }}
+                  animate={{ x: at.x, y: at.y }}
+                  transition={travel}
                 >
-                  <ChipStack
-                    x={at.x}
-                    y={at.y}
-                    amount={bet.amount}
-                    r={20}
-                    ring={ring}
-                    off={!bet.working && ['PLACE', 'BUY', 'HARDWAY'].includes(bet.kind)}
-                    label={oddsLabel}
-                    title={[
-                      table.seats[bet.seat].name,
-                      maxOdds > 0 ? `click to add odds (max $${maxOdds})` : null,
-                      takeable
-                        ? 'right-click to take down'
-                        : bet.odds > 0
-                          ? 'right-click to pull the odds'
-                          : 'contract bet, stays until it resolves',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (rolling) return;
-                      if (maxOdds > 0) adjustOdds(bet.id, Math.min(maxOdds, bet.odds + chip));
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Contract bets refuse politely, and pull their odds down
-                      // instead if any are riding.
-                      if (!rolling) clearBet(bet.id);
-                    }}
-                  />
-                </motion.g>
-                {bet.odds > 0 ? (
-                  <motion.g
-                    initial={{ opacity: 0, scale: 0.4 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-                  >
+                  <motion.g initial={entranceIn} animate={entranceTo} transition={entrance}>
                     <ChipStack
-                      x={oddsAnchorFor(bet).x + nudge.x}
-                      y={oddsAnchorFor(bet).y + nudge.y}
-                      amount={bet.odds}
+                      x={0}
+                      y={0}
+                      amount={bet.amount}
+                      r={20}
                       ring={ring}
-                      r={15}
-                      off={!bet.oddsWorking}
-                      title={`Odds $${bet.odds} — right-click to take down`}
+                      off={!bet.working && ['PLACE', 'BUY', 'HARDWAY'].includes(bet.kind)}
+                      label={oddsLabel}
+                      title={[
+                        table.seats[bet.seat].name,
+                        maxOdds > 0 ? `click to add odds (max $${maxOdds})` : null,
+                        takeable
+                          ? 'right-click to take down'
+                          : bet.odds > 0
+                            ? 'right-click to pull the odds'
+                            : 'contract bet, stays until it resolves',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (rolling) return;
+                        if (maxOdds > 0) adjustOdds(bet.id, Math.min(maxOdds, bet.odds + chip));
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!rolling) adjustOdds(bet.id, 0);
+                        // Contract bets refuse politely, and pull their odds
+                        // down instead if any are riding.
+                        if (!rolling) clearBet(bet.id);
                       }}
                     />
+                  </motion.g>
+                </motion.g>
+                {bet.odds > 0 ? (
+                  // Odds ride on top of the flat bet, so they follow it around
+                  // the layout the same way.
+                  <motion.g
+                    initial={{ x: oddsAt.x, y: oddsAt.y }}
+                    animate={{ x: oddsAt.x, y: oddsAt.y }}
+                    transition={travel}
+                  >
+                    <motion.g
+                      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.4 }}
+                      animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                      transition={entrance}
+                    >
+                      <ChipStack
+                        x={0}
+                        y={0}
+                        amount={bet.odds}
+                        ring={ring}
+                        r={15}
+                        off={!bet.oddsWorking}
+                        title={`Odds $${bet.odds} — right-click to take down`}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!rolling) adjustOdds(bet.id, 0);
+                        }}
+                      />
+                    </motion.g>
                   </motion.g>
                 ) : null}
               </g>
@@ -355,15 +415,18 @@ export function Felt({ onOpenHop }: { onOpenHop: () => void }) {
             return (
               <motion.g
                 key={f.key}
-                initial={{ opacity: 0, y: 0, scale: 0.8 }}
-                animate={{ opacity: 1, y: -34, scale: 1 }}
-                exit={{ opacity: 0, y: -52 }}
+                // The figure floats up off the chips it belongs to. Under
+                // reduced motion it is printed where it would have ended up and
+                // only fades, so it still clears the stack without travelling.
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 0, scale: 0.8 }}
+                animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: -34, scale: 1 }}
+                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -52 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 pointerEvents="none"
               >
                 <text
                   x={at.x}
-                  y={at.y}
+                  y={at.y + (reducedMotion ? -34 : 0)}
                   textAnchor="middle"
                   fontSize={22}
                   fontWeight={800}
@@ -840,12 +903,47 @@ function Puck({ point }: { point: PointNumber | null }) {
   const target = puckAnchor(point);
   const on = point !== null;
   const reduced = useReducedMotion() ?? false;
+
+  /*
+   * The puck's two faces, and the turn between them.
+   *
+   * A dealer does not recolour the puck, they pick it up, turn it over and set
+   * it down on the number — and that flip is the single loudest thing that
+   * happens on a table between rolls. Keying the group on which face is showing
+   * remounts it, so the new side arrives edge-on and opens out. That reads as a
+   * turn without needing to animate a colour through the halfway point, and it
+   * fires in both directions: on when the point is set, off when the hand ends.
+   */
+  const face = (
+    <>
+      <circle
+        r={22}
+        fill={on ? '#f4f4f2' : '#16181d'}
+        stroke={on ? '#c9c9c2' : '#000'}
+        strokeWidth={3}
+      />
+      <circle r={17} fill="none" stroke={on ? '#1f8a4c' : '#3a3a3a'} strokeWidth={2} />
+      <text
+        textAnchor="middle"
+        dominantBaseline="middle"
+        y={1}
+        fontSize={13}
+        fontWeight={800}
+        fill={on ? '#0b5136' : '#e6e9ef'}
+        style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}
+      >
+        {on ? 'ON' : 'OFF'}
+      </text>
+    </>
+  );
+
   return (
     <motion.g
       animate={{ x: target.x, y: target.y }}
       initial={false}
-      transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 220, damping: 24 }}
       pointerEvents="none"
+      data-fx="puck"
     >
       <ellipse cx={0} cy={4} rx={23} ry={8} fill="#000" opacity={0.45} />
       {/* A live point breathing.
@@ -862,33 +960,39 @@ function Puck({ point }: { point: PointNumber | null }) {
           transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
         />
       ) : null}
-      {/* The puck landing on a new number. Keyed on the point so it replays
-          once per point set and stays put for the rest of the cycle. */}
-      {on && !reduced ? (
-        <motion.circle
-          key={point}
-          r={22}
-          fill="none"
-          stroke="#4ade80"
-          strokeWidth={3}
-          initial={{ scale: 1, opacity: 0.85 }}
-          animate={{ scale: 2.7, opacity: 0 }}
-          transition={{ duration: 0.7, ease: 'easeOut' }}
-        />
-      ) : null}
-      <circle r={22} fill={on ? '#f4f4f2' : '#16181d'} stroke={on ? '#c9c9c2' : '#000'} strokeWidth={3} />
-      <circle r={17} fill="none" stroke={on ? '#1f8a4c' : '#3a3a3a'} strokeWidth={2} />
-      <text
-        textAnchor="middle"
-        dominantBaseline="middle"
-        y={1}
-        fontSize={13}
-        fontWeight={800}
-        fill={on ? '#0b5136' : '#e6e9ef'}
-        style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}
-      >
-        {on ? 'ON' : 'OFF'}
-      </text>
+      {/* The puck landing on a new number. Two rings offset in time rather than
+          one, so the knock has a leading and a trailing edge — the wider,
+          slower one is what carries a point being set across the table instead
+          of leaving it a detail up in the corner. Keyed on the point so it
+          replays once per point set and stays put for the rest of the cycle.
+          Only in the ON direction: a hand ending already owns the wash, the
+          burst and, on a seven out, the whole table. */}
+      {on && !reduced
+        ? [0, 1].map((k) => (
+            <motion.circle
+              key={`${point}-ring-${k}`}
+              r={22}
+              fill="none"
+              stroke="#4ade80"
+              strokeWidth={k ? 2 : 3}
+              initial={{ scale: 1, opacity: k ? 0.45 : 0.85 }}
+              animate={{ scale: k ? 3.6 : 2.7, opacity: 0 }}
+              transition={{ duration: k ? 0.95 : 0.7, delay: k * 0.1, ease: 'easeOut' }}
+            />
+          ))
+        : null}
+      {reduced ? (
+        <g>{face}</g>
+      ) : (
+        <motion.g
+          key={on ? `on-${point}` : 'off'}
+          initial={{ scaleY: 0.04, scaleX: 1.1, opacity: 0.5 }}
+          animate={{ scaleY: 1, scaleX: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 17 }}
+        >
+          {face}
+        </motion.g>
+      )}
     </motion.g>
   );
 }

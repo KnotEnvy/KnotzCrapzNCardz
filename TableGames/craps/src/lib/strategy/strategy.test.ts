@@ -14,7 +14,14 @@ import {
   strategyWarnings,
 } from './library';
 import { runStrategy } from './run';
-import { emptyMemory, units, type Strategy, type StrategyMemory, type StrategyRule } from './types';
+import {
+  LOG_LIMIT,
+  emptyMemory,
+  units,
+  type Strategy,
+  type StrategyMemory,
+  type StrategyRule,
+} from './types';
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -211,27 +218,17 @@ describe('betting a spot that already has money on it', () => {
  * ------------------------------------------------------------------ */
 
 describe('pass line and full odds', () => {
-  it('puts a flat bet up on the come-out and nothing else', () => {
-    const s = open(house('pass-odds'));
-    const bets = s.table.bets;
-    expect(bets).toHaveLength(1);
-    expect(bets[0].kind).toBe('PASS');
-    expect(bets[0].amount).toBe(10);
-  });
+  it('puts one flat bet up on the come-out, then backs it with full odds', () => {
+    // The come-out: one $10 unit on the line and nothing else on the felt.
+    const opened = open(house('pass-odds'));
+    expect(opened.table.bets.map((b) => [b.kind, b.amount, b.odds])).toEqual([['PASS', 10, 0]]);
 
-  it('takes the full 3-4-5 odds once the point is set', () => {
+    // Point four: the same bet travels and takes the full 3x behind it. Still
+    // one bet — the odds ride on the line bet rather than becoming another.
     const s = play(house('pass-odds'), [4]);
-    const pass = s.table.bets.find((b) => b.kind === 'PASS')!;
-    expect(pass.number).toBe(4);
-    expect(pass.odds).toBe(30); // 3x on the four
-  });
-
-  it('does not double the flat bet on a come-out it has already covered', () => {
-    // Two natural sevens in a row: the line pays and is re-bet, never stacked.
-    const s = play(house('pass-odds'), [7, 7]);
-    const pass = s.table.bets.filter((b) => b.kind === 'PASS');
-    expect(pass).toHaveLength(1);
-    expect(pass[0].amount).toBe(10);
+    expect(s.table.bets.map((b) => [b.kind, b.number, b.amount, b.odds])).toEqual([
+      ['PASS', 4, 10, 30],
+    ]);
   });
 
   it('lays the full odds on the dark side', () => {
@@ -246,20 +243,17 @@ describe('pass line and full odds', () => {
 });
 
 describe('three point molly', () => {
-  it('works up to a line bet and two come bets, and no further', () => {
+  it('works up to a line bet and two come bets, each backed with full odds', () => {
+    // Point five, come points six and eight, then two more numbers that must
+    // not buy a third come bet. The flat bets are one $10 unit each and the
+    // odds are the full 3-4-5x behind every travelled number: $40 on the five,
+    // $50 each on the six and eight.
     const s = play(house('three-point-molly'), [5, 6, 8, 9, 10]);
-    const come = s.table.bets.filter((b) => b.kind === 'COME');
-    expect(come.length).toBeLessThanOrEqual(2);
-    expect(s.table.bets.filter((b) => b.kind === 'PASS')).toHaveLength(1);
-  });
-
-  it('backs every travelled bet with odds', () => {
-    const s = play(house('three-point-molly'), [5, 6, 8]);
-    const withNumbers = s.table.bets.filter(
-      (b) => (b.kind === 'PASS' || b.kind === 'COME') && b.number !== undefined,
-    );
-    expect(withNumbers.length).toBeGreaterThan(1);
-    for (const bet of withNumbers) expect(bet.odds).toBeGreaterThan(0);
+    expect(s.table.bets.map((b) => [b.kind, b.number, b.amount, b.odds])).toEqual([
+      ['PASS', 5, 10, 40],
+      ['COME', 6, 10, 50],
+      ['COME', 8, 10, 50],
+    ]);
   });
 });
 
@@ -300,9 +294,19 @@ describe('pressing is scoped to the number that hit', () => {
  * ------------------------------------------------------------------ */
 
 describe('the $44 inside regression', () => {
-  it('does not regress on the roll that set the point', () => {
+  it('keeps its once-per-point budget unspent on the roll that set the point', () => {
+    // The regression rule sits *above* the rule that creates the bets, so on
+    // the point-set roll it finds nothing to regress. `once` counts successes,
+    // not attempts, so it must not be stamped as fired — otherwise the real
+    // hit arrives with the budget already spent and the system stays flat.
     const s = play(house('regression-44'), [4]);
     expect(atRisk(s.table, 'A')).toBe(44);
+    expect(s.memory.fired['regression-44#0']).toBeUndefined();
+    expect(s.memory.fired['regression-44#1']).toBe('p1');
+
+    // And on the hit it does fire, in the same point cycle it saved.
+    const hit = step(s, house('regression-44'), soft(9));
+    expect(hit.memory.fired['regression-44#0']).toBe('p1');
   });
 
   it('comes down to $22 on the first hit', () => {
@@ -370,15 +374,16 @@ describe('the iron cross', () => {
 });
 
 describe("the hedged don't", () => {
-  it('carries the any-craps hedge on the come-out', () => {
-    const s = open(house('hedged-dont'));
-    expect(s.table.bets.some((b) => b.kind === 'PROP' && b.prop === 'ANY_CRAPS')).toBe(true);
-  });
+  it('hedges the come-out with any craps and drops it once a point is set', () => {
+    // The hedge only earns its keep on the come-out, where a 2, 3 or 12 is the
+    // one thing that beats the don't. Once a point is on it is dead money.
+    const opened = open(house('hedged-dont'));
+    expect(opened.table.bets.some((b) => b.kind === 'PROP' && b.prop === 'ANY_CRAPS')).toBe(true);
+    expect(opened.table.bets.some((b) => b.kind === 'DONT_PASS')).toBe(true);
 
-  it('takes the hedge down the moment a point is set', () => {
     const s = play(house('hedged-dont'), [6]);
     expect(s.table.bets.some((b) => b.kind === 'PROP')).toBe(false);
-    expect(s.table.bets.some((b) => b.kind === 'DONT_PASS')).toBe(true);
+    expect(s.table.bets.find((b) => b.kind === 'DONT_PASS')!.number).toBe(6);
   });
 });
 
@@ -401,12 +406,28 @@ describe('the 5-count', () => {
     expect(s.table.bets).toHaveLength(0);
   });
 
-  it('starts betting once the shooter has thrown five', () => {
+  it('starts betting on the fifth roll and not before', () => {
+    const rolls = [4, 9, 9, 5, 5, 9];
+    expect(play(house('five-count'), rolls.slice(0, 4)).table.bets).toHaveLength(0);
+
+    // Fifth roll: the line is closed (point four is on), so it qualifies with
+    // a come bet instead, and backs it with full odds once it travels.
+    const fifth = play(house('five-count'), rolls.slice(0, 5));
+    expect(fifth.table.bets.map((b) => [b.kind, b.number])).toEqual([['COME', undefined]]);
+
+    const sixth = play(house('five-count'), rolls);
+    expect(sixth.table.bets.map((b) => [b.kind, b.number, b.odds])).toEqual([
+      ['COME', 9, 40],
+      ['COME', undefined, 0],
+    ]);
+  });
+
+  it('restarts the count for the next shooter', () => {
     const s = play(house('five-count'), [4, 9, 9, 5, 5, 7]);
-    // The seven-out cleared the felt; the count restarts with the new shooter.
+    // The seven-out cleared the felt and handed the dice on; the new shooter
+    // has to earn the count again from zero.
     expect(s.table.shooterRollCount).toBe(0);
-    const later = play(house('five-count'), [4, 9, 9, 5, 5, 9, 9]);
-    expect(later.table.bets.length).toBeGreaterThan(0);
+    expect(s.table.bets).toHaveLength(0);
   });
 });
 
@@ -431,10 +452,9 @@ describe('triggers', () => {
   };
 
   it('does not re-fire an event trigger when the strategy is run again by hand', () => {
-    let start = table();
-    start = placeBet(start, 'A', { kind: 'PLACE', number: 6 }, 6).ok
-      ? (placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 6) as { state: TableState }).state
-      : start;
+    const start = (
+      placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 6) as { state: TableState }
+    ).state;
 
     const applied = applyRoll(start, soft(6));
     const first = runStrategy({
@@ -496,16 +516,20 @@ describe('win goals and loss limits', () => {
   const goal: Strategy = { ...house('pass-odds'), id: 'goal-test', winGoal: 1 };
   const limit: Strategy = { ...house('field-grinder'), id: 'limit-test', lossLimit: 20 };
 
-  it('stops betting once the session clears the win goal', () => {
+  it('stops betting once the session clears the win goal, and says why', () => {
     // Buy in small so a single winning line bet clears a one dollar goal.
     const start = createTable({ buyIn: 200, rules: { minBet: 5 } });
     let session = open(goal, start);
     session = step(session, goal, soft(7)); // pass line pays, session is up
     expect(session.memory.stopped).toBe(true);
+    expect(session.memory.stopReason).toContain('win goal');
+    expect(session.memory.log.some((e) => e.rule === 'Win goal')).toBe(true);
 
-    const before = session.table.bets.length;
+    // And it stays stopped: not a chip more leaves the rack on the next roll.
+    const before = { bets: session.table.bets.length, rack: session.table.seats.A.bankroll };
     session = step(session, goal, soft(7));
-    expect(session.table.bets.length).toBeLessThanOrEqual(before);
+    expect(session.table.bets).toHaveLength(before.bets);
+    expect(session.table.seats.A.bankroll).toBe(before.rack);
   });
 
   it('stops betting once the session hits the loss limit', () => {
@@ -517,12 +541,6 @@ describe('win goals and loss limits', () => {
     expect(session.memory.stopReason).toContain('loss limit');
   });
 
-  it('records why it walked away', () => {
-    const start = createTable({ buyIn: 200, rules: { minBet: 5 } });
-    let session = open(goal, start);
-    session = step(session, goal, soft(7));
-    expect(session.memory.log.some((e) => e.rule === 'Win goal')).toBe(true);
-  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -530,42 +548,29 @@ describe('win goals and loss limits', () => {
  * ------------------------------------------------------------------ */
 
 describe('setBetAmount', () => {
-  it('brings a bet down and returns the difference', () => {
-    const start = (placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 30) as { state: TableState })
-      .state;
-    const before = start.seats.A.bankroll;
-    const res = setBetAmount(start, start.bets[0].id, 12);
+  // Both directions from one entry point, and the equity invariant on every
+  // row: whatever leaves the felt has to arrive in the rack, to the dollar.
+  it.each([
+    ['brings a bet down and returns the difference', 30, 12, 12],
+    ['rounds a regression up to something the dealer can pay', 30, 10, 12],
+    ['goes up as a press when the target is larger', 12, 24, 24],
+    ['takes the bet down entirely at zero', 12, 0, null],
+  ] as const)('%s', (_name, from, target, expected) => {
+    const start = (
+      placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, from) as { state: TableState }
+    ).state;
+    const res = setBetAmount(start, start.bets[0].id, target);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.state.bets[0].amount).toBe(12);
-    expect(res.state.seats.A.bankroll).toBe(before + 18);
-  });
 
-  it('rounds a regression up to something the dealer can pay', () => {
-    const start = (placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 30) as { state: TableState })
-      .state;
-    const res = setBetAmount(start, start.bets[0].id, 10);
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.state.bets[0].amount).toBe(12);
-  });
-
-  it('goes up as a press when the target is larger', () => {
-    const start = (placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 12) as { state: TableState })
-      .state;
-    const res = setBetAmount(start, start.bets[0].id, 24);
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.state.bets[0].amount).toBe(24);
-  });
-
-  it('takes the bet down entirely at zero', () => {
-    const start = (placeBet(table(), 'A', { kind: 'PLACE', number: 6 }, 12) as { state: TableState })
-      .state;
-    const res = setBetAmount(start, start.bets[0].id, 0);
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.state.bets).toHaveLength(0);
+    if (expected === null) {
+      expect(res.state.bets).toHaveLength(0);
+    } else {
+      expect(res.state.bets[0].amount).toBe(expected);
+    }
+    // The rack absorbs exactly the difference, in either direction.
+    expect(res.state.seats.A.bankroll).toBe(start.seats.A.bankroll + from - (expected ?? 0));
+    expect(equity(res.state)).toBe(equity(start));
   });
 
   it('refuses to reduce a contract bet', () => {
@@ -574,14 +579,91 @@ describe('setBetAmount', () => {
     const res = setBetAmount(start, start.bets[0].id, 10);
     expect(res.ok).toBe(false);
   });
+});
 
-  it('never moves money it did not account for', () => {
-    const start = (placeBet(table(), 'A', { kind: 'PLACE', number: 8 }, 30) as { state: TableState })
-      .state;
-    const res = setBetAmount(start, start.bets[0].id, 12);
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(equity(res.state)).toBe(equity(start));
+/* ------------------------------------------------------------------ *
+ * The amount modes no house system happens to use
+ * ------------------------------------------------------------------ */
+
+describe('sizing a bet', () => {
+  /** A throwaway strategy of one or two rules, for probing one amount mode. */
+  function sizing(rules: Array<Partial<StrategyRule>>): Strategy {
+    return {
+      ...emptyStrategy('sizing', 'Sizing'),
+      unit: 5,
+      rules: rules.map((rule, i) => ({
+        id: `sizing#${i}`,
+        enabled: true,
+        when: 'EVERY_ROLL',
+        once: 'ALWAYS',
+        all: [],
+        then: [],
+        ...rule,
+      })) as StrategyRule[],
+    };
+  }
+
+  const inside = {
+    when: 'POINT_ON',
+    once: 'POINT',
+    then: [{ t: 'BET', target: { kind: 'PLACE', number: 'INSIDE' }, amount: units(1) }],
+  } as const satisfies Partial<StrategyRule>;
+
+  /*
+   * Every house system happens to size its bets with UNITS, FIXED or MAX odds,
+   * so these four modes ship in the workshop without a single system exercising
+   * them. A player building their own rule reaches them from the first dropdown.
+   */
+
+  it('TABLE_MIN and PCT_BANKROLL size off the table, not off the unit', () => {
+    const min = sizing([
+      { when: 'COME_OUT', then: [{ t: 'BET', target: { kind: 'PASS' }, amount: { mode: 'TABLE_MIN', value: 0 } }] },
+    ]);
+    expect(open(min).table.bets.map((b) => b.amount)).toEqual([5]);
+    expect(open(min, createTable({ buyIn: 10_000, rules: { minBet: 25 } })).table.bets[0].amount).toBe(
+      25,
+    );
+
+    const pct = sizing([
+      { when: 'COME_OUT', then: [{ t: 'BET', target: { kind: 'PASS' }, amount: { mode: 'PCT_BANKROLL', value: 1 } }] },
+    ]);
+    expect(open(pct).table.bets[0].amount).toBe(100); // 1% of a $10,000 rack
+  });
+
+  it('TO names the level the spot should reach', () => {
+    const s = sizing([
+      { ...inside, then: [{ t: 'BET', target: { kind: 'PLACE', number: 6 }, amount: { mode: 'TO', value: 30 } }] },
+    ]);
+    // And it is a level, not a helping: two point cycles leave it at thirty.
+    expect(numbers(play(s, [4]).table)).toEqual({ 6: 30 });
+    expect(numbers(play(s, [4, 4, 6]).table)).toEqual({ 6: 30 });
+  });
+
+  it('DOUBLE, WIN and HALF_WIN press against what the number did', () => {
+    const press = (amount: { mode: 'DOUBLE' | 'WIN' | 'HALF_WIN'; value: number }) =>
+      sizing([inside, { when: 'NUMBER_HIT', then: [{ t: 'PRESS', number: 'HIT', amount }] }]);
+
+    // $22 inside, so the nine holds $5 and pays $7 when it lands.
+    const doubled = step(play(press({ mode: 'DOUBLE', value: 0 }), [4]), press({ mode: 'DOUBLE', value: 0 }), soft(9));
+    expect(numbers(doubled.table)[9]).toBe(10);
+
+    // The whole win goes back up: $5 + $7 is $12, snapped up to a payable $15.
+    const won = step(play(press({ mode: 'WIN', value: 0 }), [4]), press({ mode: 'WIN', value: 0 }), soft(9));
+    expect(numbers(won.table)[9]).toBe(15);
+
+    // Half of it: $5 + $4 is $9, snapped up to $10.
+    const half = step(play(press({ mode: 'HALF_WIN', value: 0 }), [4]), press({ mode: 'HALF_WIN', value: 0 }), soft(9));
+    expect(numbers(half.table)[9]).toBe(10);
+  });
+
+  it('MULTIPLE lays odds as a multiple of the flat bet', () => {
+    const s = sizing([
+      { when: 'COME_OUT', then: [{ t: 'BET', target: { kind: 'PASS' }, amount: units(2) }] },
+      { when: 'POINT_ON', once: 'POINT', then: [{ t: 'ODDS', on: 'PASS', amount: { mode: 'MULTIPLE', value: 2 } }] },
+    ]);
+    // $10 flat on the four: 2x is $20, and the 3-4-5x cap of $30 is not reached.
+    const pass = play(s, [4]).table.bets.find((b) => b.kind === 'PASS')!;
+    expect([pass.amount, pass.odds]).toEqual([10, 20]);
   });
 });
 
@@ -692,17 +774,43 @@ describe('strategy memory', () => {
     expect(s.memory.handIndex).toBe(1);
   });
 
-  it('keeps the log inside its window', () => {
-    const s = play(house('field-grinder'), new Array(120).fill(5));
-    expect(s.memory.log.length).toBeLessThanOrEqual(60);
+  it('keeps the log inside its window, dropping the oldest entries', () => {
+    // The Field Grinder ships with a loss limit that would stop it after thirty
+    // losses — well short of the window — so this drops the limit to actually
+    // fill the log. 121 decision points, one entry each, capped at sixty.
+    const forever: Strategy = { ...house('field-grinder'), id: 'forever', lossLimit: 0 };
+    const s = play(forever, new Array(120).fill(5), createTable({ buyIn: 10_000, rules: { minBet: 5 } }));
+    expect(s.memory.log).toHaveLength(LOG_LIMIT);
+    expect(LOG_LIMIT).toBe(60);
+    // It is the newest sixty that survive, not the first sixty.
+    expect(s.memory.log[s.memory.log.length - 1].roll).toBe(120);
   });
 
   it('does not repeat the same refusal on every roll', () => {
-    // A rack too small for the bet: it should say so once, not forty times.
-    const broke = createTable({ buyIn: 6, rules: { minBet: 5 } });
-    const s = play(house('across'), [4, 9, 9, 5, 5, 6, 6], broke);
+    // A rack too small for the bet, reached for on every one of thirteen
+    // decision points. Without the dedupe the log would carry thirteen copies
+    // of the same line and scroll every real entry away.
+    const greedy: Strategy = {
+      ...emptyStrategy('broke', 'Broke'),
+      unit: 5,
+      rules: [
+        {
+          id: 'broke#0',
+          enabled: true,
+          when: 'EVERY_ROLL',
+          once: 'ALWAYS',
+          all: [],
+          then: [{ t: 'BET', target: { kind: 'PLACE', number: 6 }, amount: units(20) }],
+        },
+      ],
+    };
+    const broke = createTable({ buyIn: 4, rules: { minBet: 5 } });
+    const s = play(greedy, [4, 9, 9, 5, 5, 6, 6, 4, 9, 10, 11, 3], broke);
+
     const refusals = s.memory.log.filter((e) => !e.ok);
-    expect(refusals.length).toBeLessThan(4);
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0].text).toBe('Not enough in the rack');
+    expect(s.memory.log).toHaveLength(1);
   });
 });
 
@@ -796,16 +904,16 @@ describe('warnings', () => {
 });
 
 describe('duplicating and importing', () => {
-  it('makes an editable copy with its own rule ids', () => {
+  it('makes an editable copy that shares nothing with the original', () => {
     const copy = duplicateStrategy(house('iron-cross'), 'mine-1');
     expect(copy.origin).toBe('CUSTOM');
     expect(copy.id).toBe('mine-1');
-    expect(copy.rules.every((r) => r.id.startsWith('mine-1#'))).toBe(true);
     expect(copy.rules).toHaveLength(house('iron-cross').rules.length);
-  });
+    // Rule ids are derived from the strategy id and the position, so they are
+    // stable across reloads and cannot collide with the original's.
+    expect(copy.rules.every((r) => r.id.startsWith('mine-1#'))).toBe(true);
 
-  it('leaves the original alone', () => {
-    const copy = duplicateStrategy(house('iron-cross'), 'mine-2');
+    // Editing the copy must not reach back into the house system it came from.
     copy.rules[0].enabled = false;
     expect(house('iron-cross').rules[0].enabled).toBe(true);
   });
@@ -851,3 +959,7 @@ describe('the library a player actually sees', () => {
     expect(allStrategies([mine]).some((s) => s.id === 'mine-7')).toBe(true);
   });
 });
+
+
+
+

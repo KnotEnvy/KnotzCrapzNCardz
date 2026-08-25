@@ -9,7 +9,7 @@ import { motion } from 'motion/react';
 import * as React from 'react';
 import { DENOMS, RackChip } from './table/Chip';
 import { Button, Segmented, cn, money } from './ui/primitives';
-import { chipDrop, uiClick } from '@/lib/audio';
+import { chipPick, uiClick } from '@/lib/audio';
 import { atRisk } from '@/lib/engine/table';
 import { allStrategies, useGame, type NumberMode } from '@/lib/store/useGame';
 import type { SeatId } from '@/lib/engine/types';
@@ -201,7 +201,9 @@ export function ChipRack() {
             transition={{ type: 'spring', stiffness: 500, damping: 28 }}
             onClick={() => {
               setChip(d.value);
-              chipDrop();
+              // Lifting a chip out of the rack, not dropping one on the cloth —
+              // the felt's own chipDrop is driven from the money going down.
+              chipPick();
             }}
             disabled={!affordable}
             aria-pressed={selected}
@@ -390,7 +392,10 @@ export function RollButton() {
     <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={() => toggleFastRoll()}
+        onClick={() => {
+          toggleFastRoll();
+          uiClick();
+        }}
         aria-pressed={fastRoll}
         title="Skip the dice animation for rapid strategy testing"
         className={cn(
