@@ -62,8 +62,8 @@
   "commands": {
     "dev": "npm run dev",
     "build": "npm run build",
-    "test": "npm test — 207 tests, ~2s. Run this constantly.",
-    "testStats": "npm run test:stats — 6 seeded house-edge simulations, ~18s (was ~165s before this session's optimization pass). Cheap enough to run routinely.",
+    "test": "npm test — 214 tests, ~2s. Run this constantly.",
+    "testStats": "npm run test:stats — 71 tests, ~2m38s. Every bet on the layout plus the seventeen-strategy EV table. Opt-in, separate config.",
     "typecheck": "npm run typecheck",
     "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
     "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own."
@@ -146,6 +146,14 @@
     ]
   },
   "keyDecisions": [
+    {
+      "topic": "Buy and lay charge commission on different quantities",
+      "where": "buyVig / layVig / layWinnings in odds.ts, used by both placeBet and the resolver",
+      "decision": "A buy is charged five percent of its stake. A lay is charged five percent of what it stands to WIN. Both rules live in odds.ts and both call sites import them.",
+      "why": "They were duplicated, and the duplicates disagreed. resolve.ts had it right on the commission-on-win path; table.ts applied the buy formula to both bets on the up-front path, charging a lay five percent of the stake. Because a lay risks more than it wins, that is double on the four and ten, 1.5x on the five and nine, 1.2x on the six and eight - and it flattened all six numbers to 4.762%, the buy-bet price, where the real prices are 2.439% / 3.226% / 4.000%. The player was being overcharged on every up-front lay.",
+      "note": "Found by the house-edge simulations, which is exactly what they are for: it type-checked, it linted, and every unit test passed. Regression guards now exist at both speeds - an it.each in the default suite that asserts the exact commission on all six numbers in milliseconds, and the six measured edges in the stats suite.",
+      "doNot": "Do not re-inline either formula at a call site. One rule, one place, is the whole point."
+    },
     {
       "topic": "A wager is always snapped to a payable multiple",
       "where": "betIncrement in odds.ts, applied unconditionally by placeBet and setBetAmount in table.ts",
@@ -394,6 +402,7 @@
     }
   ],
   "gotchas": [
+    "A lay bet is charged five percent of what it WINS, a buy five percent of what it STAKES. These are not the same quantity, because a lay risks more than it wins. Both rules are in odds.ts; do not reimplement either at a call site. This exact drift was a live bug until the house-edge suite caught it.",
     "There is no way to turn increment snapping off, and there must not be. `enforceIncrements` was a house rule until this session; with it off, placeBet skipped the snap but the resolver still paid the true ratio, so a literal $10 place bet on the six paid $11.666666666666668 into the bankroll and float dust into everything downstream. The rule is deleted from TableRules and both toggles are gone from the UI. The increments are not cosmetic - HORN divides the wager by 4, WORLD and HORN_HIGH by 5, C_AND_E by 2, and those divisions are only whole because the wager was snapped first. Regression tests: the 'every wager is taken at a payable multiple' block.",
     "On a FRESH CLONE, `npm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `npm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
     "Do not typecheck while `next dev` is running - you will get `.next/dev/types/validator.ts: Unexpected keyword or identifier` from a generated file the dev server is mid-write on. It is transient and not yours.",
@@ -424,8 +433,9 @@
       "unit": "126 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports. Plus a new 'every wager is taken at a payable multiple' block: the increment table for every bet kind, and an invariant that walks a full hand with seventeen bet types on the felt at seven awkward stake amounts and asserts no settlement credit, debit or net - and no bankroll - is ever fractional.",
       "strategy": "77 tests. Everything the previous session covered, plus a new 'the library a player actually sees' block: a custom carrying a house id never shadows the house version, every id in the library is unique, and a custom with its own id survives.",
       "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
-      "statistical": "npm run test:stats — 6 tests, ~29s (was ~165s). RE-RUN THIS SESSION and green: pass line, don't pass, field, any seven and pass-with-full-odds all land inside their theoretical bands, which is what proves the engine optimization did not move money.",
-      "static": "tsc --noEmit clean (after one build - see gotchas); eslint clean, 0 errors 0 warnings; next build succeeds."
+      "statistical": "npm run test:stats — 71 tests across two files, ~2m38s. Now covers EVERY bet on the layout, not five of them: pass, don't pass, come, don't come, all four odds bets measured in isolation (which must and do come out at zero edge), all six place numbers, buy and lay on all six with BOTH vig polarities, the four hardways, Big 6/8, all sixteen props including the four horn highs, easy and hard hops, the field in both twelve polarities, the Fire Bet and All/Tall/Small. Bands are theory +/- 3 standard errors computed from each run's own per-decision variance. It prints its own summary table. This is the suite that caught the lay commission bug.",
+      "static": "tsc --noEmit clean (after one build - see gotchas); eslint clean, 0 errors 0 warnings; next build succeeds.",
+      "strategyEv": "src/lib/engine/strategy-ev.sim.test.ts — the expected value of all seventeen house systems over 200,000 seeded rolls each, reported as net per roll, realised edge, and action generated per roll. Two invariants make it a test rather than a report: no system may measure a better edge than the cheapest bet it is built from, and the seventeen pooled must measure a losing proposition. Closes a long-standing open item."
     },
     "manual": [
       "PREFERS-REDUCED-MOTION, FINALLY EXERCISED FOR REAL. Chromium via Playwright with reducedMotion:'reduce', a real session, 45 rolls, money on the pass line, the field and the 6 and 8, sampling every data-fx layer's computed opacity five times per roll. Under reduce: burst, flights and moves do not mount at all (0 of 45 rolls). flashes, wash and puck stay mounted and visible, so the player still gets feedback. Under no-preference all six layers mount and reach opacity 1. Zero page errors in both polarities. Screenshots taken in both; the felt, dice, puck, HUD and settlement figures all render correctly under reduce, and the seven-out wash and burst ring are plainly visible under normal.",
@@ -485,6 +495,16 @@
       "detail": "The 15 sounds are measured, wired, and proven reachable, but nobody has heard them. Peak, RMS, duration and band-energy are all in range and the levels were built against spectral targets rather than guesses, so this is much better founded than it was - but measurement is not listening. Start with pointMade and sevenOut (the two stings) and rake. The master level is one number, MASTER in audio.ts, currently 1."
     },
     {
+      "priority": "high",
+      "item": "takeDown refunds an up-front vig that the house has already earned.",
+      "detail": "With vigOnWin false the commission is charged once at placement and recorded on bet.vigPaid; takeDown then refunds bet.amount + bet.odds + bet.vigPaid unconditionally. A buy or lay that has already won and ridden therefore hands the commission back when it comes down. Two questions, and they want an owner decision rather than a quiet fix: should the engine re-charge the vig each time an up-front buy or lay wins and stays up (which is what a real table does), and should takeDown refund a commission that has already bought at least one decision? Refunding before the bet has resolved at all is clearly right; refunding after it has won is not. Flagged by the stats agent at lower confidence; it does not distort any measured figure above, because the harness books the vig per decision."
+    },
+    {
+      "priority": "medium",
+      "item": "seat.totalWagered counts a riding bet once, so \"action\" is understated.",
+      "detail": "A stake is counted at placement only, so a bet that wins and rides (place, buy, lay, hardway, and props under propsRideAfterWin) is re-exposed without new action being recorded. One dollar of recorded action buys roughly 1.8 field resolutions, which is why Field Grinder measures 4.66% against the field's own 2.778%. Anything reading totalWagered as action inherits this, including the HUD's hold percentage. Not wrong so much as undefined - decide what the figure means and document it."
+    },
+    {
       "priority": "medium",
       "item": "Six of seven odds schemes are completely untested.",
       "detail": "Only '3-4-5' is covered. 1x, 2x, 5x, 10x, 20x and 100x are all selectable in Setup.tsx and have no test. maxLayOdds has a double num/den multiply and a `+ 1e-9` fudge - exactly the shape of formula that breaks off its calibration point. All 7 schemes x 6 points were probed end to end this session and every one is correct, so this is regression risk rather than a live bug, but nothing guards it."
@@ -508,11 +528,6 @@
       "priority": "medium",
       "item": "The hop bets are still behind a dialog.",
       "detail": "The reference app prints a full hop grid and a hardway-hops block on the felt. We have a HOP cell that opens a dialog instead. The proposition column is now packed, so putting 21 hop cells on the felt means either reclaiming space or widening the column, which pushes into the player layout. Worth doing only if the owner wants it; the dialog is genuinely easier to use."
-    },
-    {
-      "priority": "medium",
-      "item": "Measure what the seventeen systems actually cost.",
-      "detail": "Unchanged from last session and still the natural next step for the strategy layer. The engine is seeded and pure, runStrategy is pure, and the stats config already runs long simulations. A test that plays each system over a few hundred thousand rolls and reports net per roll against total action would turn the workshop from a toy into a lab, and give it somewhere to show an expected-value figure. NOTE: this got much cheaper this session - the stats config now runs in ~29s rather than ~165s, and the strategy layer already has a seeded 400-roll harness. Extending it to accumulate net over ~50k rolls per system would turn 'does this system cheat?' into 'what does this system cost?', and would catch a rule regression that keeps the money conserved but plays a different game."
     },
     {
       "priority": "medium",

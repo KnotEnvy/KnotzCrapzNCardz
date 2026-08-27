@@ -10,7 +10,10 @@ import { produce } from 'immer';
 import {
   betIncrement,
   betLabel,
+  buyVig,
   chipToWager,
+  layVig,
+  layWinnings,
   maxLayOdds,
   maxPassOdds,
   snapDownToIncrement,
@@ -342,8 +345,13 @@ export function placeBet(
     }
 
     // Buy and lay commission taken up front when the table charges that way.
+    // A buy is charged on its stake and a lay on what it stands to win; the
+    // two rules live in odds.ts so this path and the resolver cannot drift.
     if (!draft.rules.vigOnWin && (spec.kind === 'BUY' || spec.kind === 'LAY')) {
-      const vig = Math.max(1, Math.floor(wager * 0.05));
+      const vig =
+        spec.kind === 'BUY'
+          ? buyVig(wager)
+          : layVig(layWinnings(wager, spec.number as PointNumber));
       if (draft.seats[seat].bankroll >= vig) {
         draft.seats[seat].bankroll -= vig;
         bet.vigPaid = vig;

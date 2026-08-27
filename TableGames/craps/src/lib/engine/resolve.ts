@@ -22,11 +22,13 @@ import {
   ATS_NUMBERS,
   atsOdds,
   betLabel,
+  buyVig,
   fieldOdds,
   fireOdds,
   hardwayOdds,
   hopOdds,
   layOdds,
+  layVig,
   placeOdds,
   propPayout,
   ratioValue,
@@ -81,16 +83,6 @@ function locate(bet: Bet): BetLocation {
 
 function isPointNumber(n: number): n is PointNumber {
   return (POINT_NUMBERS as readonly number[]).includes(n);
-}
-
-/** Five percent of the buy stake, rounded the way a boxman rounds it. */
-function buyVig(amount: number): number {
-  return Math.max(1, Math.floor(amount * 0.05));
-}
-
-/** Five percent of what a lay actually wins. */
-function layVig(win: number): number {
-  return Math.max(1, Math.floor(win * 0.05));
 }
 
 /**

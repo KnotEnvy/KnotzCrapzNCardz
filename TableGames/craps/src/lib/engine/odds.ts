@@ -54,6 +54,39 @@ export function layOdds(n: PointNumber): Ratio {
 }
 
 /* ------------------------------------------------------------------ *
+ * Commission
+ * ------------------------------------------------------------------ */
+
+/*
+ * Buy and lay are the two bets that carry a vig, and they charge it on
+ * different quantities. A buy pays true odds on the stake, so the commission
+ * is five percent of the stake. A lay wins less than it risks, and the boxman
+ * takes five percent of what it *wins* — $120 against the four wins $60 and
+ * costs $3, not $6.
+ *
+ * Both live here rather than at the two call sites that need them. They used
+ * to be duplicated: resolve.ts charged them correctly when the table takes the
+ * vig on the win, while table.ts applied the buy formula to both when the vig
+ * is taken up front, which charged a lay double on the four and ten. One rule,
+ * one place.
+ */
+
+/** Five percent of the buy stake, rounded the way a boxman rounds it. */
+export function buyVig(amount: number): number {
+  return Math.max(1, Math.floor(amount * 0.05));
+}
+
+/** Five percent of what a lay actually wins. */
+export function layVig(win: number): number {
+  return Math.max(1, Math.floor(win * 0.05));
+}
+
+/** What a lay of `amount` against `n` stands to win, before commission. */
+export function layWinnings(amount: number, n: PointNumber): number {
+  return amount * ratioValue(layOdds(n));
+}
+
+/* ------------------------------------------------------------------ *
  * Place bets
  * ------------------------------------------------------------------ */
 

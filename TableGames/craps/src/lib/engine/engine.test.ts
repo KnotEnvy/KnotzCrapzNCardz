@@ -393,6 +393,48 @@ describe('buy and lay', () => {
     expect(bank(s) - before).toBe(195);
   });
 
+  /*
+   * The up-front path used to reuse the buy formula for both bets and charge
+   * a lay five percent of the *stake*. That is double on the four and ten, and
+   * it flattened all six numbers to the buy-bet house edge — caught by the
+   * house-edge simulations, which measured 4.76% on every lay instead of
+   * 2.44 / 3.23 / 4.00. Cheap to assert directly, so it is asserted here too
+   * rather than only in a suite that takes minutes to run.
+   */
+  it.each([
+    [4, 120, 60, 3],
+    [10, 120, 60, 3],
+    [5, 120, 80, 4],
+    [9, 120, 80, 4],
+    [6, 120, 100, 5],
+    [8, 120, 100, 5],
+  ])(
+    'charges an up-front lay against the %i five percent of the $%i it wins',
+    (number, laid, win, vig) => {
+      let s = table({ vigOnWin: false });
+      s = applyRoll(s, soft(number === 5 ? 6 : 5)).state;
+      const before = bank(s);
+      const res = placeBet(s, 'A', { kind: 'LAY', number: number as 4 }, laid);
+      expect(res.ok).toBe(true);
+      s = (res as { state: TableState }).state;
+      // The rack is down the lay plus the commission, and nothing else.
+      expect(before - bank(s)).toBe(laid + vig);
+      expect(s.bets.find((b) => b.kind === 'LAY')!.vigPaid).toBe(vig);
+      // Five percent of what it stands to win, not of what is laid.
+      expect(vig).toBe(Math.floor(win * 0.05));
+    },
+  );
+
+  it('charges an up-front buy five percent of the stake, not of the win', () => {
+    // The other half of the same rule: a buy really is charged on its stake,
+    // so this figure must NOT move when the lay rule is corrected.
+    let s = table({ vigOnWin: false });
+    s = applyRoll(s, soft(5)).state;
+    const before = bank(s);
+    s = bet(s, { kind: 'BUY', number: 4 }, 100);
+    expect(before - bank(s)).toBe(105);
+  });
+
   it('lays against the 4 at 1:2 with vig on the win', () => {
     let s = bet(table(), { kind: 'PASS' }, 10);
     s = applyRoll(s, soft(5)).state;
