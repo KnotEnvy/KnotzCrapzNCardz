@@ -435,6 +435,71 @@ describe('buy and lay', () => {
     expect(before - bank(s)).toBe(105);
   });
 
+  /*
+   * The two commissions behave differently once a bet starts riding, and the
+   * difference is not arbitrary.
+   *
+   * A buy's vig rides with the bet: paid once, it covers every win until the
+   * bet is lost or comes down, and it comes back with the bet if the player
+   * pulls it.
+   *
+   * A lay is properly supposed to come down each time it wins. The house lets
+   * it ride as a convenience, but the next go-round is a new bet and owes a
+   * new commission — so the up-front payment covers the round it was placed
+   * for and every win pre-pays the round after it. One vig per decision.
+   */
+  it('lets one up-front buy vig ride through repeated wins', () => {
+    let s = table({ vigOnWin: false });
+    s = applyRoll(s, soft(6)).state;
+    const start = bank(s);
+    s = bet(s, { kind: 'BUY', number: 4 }, 100);
+    expect(start - bank(s)).toBe(105); // stake plus a single $5 commission
+    const buy = s.bets.find((b) => b.kind === 'BUY')!;
+    expect(buy.vigPaid).toBe(5);
+
+    for (let round = 0; round < 2; round++) {
+      const before = bank(s);
+      s = applyRoll(s, soft(4)).state;
+      // The full 2:1. No fresh commission — the one already paid still covers it.
+      expect(bank(s) - before).toBe(200);
+      expect(s.bets.find((b) => b.kind === 'BUY')!.vigPaid).toBe(5);
+      // The point stays on the six throughout, so the four simply repeats and
+      // the buy is live for it both times.
+    }
+
+    const held = bank(s);
+    const down = takeDown(s, s.bets.find((b) => b.kind === 'BUY')!.id);
+    expect(down.ok).toBe(true);
+    // The stake and the commission both come back.
+    expect(bank((down as { state: TableState }).state) - held).toBe(105);
+  });
+
+  it('charges a fresh vig every time an up-front lay wins', () => {
+    let s = table({ vigOnWin: false });
+    s = applyRoll(s, soft(6)).state;
+    const start = bank(s);
+    s = bet(s, { kind: 'LAY', number: 4 }, 120);
+    expect(start - bank(s)).toBe(123); // $120 laid plus $3, five percent of the $60 it wins
+    expect(s.bets.find((b) => b.kind === 'LAY')!.vigPaid).toBe(3);
+
+    for (let round = 0; round < 2; round++) {
+      const before = bank(s);
+      s = applyRoll(s, soft(7)).state;
+      // $60 won, less a new $3 covering the round it is about to ride into.
+      expect(bank(s) - before).toBe(57);
+      const lay = s.bets.find((b) => b.kind === 'LAY');
+      expect(lay).toBeDefined();
+      expect(lay!.vigPaid).toBe(3);
+      s = applyRoll(s, soft(6)).state;
+    }
+
+    const held = bank(s);
+    const down = takeDown(s, s.bets.find((b) => b.kind === 'LAY')!.id);
+    expect(down.ok).toBe(true);
+    // The deposit covering the round that never happened comes back with it.
+    expect(bank((down as { state: TableState }).state) - held).toBe(123);
+  });
+
   it('lays against the 4 at 1:2 with vig on the win', () => {
     let s = bet(table(), { kind: 'PASS' }, 10);
     s = applyRoll(s, soft(5)).state;

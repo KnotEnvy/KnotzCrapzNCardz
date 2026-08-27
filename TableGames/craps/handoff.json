@@ -62,7 +62,7 @@
   "commands": {
     "dev": "npm run dev",
     "build": "npm run build",
-    "test": "npm test — 214 tests, ~2s. Run this constantly.",
+    "test": "npm test — 216 tests, ~2s. Run this constantly.",
     "testStats": "npm run test:stats — 71 tests, ~2m38s. Every bet on the layout plus the seventeen-strategy EV table. Opt-in, separate config.",
     "typecheck": "npm run typecheck",
     "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
@@ -147,12 +147,12 @@
   },
   "keyDecisions": [
     {
-      "topic": "Buy and lay charge commission on different quantities",
-      "where": "buyVig / layVig / layWinnings in odds.ts, used by both placeBet and the resolver",
-      "decision": "A buy is charged five percent of its stake. A lay is charged five percent of what it stands to WIN. Both rules live in odds.ts and both call sites import them.",
-      "why": "They were duplicated, and the duplicates disagreed. resolve.ts had it right on the commission-on-win path; table.ts applied the buy formula to both bets on the up-front path, charging a lay five percent of the stake. Because a lay risks more than it wins, that is double on the four and ten, 1.5x on the five and nine, 1.2x on the six and eight - and it flattened all six numbers to 4.762%, the buy-bet price, where the real prices are 2.439% / 3.226% / 4.000%. The player was being overcharged on every up-front lay.",
-      "note": "Found by the house-edge simulations, which is exactly what they are for: it type-checked, it linted, and every unit test passed. Regression guards now exist at both speeds - an it.each in the default suite that asserts the exact commission on all six numbers in milliseconds, and the six measured edges in the stats suite.",
-      "doNot": "Do not re-inline either formula at a call site. One rule, one place, is the whole point."
+      "topic": "Buy and lay commission: different quantity, and different behaviour on a ride",
+      "where": "buyVig / layVig / layWinnings in odds.ts; placeBet in table.ts; the BUY and LAY cases in resolve.ts",
+      "decision": "TWO rules, both settled by the owner from how the tables he plays actually work. (1) WHAT is charged: a buy is five percent of its STAKE, a lay five percent of what it WINS. Different quantities, because a lay risks more than it wins. (2) WHEN it is charged on a bet that rides: a buy's up-front vig rides WITH the bet - paid once, it covers every win until the bet is lost, and it comes back with the bet if the player takes it down. A lay pays a FRESH vig on every win, in both vig polarities.",
+      "why": "A lay is properly supposed to come down each time it wins; the house lets it ride as a convenience, but the next go-round is a new bet and owes a new commission. A buy is not - it simply stays up. So the up-front payment covers the round it was placed for, each lay win pre-pays the round it rides into, and `vigPaid` is the deposit covering the live round, which is what takeDown hands back. Exactly one commission per lay decision, exactly one per buy PLACEMENT.",
+      "note": "Both halves were caught by measurement, not by reading code. The what-is-charged half was a live bug: table.ts applied the buy formula to lays on the up-front path, charging double on the four and ten and flattening all six numbers to 4.762%. The when-is-charged half was never specified. Letting one buy vig ride is player-favourable and shows up in the numbers: an up-front buy now costs 3.175% on the four and ten and 2.597% on the six and eight, against the 4.762% a table that re-vigs every win would charge. Up-front lays sit at the textbook 2.439 / 3.226 / 4.000.",
+      "doNot": "Do not re-inline either formula at a call site - the duplicates silently disagreeing is what caused the bug. Do not make a buy re-vig on a win, and do not make a lay skip one. Regression guards: 'lets one up-front buy vig ride through repeated wins' and 'charges a fresh vig every time an up-front lay wins' in the default suite, plus the twelve measured up-front edges in the stats suite."
     },
     {
       "topic": "A wager is always snapped to a payable multiple",
@@ -402,6 +402,7 @@
     }
   ],
   "gotchas": [
+    "The stats harness books an up-front commission ONCE PER PLACEMENT, not once per decision (`sp.vig` is zeroed after the first settlement of a placement in runSpots). That is what makes the buy figures amortise across a ride. Charging it per decision instead silently reproduces a re-vigging table and reports 4.762% on every up-front buy and lay, which is what it did before the rule was settled.",
     "A lay bet is charged five percent of what it WINS, a buy five percent of what it STAKES. These are not the same quantity, because a lay risks more than it wins. Both rules are in odds.ts; do not reimplement either at a call site. This exact drift was a live bug until the house-edge suite caught it.",
     "There is no way to turn increment snapping off, and there must not be. `enforceIncrements` was a house rule until this session; with it off, placeBet skipped the snap but the resolver still paid the true ratio, so a literal $10 place bet on the six paid $11.666666666666668 into the bankroll and float dust into everything downstream. The rule is deleted from TableRules and both toggles are gone from the UI. The increments are not cosmetic - HORN divides the wager by 4, WORLD and HORN_HIGH by 5, C_AND_E by 2, and those divisions are only whole because the wager was snapped first. Regression tests: the 'every wager is taken at a payable multiple' block.",
     "On a FRESH CLONE, `npm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `npm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
@@ -493,11 +494,6 @@
       "priority": "high",
       "item": "Listen to the audio.",
       "detail": "The 15 sounds are measured, wired, and proven reachable, but nobody has heard them. Peak, RMS, duration and band-energy are all in range and the levels were built against spectral targets rather than guesses, so this is much better founded than it was - but measurement is not listening. Start with pointMade and sevenOut (the two stings) and rake. The master level is one number, MASTER in audio.ts, currently 1."
-    },
-    {
-      "priority": "high",
-      "item": "takeDown refunds an up-front vig that the house has already earned.",
-      "detail": "With vigOnWin false the commission is charged once at placement and recorded on bet.vigPaid; takeDown then refunds bet.amount + bet.odds + bet.vigPaid unconditionally. A buy or lay that has already won and ridden therefore hands the commission back when it comes down. Two questions, and they want an owner decision rather than a quiet fix: should the engine re-charge the vig each time an up-front buy or lay wins and stays up (which is what a real table does), and should takeDown refund a commission that has already bought at least one decision? Refunding before the bet has resolved at all is clearly right; refunding after it has won is not. Flagged by the stats agent at lower confidence; it does not distort any measured figure above, because the harness books the vig per decision."
     },
     {
       "priority": "medium",

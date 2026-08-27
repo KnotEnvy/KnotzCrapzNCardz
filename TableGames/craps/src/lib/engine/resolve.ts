@@ -208,7 +208,20 @@ function judge(bet: Bet, roll: Roll, state: TableState): Verdict {
     case 'LAY': {
       if (t === 7) {
         const win = bet.amount * ratioValue(layOdds(bet.number as PointNumber));
-        return { t: 'WIN', win, vig: rules.vigOnWin ? layVig(win) : 0, stakeReturns: false };
+        /*
+         * A lay pays its commission on every win, whichever way the table
+         * charges — unlike a buy, whose up-front vig rides with the bet and
+         * covers it until it is lost or taken down.
+         *
+         * The reason is that a lay is properly supposed to come down each time
+         * it wins. Houses let it ride as a convenience, but the next go-round
+         * is a new bet and owes a new vig. So the up-front payment covers the
+         * round it was placed for, and each win pre-pays the round that
+         * follows: exactly one commission per decision either way. `vigPaid`
+         * stays on the bet as the deposit covering the live round, which is
+         * what takeDown hands back.
+         */
+        return { t: 'WIN', win, vig: layVig(win), stakeReturns: false };
       }
       if (t === bet.number) return LOSE;
       return STAND;

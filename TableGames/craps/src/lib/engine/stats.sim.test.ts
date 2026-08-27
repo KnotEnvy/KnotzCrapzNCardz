@@ -210,7 +210,13 @@ interface Spot {
   amount: number;
   /** Whether a winner stays on the felt rather than coming down. */
   ridesOnWin: boolean;
-  /** Commission taken at placement, charged against every decision it sees. */
+  /**
+   * Commission taken at placement. Charged against the FIRST decision of that
+   * placement only — it is a one-off payment, not a per-decision fee. A buy's
+   * up-front vig then rides with the bet and covers every later win; a lay's
+   * later rounds are paid for by the fresh vig the engine takes on each win,
+   * which arrives inside the settlement's own net.
+   */
   vig: number;
   betId: string | null;
   series: Series;
@@ -272,6 +278,9 @@ function runSpots(seed: string, rolls: number, rules: Partial<TableRules>, spots
       const sp = byId.get(st.betId);
       if (sp === undefined) continue;
       settle(sp.series, st.net - sp.vig, sp.amount + sp.vig);
+      // Paid once at placement, not once per decision. A riding bet keeps the
+      // stake exposed, so the denominator repeats, but the commission does not.
+      sp.vig = 0;
       if (st.type !== 'WIN' || !sp.ridesOnWin) {
         byId.delete(st.betId);
         sp.betId = null;
@@ -563,13 +572,21 @@ describe('the box numbers', () => {
   });
 
   for (const n of BOX) {
-    it(`buys the ${n} at 4.762 percent when the vig is taken up front`, () => {
-      // Paying the commission whether or not the bet wins turns 1.7-2.3% into a
-      // flat 4.762% on every number: one dollar of every twenty-one put up.
-      check(
-        buyUpFront[at(n)].series,
-        edgeFrom(pMake(n), trueWin(BUY_AMOUNT, n) - buyVig, BUY_AMOUNT + buyVig, BUY_AMOUNT + buyVig),
-      );
+    it(`buys the ${n} with a single up-front vig riding with the bet`, () => {
+      /*
+       * The commission is paid once and rides: a buy that wins and stays up is
+       * not re-vigged, and the same payment comes back if the player pulls the
+       * bet down. So the cost is one vig spread over however many decisions the
+       * bet survives, not one vig per decision.
+       *
+       * A buy dies to the seven, so it lives (ways + 6) / 6 decisions on
+       * average — 1.5 on the four and ten, 1.83 on the six and eight. The flat
+       * part is a fair bet at true odds, which leaves the amortised vig as the
+       * entire edge.
+       */
+      const livesFor = (WAYS[n] + 6) / 6;
+      const vigPerDecision = buyVig / livesFor;
+      check(buyUpFront[at(n)].series, vigPerDecision / (BUY_AMOUNT + buyVig));
     });
   }
 
@@ -605,10 +622,10 @@ describe('the box numbers', () => {
        * odds.ts so this path and the resolver cannot drift apart again.
        */
       const vig = layWin(n) * 0.05;
-      check(
-        layUpFront[at(n)].series,
-        edgeFrom(1 - pMake(n), layWin(n) - vig, LAY_AMOUNT + vig, LAY_AMOUNT + vig),
-      );
+      // One commission per decision: the up-front payment covers the round it
+      // was placed for, and every win pre-pays the round it rides into. The
+      // flat part is fair, so the vig is the whole edge.
+      check(layUpFront[at(n)].series, vig / (LAY_AMOUNT + vig));
     });
   }
 
