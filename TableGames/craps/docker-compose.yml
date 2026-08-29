@@ -1,0 +1,35 @@
+# Knotz Craps, packaged.
+#
+#   docker compose up -d --build     build and run
+#   docker compose logs -f           watch it
+#   docker compose down              stop it
+#
+# The game then answers on http://localhost:8080, and on http://<this
+# machine's LAN IP>:8080 from any phone or laptop on the same network.
+
+services:
+  craps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: knotz-craps:latest
+    container_name: knotz-craps
+    restart: unless-stopped
+    ports:
+      # Host 8080 rather than 80: on Windows, 80 is often already taken, and
+      # nothing here needs a privileged port. Change the left number freely.
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # The container serves files and holds no state, so it has no business
+    # writing to its own filesystem outside of nginx's scratch directories.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true

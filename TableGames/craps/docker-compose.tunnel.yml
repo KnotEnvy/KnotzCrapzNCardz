@@ -1,0 +1,22 @@
+# Optional: publish the running container through a Cloudflare Tunnel.
+#
+#   CLOUDFLARE_TUNNEL_TOKEN=<token> \
+#     docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+#
+# The tunnel dials out to Cloudflare, so nothing is forwarded on the router and
+# the home IP is never published. Point the tunnel's public hostname at
+# http://craps:80 in the Zero Trust dashboard -- that is this compose network's
+# own name for the game container, not an address on the host.
+#
+# See DEPLOY.md for why this is preferable to opening a port.
+
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: knotz-craps-tunnel
+    restart: unless-stopped
+    # The token is a credential: pass it in the environment, never commit it.
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      craps:
+        condition: service_healthy

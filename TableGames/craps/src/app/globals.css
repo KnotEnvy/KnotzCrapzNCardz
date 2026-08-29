@@ -66,6 +66,11 @@
 html,
 body {
   height: 100%;
+  /* On a phone, `100%` resolves against a viewport that grows and shrinks as
+     the browser chrome slides away, which leaves the table either clipped or
+     short. `dvh` tracks the space actually on screen. The `100%` above stays
+     as the fallback for anything without dvh. */
+  height: 100dvh;
 }
 
 body {
@@ -74,6 +79,19 @@ body {
   color: var(--color-pit-100);
   font-family: var(--font-sans);
   overscroll-behavior: none;
+
+  /* `viewport-fit=cover` lets the felt run under the notch and the home
+     indicator, which is what we want for the background -- but not for the
+     chip rack or the roll button. Padding the body back out by the insets
+     keeps every control reachable while the table still bleeds to the edge. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+
+  /* A craps layout is a tap-and-drag surface. Without this, iOS treats a
+     double-tap on a bet box as a zoom and a drag near the edge as a page
+     swipe. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ------------------------------------------------------------------ *
@@ -267,5 +285,64 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Turn the phone sideways
+ *
+ * A craps layout is a wide object: the pass line, the box numbers and the
+ * proposition block sit side by side, and squeezing them into a 390px column
+ * makes every bet box too small to hit. In landscape the table fits a phone
+ * with room to spare, so the portrait case is answered rather than redesigned
+ * for -- the manifest asks for landscape, and this covers the browsers that
+ * ignore it.
+ *
+ * Pure CSS on purpose: no JS, no orientation listener, and nothing that can
+ * differ between the server-rendered HTML and the first client paint.
+ * `pointer: coarse` keeps it away from a narrow desktop window.
+ * ------------------------------------------------------------------ */
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 900px) and (pointer: coarse) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #1b2028 0%, #0b0d10 55%, #06070a 100%);
+  }
+
+  /* The table underneath is inert while this is up, so it cannot be
+     half-played through the overlay. */
+  .rotate-hint ~ * {
+    pointer-events: none;
+  }
+}
+
+.rotate-hint__dice {
+  animation: rotate-hint-turn 2.4s ease-in-out infinite;
+}
+
+@keyframes rotate-hint-turn {
+  0%,
+  30% {
+    transform: rotate(0deg);
+  }
+  55%,
+  85% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
   }
 }

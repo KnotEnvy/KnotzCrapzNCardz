@@ -66,7 +66,10 @@
     "testStats": "npm run test:stats — 71 tests, ~2m38s. Every bet on the layout plus the seventeen-strategy EV table. Opt-in, separate config.",
     "typecheck": "npm run typecheck",
     "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
-    "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own."
+    "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own.",
+    "dockerUp": "docker compose up -d --build → http://localhost:8080. Rebuilds the image and restarts the container.",
+    "dockerDown": "docker compose down",
+    "start": "npm start — serves the built out/ as static files on :3000. NOT `next start`, which a static export does not have."
   },
   "architecture": {
     "principle": "The engine is pure. `src/lib/engine` and `src/lib/strategy` contain no React, no I/O, no clock and no randomness at the point of use. `applyRoll(table, roll)` returns a new table, the settlements to animate, and a ledger record; `runStrategy(...)` returns a new table, new memory, and a log. That is what makes the game replayable from a seed and testable without a browser. Keep it that way.",
@@ -427,7 +430,9 @@
     "Solo is TableState.solo, not a rule. resolve.ts checks it before passing the dice, and SeatBar, the HUD, the equity chart and the strategy layer all narrow to one seat from it. Seat B still exists in state so nothing downstream has to handle a missing seat, and playStrategies skips it explicitly.",
     "next dev rewrites the agent block at the top of AGENTS.md on every run. Committing it with your work keeps the tree clean.",
     "The dice test 'is fast enough to run synchronously on a click' asserts under 60ms per throw and measured 61.5ms once on a machine also running a dev server and a browser. It passes comfortably on its own. If it fails, re-run it alone before believing it.",
-    "A green build, typecheck and lint prove nothing about whether the 3D canvas actually drew anything, whether an effect layer animated, or whether a bot actually put chips on the felt. All three were verified this session by driving the live app and reading the DOM back. That is the standard to hold."
+    "A green build, typecheck and lint prove nothing about whether the 3D canvas actually drew anything, whether an effect layer animated, or whether a bot actually put chips on the felt. All three were verified this session by driving the live app and reading the DOM back. That is the standard to hold.",
+    "nginx `add_header` does not accumulate down the config tree: the moment a location block sets one, every add_header from the server block above stops applying there. The security headers in nginx.conf are therefore repeated in each location on purpose — deleting the duplicates silently strips them from the HTML responses.",
+    "`npm start` no longer runs `next start`; a static export has no Next server. It serves out/ as files instead, which is what previewing the real production build means now."
   ],
   "verification": {
     "automated": {
@@ -605,5 +610,23 @@
       "Anything animated with motion inside the SVG - motion writes style.transform, which silently overrides a transform attribute on the same element.",
       "src/lib/audio.ts - the levels are built on noiseTrim() making `gain` mean the same thing for a noise burst and an oscillator. Add a voice without it and it will be an order of magnitude out."
     ]
+  },
+  "deployment": {
+    "model": "Static. The game is client-side end to end, so `next build` runs with `output: 'export'` and writes out/ — a folder of files. No Node runs in production.",
+    "why": "Nothing in the app needs a server: the engine, the physics, the strategies and the saved session are all in the browser. Exporting statically makes the image small, removes the whole npm dependency surface from production, and lets the same build go to any static host without change.",
+    "consequence": "Anything requiring a server — route handlers, server actions, ISR, next/image optimisation, sessions shared across devices — now fails the build instead of silently not working. That is the intended trade, not an oversight.",
+    "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. ~69 MB. Runs read_only with tmpfs for nginx scratch dirs.",
+    "run": "docker compose up -d --build  →  http://localhost:8080",
+    "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/. That keeps the running game from calling Google, but an offline build machine fails at `npm run build`.",
+    "tls": "nginx.conf is an origin server speaking plain HTTP on 80. TLS belongs at a reverse proxy or tunnel in front of it, never in this config.",
+    "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting with the trade-offs spelled out."
+  },
+  "pwa": {
+    "what": "public/manifest.webmanifest plus icons in public/icons. Installs to an iPhone home screen via Share → Add to Home Screen, opening standalone with no Safari chrome.",
+    "orientation": "Landscape. A craps layout is wide; at 844x390 it fits an iPhone exactly with no overflow, and at 375 wide portrait it overflows to ~505px. Portrait shows a \"turn your phone sideways\" overlay (.rotate-hint in globals.css) rather than a squeezed table.",
+    "appleTags": "Next 16 emits only the standardised `mobile-web-app-capable`. The legacy `apple-mobile-web-app-capable` is added by hand via metadata.other, because iPhones a couple of versions back read only that spelling and otherwise open the icon in a normal Safari tab.",
+    "manifestMime": "nginx does not know .webmanifest natively. The types block in nginx.conf sets application/manifest+json — without it iOS silently refuses the install.",
+    "viewport": "viewport-fit=cover with safe-area padding on body, height:100dvh, touch-action:manipulation, and zoom disabled — the felt is a drag surface and the dice are a canvas, so pinch-zoom there is always an accident.",
+    "notDone": "No service worker, so the installed app still needs the network to load. A service worker only registers over HTTPS or localhost, so it would help a hosted deployment and not a plain-HTTP LAN address."
   }
 }

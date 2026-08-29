@@ -9,6 +9,15 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+Or run the packaged build, which is what gets deployed:
+
+```bash
+docker compose up -d --build   # http://localhost:8080
+```
+
+See [DEPLOY.md](DEPLOY.md) for putting it on the web, and for playing it on a
+phone — it installs to an iPhone home screen and wants to be held sideways.
+
 ## Setting up
 
 The first thing you see is the setup screen: solo or two players, names, what
@@ -232,7 +241,7 @@ seeded rolls in a test with no browser anywhere in sight.
 ## Tests
 
 ```bash
-npm test           # 189 tests, about ten seconds
+npm test           # 216 tests, about ten seconds
 npm run test:stats # long-running house-edge simulations
 npm run typecheck
 npm run lint
@@ -258,3 +267,15 @@ on any seven, and around 0.37% on the pass line backed with full odds. It also
 checks all 36 dice combinations come up flat over 600,000 rolls. Every run is
 seeded, so it is deterministic rather than flaky; the tolerance bands are theory
 plus or minus three standard errors. It takes a few minutes.
+
+## How it ships
+
+The game is client-side from top to bottom, so `npm run build` writes a folder
+of static files (`out/`) rather than something that needs a Node process. The
+Docker image builds that folder and then serves it from nginx, which is why it
+is about 69 MB and has no npm packages in it to keep patched.
+
+The practical consequence: anything that would need a server — a route handler,
+a server action, saved sessions shared between devices — will fail the build
+rather than quietly not work. Sessions live in the browser they were played in,
+by design. [DEPLOY.md](DEPLOY.md) has the rest.
