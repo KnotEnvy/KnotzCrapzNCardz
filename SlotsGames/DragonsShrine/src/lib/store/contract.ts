@@ -11,6 +11,7 @@
 
 import type {
   Cell,
+  FeatureId,
   FreeSpinsState,
   GambleChoice,
   GambleResult,
@@ -80,6 +81,29 @@ export interface Highlight {
   line: number | null;
   /** Cents this particular highlight is worth. */
   amount: number;
+}
+
+/**
+ * The card that stands between the base game and a feature.
+ *
+ * ADDED after the first draft. The phase alone says a card is up, and `free`
+ * or `hold` says which feature it belongs to, but neither carries what the
+ * card should actually read -- and an outro has to keep saying "you won
+ * $412.50" for three seconds after the feature state it came from has already
+ * been torn down and settled. Rather than keeping a dead feature alive purely
+ * so a card can quote it, the card carries its own text.
+ */
+export interface FeatureCard {
+  kind: 'INTRO' | 'OUTRO';
+  feature: FeatureId;
+  /** Intro: free spins awarded. */
+  spins?: number;
+  /** Intro: orbs locked by the trigger. */
+  orbs?: number;
+  /** Outro: cents the whole feature paid. */
+  total?: number;
+  /** Bumped per card, so an entrance animation can key off it. */
+  key: number;
 }
 
 /* ------------------------------------------------------------------ *
@@ -193,11 +217,20 @@ export interface SlotsState {
   dimmed: Cell[];
   /** Transient banner text, e.g. "DRAGON RAGE". */
   banner: string | null;
+  /** ADDED. The feature intro/outro card currently on screen. */
+  featureCard: FeatureCard | null;
 
   /* --- features --- */
   free: FreeSpinsState | null;
   hold: HoldState | null;
   gamble: { stake: number; step: number; history: GambleResult[] } | null;
+  /**
+   * ADDED. True while the last win is eligible to be gambled and the machine
+   * is sitting at IDLE waiting to be told. Whether a win qualifies is an engine
+   * question (`canGamble`), so the answer is published rather than left for
+   * each screen to re-derive and get subtly wrong.
+   */
+  canGamble: boolean;
   /** Orbs locked on the grid during the link. */
   orbs: Orb[];
   /** Jackpot won this session, latched for the celebration. */
@@ -205,6 +238,8 @@ export interface SlotsState {
 
   /* --- session --- */
   seed: string;
+  /** ADDED. `Date.now()` when this session began, for the session clock. */
+  startedAt: number;
   stats: SessionStats;
   history: HistoryEntry[];
   autoplay: { left: number; total: number } | null;
@@ -222,6 +257,11 @@ export interface SlotsState {
   startAutoplay: (count: number) => void;
   stopAutoplay: () => void;
   buyFeature: (option: BuyOption) => void;
+  /**
+   * ADDED. Move an eligible win onto the cards. The original list had the two
+   * calls that happen *inside* a gamble but no way to enter one.
+   */
+  startGamble: () => void;
   chooseGamble: (choice: GambleChoice) => void;
   collectGamble: () => void;
   /** Skip whatever celebration is on screen and settle it immediately. */
