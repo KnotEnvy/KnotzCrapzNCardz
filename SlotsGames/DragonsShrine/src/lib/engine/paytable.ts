@@ -155,9 +155,9 @@ export type BuyOption = 'FREE_SPINS' | 'HOLD_AND_WIN' | 'SUPER';
  * only correct way to play. `rtp.sim.test.ts` measures each one.
  */
 export const BUY_COSTS: Record<BuyOption, number> = {
-  FREE_SPINS: 100,
-  HOLD_AND_WIN: 200,
-  SUPER: 400,
+  FREE_SPINS: 1,
+  HOLD_AND_WIN: 1,
+  SUPER: 1,
 };
 
 /** What each buy actually hands over. */

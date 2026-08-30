@@ -222,8 +222,6 @@ const JACKPOT_VAR: Record<JackpotId, string> = {
 export interface OrbLayerProps {
   geometry: Geometry;
   orbs: readonly Orb[];
-  /** Orbs that arrived on the most recent respin get the lock animation. */
-  freshKey: number;
 }
 
 /**
@@ -235,35 +233,28 @@ export interface OrbLayerProps {
  * hold-and-win is broken. Each one carries its award on its face, which is the
  * other half of the feature -- a board of orbs the player cannot read the
  * value of is just decoration.
+ *
+ * The lock animation needs no "is this one new" bookkeeping: each orb is keyed
+ * by the cell it holds, so an orb that has just landed is an element React has
+ * just mounted, and a CSS animation on a freshly mounted element runs exactly
+ * once. Orbs already on the board keep their key, never remount, and sit
+ * perfectly still while the reels respin around them -- which is the whole
+ * visual promise of the feature.
  */
 export const OrbLayer = React.memo(function OrbLayer({
   geometry,
   orbs,
-  freshKey,
 }: OrbLayerProps): React.JSX.Element | null {
-  const seen = React.useRef<Set<string>>(new Set());
-  const lastKey = React.useRef(freshKey);
-  if (lastKey.current !== freshKey) {
-    lastKey.current = freshKey;
-  }
-
-  if (orbs.length === 0) {
-    seen.current = new Set();
-    return null;
-  }
+  if (orbs.length === 0) return null;
 
   return (
     <>
       {orbs.map((orb) => {
-        const key = `${orb.reel}-${orb.row}`;
-        const fresh = !seen.current.has(key);
-        seen.current.add(key);
         const jackpot = orb.award.kind === 'JACKPOT' ? orb.award.jackpot : null;
         return (
           <div
-            key={key}
+            key={`${orb.reel}-${orb.row}`}
             className="ds-orb"
-            data-fresh={fresh ? '1' : '0'}
             data-jackpot={jackpot ?? undefined}
             style={
               {
@@ -276,9 +267,7 @@ export const OrbLayer = React.memo(function OrbLayer({
             }
           >
             <SymbolArt id="ORB" state="idle" />
-            <span className="ds-orb-value numeric">
-              {jackpot ? jackpot : money(orb.amount)}
-            </span>
+            <span className="ds-orb-value numeric">{jackpot ?? money(orb.amount)}</span>
           </div>
         );
       })}
