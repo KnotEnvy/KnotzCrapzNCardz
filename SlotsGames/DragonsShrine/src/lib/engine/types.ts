@@ -247,6 +247,20 @@ export interface SpinResult {
    * knows whether reel 3 is about to be the third scatter.
    */
   anticipation: number[];
+
+  /**
+   * How many steps up the multiplier trail this spin earned.
+   *
+   * Free spins only, and zero everywhere else. It exists so that
+   * `applyFreeSpin` can carry the trail forward without re-deriving it from
+   * {@link multiplier} -- the trail saturates at its top rung, so a spin that
+   * earns two steps while already at 10x is indistinguishable from one that
+   * earned none if you only look at the multiplier that came out.
+   *
+   * Optional because it was added after the contract was published; treat an
+   * absent value as zero.
+   */
+  trailAdvances?: number;
 }
 
 /** One respin inside hold-and-win. */
@@ -260,8 +274,19 @@ export interface HoldSpinResult {
   respinsLeft: number;
   /** Jackpots awarded by this respin's board state. */
   jackpots: JackpotId[];
-  /** Cents on the board after this respin. */
+  /** Cents on the board after this respin. Orbs only -- see {@link total}. */
   collected: number;
+  /**
+   * Cents the feature is worth if it ended here: {@link collected} plus every
+   * board jackpot lit so far.
+   *
+   * The two are separate because {@link collected} is the sum of what is
+   * physically on the grid, which is what the orb-by-orb count-up animates,
+   * while a board jackpot is won by the *shape* of the board rather than by
+   * any one orb. The meter wants the second number; the animation wants the
+   * first. Optional because it was added after the contract was published.
+   */
+  total?: number;
 }
 
 /* ------------------------------------------------------------------ *

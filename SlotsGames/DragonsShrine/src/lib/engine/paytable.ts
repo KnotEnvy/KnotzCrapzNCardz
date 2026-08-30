@@ -31,16 +31,16 @@ export const RTP_TARGET = { min: 0.955, max: 0.968 } as const;
  * PHOENIX is what makes the last reel worth watching.
  */
 export const PAYS: Record<PayingSymbol, readonly [number, number, number]> = {
-  COIN: [4, 12, 40],
-  LOTUS: [5, 15, 50],
-  FAN: [6, 20, 65],
-  LANTERN: [8, 25, 80],
-  KOI: [12, 40, 125],
-  TURTLE: [15, 50, 160],
-  TIGER: [20, 65, 200],
-  PHOENIX: [30, 100, 320],
-  DRAGON: [50, 175, 600],
-  WILD: [75, 250, 900],
+  COIN: [5, 20, 60],
+  LOTUS: [6, 25, 80],
+  FAN: [8, 30, 100],
+  LANTERN: [10, 40, 130],
+  KOI: [15, 60, 200],
+  TURTLE: [20, 80, 250],
+  TIGER: [25, 110, 330],
+  PHOENIX: [40, 160, 500],
+  DRAGON: [60, 275, 900],
+  WILD: [100, 450, 1500],
 };
 
 /** Anywhere-pays for the golden pearl, in units of `totalBet`, indexed by count. */
@@ -74,6 +74,21 @@ export const DRAGON_REEL_CHANCE = { one: 0.16, two: 0.05, three: 0.012 } as cons
 
 /** The reels the dragon is allowed to take. Never reel 1 -- that is the anchor. */
 export const DRAGON_REEL_CANDIDATES = [1, 2, 3] as const;
+
+/* ------------------------------------------------------------------ *
+ * Anticipation
+ *
+ * Where a reel starts teasing. Presentational, but it belongs with the maths
+ * rather than with the timings, because the thresholds are statements about
+ * the trigger: two pearls is one short of the shrine, and four orbs is within
+ * one block of the link. Move a trigger and these move with it.
+ * ------------------------------------------------------------------ */
+
+/** Pearls already showing before a later reel starts to tease. */
+export const SCATTER_TEASE_AT = 2;
+
+/** Orbs already showing before a later reel starts to tease. */
+export const ORB_TEASE_AT = 4;
 
 /* ------------------------------------------------------------------ *
  * Dragon Rage -- the base game's random wilds
