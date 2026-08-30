@@ -108,14 +108,14 @@
   ],
   "openItems": [
     {
-      "item": "Features have not been watched in a browser.",
-      "severity": "high",
-      "detail": "The base game was play-tested for real: the app was driven in headless Chromium, spun repeatedly, the paytable opened, and it reported zero console errors, no page scroll in either axis, correct meters and a correct bankroll. What has NOT been seen is free spins, the hold-and-win board, the gamble, or any big-win takeover -- none of them triggered in the spins that were driven. Those code paths are unit-tested and the screens render from props, but nobody has watched them. Trigger them deliberately (the buy-feature button is the fastest route) before calling the presentation done."
-    },
-    {
       "item": "The audio has never been listened to.",
       "severity": "medium",
-      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement."
+      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement. This is now the largest unverified risk in the project."
+    },
+    {
+      "item": "The gamble and the big-win takeovers have still not been watched.",
+      "severity": "medium",
+      "detail": "Free spins and the link were both played through in a browser and both are correct. The gamble needs a qualifying win to offer itself and no takeover above BIG happened in the spins that were driven, so those two screens remain the only presentation code nobody has seen run. They render from explicit props and are unit-tested, but that is not the same thing."
     },
     {
       "item": "prefers-reduced-motion is implemented everywhere but never exercised in a browser in either polarity.",
@@ -148,6 +148,6 @@
     "fastTests": "125 passing in about two seconds (71 engine, 54 store)",
     "simulation": "8/8 passing over 20,000,000 seeded spins",
     "build": "production static export, 0.9 MB of JS, 0.3 MB gzipped",
-    "browser": "headless Chromium: loads, spins repeatedly, paytable opens, zero console errors, no page scroll, meters and bankroll correct"
+    "browser": "headless Chromium, zero console errors throughout. Base game: loads, spins repeatedly, paytable opens with every symbol drawn correctly, no page scroll in either axis, meters and bankroll correct. Free spins: bought and played through all ten spins -- the counter counts down (and says '1 FREE SPIN LEFT', singular), the multiplier trail announces 3X, 5X and 10X as it climbs, dragon reels fire, and the feature total accumulates to the amount actually paid. Hold and win: bought and played to the end -- six orbs lock with their values, a new orb lands and resets the respins, a MINI jackpot orb lands and is announced once, and the board settles at the sum of what is on it."
   }
 }
