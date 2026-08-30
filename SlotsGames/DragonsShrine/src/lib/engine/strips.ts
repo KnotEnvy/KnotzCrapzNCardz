@@ -130,12 +130,13 @@ export const BAND_LENGTH = 100;
 /**
  * The orb blocks.
  *
- * Reels 2, 3 and 4 print orbs in threes and the outer reels in twos, so the
- * biggest board the strips can produce is 2+3+3+3+2 = thirteen orbs and the
- * six needed for the link wants three reels to drop a full block. That shape
- * is why the link triggers around once in seven hundred spins while an orb
- * itself is on screen most of the time: seeing orbs is common, seeing them
- * *arrive together* is the event.
+ * Reels 2, 3 and 4 print one block of three orbs and the outer reels one block
+ * of two, so the biggest board the strips can produce is 2+3+3+3+2 = thirteen
+ * orbs, and the six the link needs wants most of the reels to drop most of a
+ * block at once. That shape is the whole reason the link is rare while an orb
+ * itself is a common sight: seeing orbs is ordinary, seeing them *arrive
+ * together* is the event, and the block is what makes six reachable at all --
+ * five evenly spread orbs on five reels can never be six.
  */
 const ORB_STACKS: StackHeights[] = [{ ORB: 2 }, { ORB: 3 }, { ORB: 3 }, { ORB: 3 }, { ORB: 2 }];
 
@@ -153,11 +154,11 @@ const ORB_STACKS: StackHeights[] = [{ ORB: 2 }, { ORB: 3 }, { ORB: 3 }, { ORB: 3
  * patience the features need.
  */
 const BASE_COUNTS: StripCounts[] = [
-  { COIN: 15, LOTUS: 14, FAN: 13, LANTERN: 12, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 7, DRAGON: 6, SCATTER: 2, ORB: 4 },
-  { COIN: 14, LOTUS: 13, FAN: 12, LANTERN: 11, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 4, SCATTER: 2, ORB: 6 },
-  { COIN: 14, LOTUS: 13, FAN: 12, LANTERN: 11, KOI: 9, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 5, SCATTER: 2, ORB: 6 },
-  { COIN: 14, LOTUS: 13, FAN: 12, LANTERN: 11, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 4, SCATTER: 2, ORB: 6 },
-  { COIN: 15, LOTUS: 14, FAN: 13, LANTERN: 12, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 5, DRAGON: 5, WILD: 3, SCATTER: 2, ORB: 4 },
+  { COIN: 16, LOTUS: 15, FAN: 13, LANTERN: 12, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 7, DRAGON: 6, SCATTER: 2, ORB: 2 },
+  { COIN: 15, LOTUS: 14, FAN: 13, LANTERN: 11, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 4, SCATTER: 2, ORB: 3 },
+  { COIN: 15, LOTUS: 14, FAN: 13, LANTERN: 11, KOI: 9, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 5, SCATTER: 2, ORB: 3 },
+  { COIN: 15, LOTUS: 14, FAN: 13, LANTERN: 11, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 6, DRAGON: 5, WILD: 4, SCATTER: 2, ORB: 3 },
+  { COIN: 16, LOTUS: 15, FAN: 13, LANTERN: 12, KOI: 10, TURTLE: 9, TIGER: 8, PHOENIX: 5, DRAGON: 5, WILD: 3, SCATTER: 2, ORB: 2 },
 ];
 
 /**

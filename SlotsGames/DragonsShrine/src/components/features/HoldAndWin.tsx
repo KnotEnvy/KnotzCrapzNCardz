@@ -220,7 +220,7 @@ export function HoldAndWin({
         <div
           className="grid gap-1.5 sm:gap-2"
           style={{ gridTemplateColumns: `repeat(${REELS}, minmax(0, 1fr))` }}
-          role="grid"
+          role="group"
           aria-label={`Link board, ${filled} of ${CELLS} niches filled`}
         >
           {/* Row-major in the DOM so a screen reader reads across, not down. */}

@@ -57,7 +57,7 @@ import {
   totalBetAt,
   winTier,
 } from '@/lib/engine/config';
-import type { BuyOption } from '@/lib/engine/paytable';
+import { GAMBLE_MAX_STEPS, type BuyOption } from '@/lib/engine/paytable';
 import { STRIPS } from '@/lib/engine/strips';
 import {
   REELS,
@@ -65,11 +65,9 @@ import {
   WIN_TIERS,
   type Cell,
   type FeatureTrigger,
-  type FreeSpinsState,
   type GambleChoice,
   type Grid,
   type HistoryEntry,
-  type HoldState,
   type JackpotId,
   type SessionStats,
   type SpinResult,
@@ -84,9 +82,10 @@ import {
   startMusic,
   stopLoop,
   stopMusic,
+  unlockAudio,
 } from '@/lib/audio';
 
-import type { FeatureCard, Highlight, Preferences, SlotsState, SoundName } from './contract';
+import type { Highlight, Preferences, SlotsState, SoundName } from './contract';
 import { beatMs, countUp, timeline, type Beat, type CountUp, type Tempo, type Timeline } from './sequence';
 
 /* ------------------------------------------------------------------ *
@@ -175,7 +174,18 @@ function tierAtLeast(tier: WinTier, floor: WinTier): boolean {
  * every time a timer was rescheduled.
  * ------------------------------------------------------------------ */
 
-let rng: Rng = createRng(randomSeed());
+/**
+ * The seed this session is playing on, and the stream it drives.
+ *
+ * One seed, named once. An earlier draft drew `randomSeed()` separately for the
+ * RNG and for `state.seed`, which meant the seed printed on the glass was not
+ * the seed the reels were actually running -- a session that could not be
+ * replayed from the only number it showed you. The RNG lives outside the store
+ * because it is a stream, not a value: putting it in state would re-render the
+ * cabinet on every draw.
+ */
+let sessionSeed = randomSeed();
+let rng: Rng = createRng(sessionSeed);
 
 /**
  * The generation guard.
@@ -233,6 +243,25 @@ let announcedJackpots: JackpotId[] = [];
  * paid for.
  */
 let boughtPending = false;
+
+/**
+ * Whether the audio context has been woken yet.
+ *
+ * Browsers will not start an AudioContext without a user gesture, and the
+ * first gesture this cabinet ever gets is a press of spin, autoplay or buy.
+ * Calling `unlockAudio` anywhere else is either too early to work or too late
+ * to matter, so it is hung off exactly those three and the flag stops the
+ * base-game music being restarted on every subsequent press.
+ */
+let audioStarted = false;
+
+/** Wake the audio bus on a real gesture, and bring the base music up with it. */
+function wakeAudio(): void {
+  if (audioStarted) return;
+  audioStarted = true;
+  unlockAudio();
+  startMusic('base');
+}
 
 /**
  * Stop everything in flight and move the world on by one generation.
@@ -460,7 +489,7 @@ function freshState(seed: string, prefs: Preferences, bankroll = STARTING_BANKRO
  */
 function initialState(): SlotsState {
   return {
-    ...freshState(randomSeed(), { ...DEFAULT_PREFS, reducedMotion: osReducedMotion() }),
+    ...freshState(sessionSeed, { ...DEFAULT_PREFS, reducedMotion: osReducedMotion() }),
 
     /* --- commands: every one of them delegates downward --- */
     spin: () => beginPlayerSpin(),
@@ -572,14 +601,6 @@ export const useSlots = create<SlotsState>()(
  * Starting a spin
  * ------------------------------------------------------------------ */
 
-/** The stake the machine is playing for right now: the feature's, or the cabinet's. */
-function activeStake(): Stake {
-  const s = useSlots.getState();
-  if (s.free) return { betPerLine: s.free.betPerLine, totalBet: s.free.totalBet };
-  if (s.hold) return { betPerLine: s.betPerLine, totalBet: s.hold.totalBet };
-  return { betPerLine: s.betPerLine, totalBet: s.totalBet };
-}
-
 /**
  * The spin button.
  *
@@ -600,6 +621,7 @@ function beginPlayerSpin(): void {
     return;
   }
 
+  wakeAudio();
   playSound('buttonPress');
   chargeAndSpin();
 }
@@ -743,7 +765,12 @@ function landReel(reel: number, result: SpinResult, teased: boolean): void {
  */
 function slamStop(): void {
   const s = useSlots.getState();
-  if (s.phase !== 'SPINNING') return;
+  // Reels turn during free spins too, and the phase there stays FREE_SPINS so
+  // the feature frame does not flicker off the glass. Asking the reels what
+  // they are doing is more honest than asking the phase.
+  const turning = s.reels.some((r) => r === 'SPINNING' || r === 'TEASE');
+  if (!turning) return;
+  if (s.phase !== 'SPINNING' && s.phase !== 'FREE_SPINS') return;
   playSound('buttonPress');
   current?.finish();
 }
@@ -823,6 +850,11 @@ function presentWin(result: SpinResult, mode: 'BASE' | 'FREE'): void {
 
   play((tl) => {
     tl.hold(ms(TIMING.beforeWins, 'motion'));
+    // Where the celebration actually begins. Everything below is measured from
+    // here rather than from the head of the timeline, because the lead-in is
+    // not part of the count and letting it be would end the presentation that
+    // much before the meter had finished climbing.
+    const opened = tl.cursor;
 
     tl.then(() => {
       presentationSeq++;
@@ -863,7 +895,7 @@ function presentWin(result: SpinResult, mode: 'BASE' | 'FREE'): void {
     }
 
     // Whichever ran longer -- the count or the cycle -- the other waits for it.
-    const shown = highlights.length > 0 ? tl.cursor : 0;
+    const shown = tl.cursor - opened;
     if (countMs > shown) tl.hold(countMs - shown);
 
     tl.then(() => {
@@ -1004,6 +1036,12 @@ function enterFeature(trigger: FeatureTrigger, result: SpinResult): void {
       },
     },
   }));
+
+  // Autoplay is for the stretch where nothing is happening. A feature is the
+  // opposite of that, so the run ends here rather than resuming afterwards --
+  // a player who set fifty spins going and walked back to find the shrine lit
+  // should find it waiting for them, not four spins into the next fifty.
+  endAutoplay();
 
   playSound('featureTrigger');
   if (trigger.feature === 'FREE_SPINS') enterFreeSpins(trigger, bought);
@@ -1318,6 +1356,15 @@ function openGamble(): void {
 function takeGamble(choice: GambleChoice): void {
   const s = useSlots.getState();
   if (s.phase !== 'GAMBLE' || !s.gamble) return;
+  // The engine throws rather than returning a silent loss when handed a step
+  // past the cap, on the grounds that being asked for a sixth double is a
+  // programming error and not a player action. It is this function's job to
+  // make sure it never is one: at the top of the ladder there is nothing left
+  // to offer, so the pot is taken.
+  if (s.gamble.step >= GAMBLE_MAX_STEPS || s.gamble.stake <= 0) {
+    closeGamble();
+    return;
+  }
 
   const alive = guard();
   const outcome = engineGamble(rng, choice, s.gamble.stake, s.gamble.step);
@@ -1344,7 +1391,7 @@ function takeGamble(choice: GambleChoice): void {
       playSound(outcome.won ? 'gambleWin' : 'gambleLose');
       // A loss, or the last rung of the ladder, ends the run on its own. There
       // is no decision left to offer, so the machine takes it.
-      if (!outcome.won || outcome.balance <= 0) closeGamble();
+      if (!outcome.won || outcome.balance <= 0 || outcome.step >= GAMBLE_MAX_STEPS) closeGamble();
     });
   });
 }
@@ -1410,6 +1457,7 @@ function beginAutoplay(count: number): void {
     useSlots.setState({ message: 'Not enough credit to start autoplay.' });
     return;
   }
+  wakeAudio();
   playSound('buttonToggle');
   useSlots.setState({ autoplay: { left: count, total: count }, canGamble: false });
   takeAutoplayTurn();
@@ -1502,6 +1550,7 @@ function buy(option: BuyOption): void {
     return;
   }
 
+  wakeAudio();
   playSound('buttonPress');
   endAutoplay();
   boughtPending = true;
@@ -1619,11 +1668,12 @@ function restart(seed?: string): void {
   boughtPending = false;
   historySeq = 0;
 
-  const next = seed ?? randomSeed();
-  rng = createRng(next);
+  sessionSeed = seed ?? randomSeed();
+  rng = createRng(sessionSeed);
+  audioStarted = false;
 
   const prefs = useSlots.getState().prefs;
-  useSlots.setState(freshState(next, prefs));
+  useSlots.setState(freshState(sessionSeed, prefs));
 }
 
 /* ------------------------------------------------------------------ *

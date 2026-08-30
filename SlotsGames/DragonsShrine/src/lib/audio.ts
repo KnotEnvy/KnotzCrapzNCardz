@@ -987,8 +987,8 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   reelStop: (q) => {
     const step = q.p !== 0 ? 0 : nextReelStep(q.c.currentTime);
     const hz = semi(deg(6 + step), q.p);
-    wood(q.c, q.out, q.t, 0.3 * q.g, hz);
-    drum(q.c, q.out, q.t, 0.16 * q.g, 110, 0.14, 0.7);
+    wood(q.c, q.out, q.t, 0.42 * q.g, hz);
+    drum(q.c, q.out, q.t, 0.22 * q.g, 110, 0.14, 0.7);
     hiss(q.c, q.out, { at: q.t, gain: 0.07 * q.g, decay: 0.05, freq: 240, q: 0.7, type: 'lowpass' });
   },
 
@@ -996,8 +996,8 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   reelStopTease: (q) => {
     const step = q.p !== 0 ? 0 : nextReelStep(q.c.currentTime);
     const hz = semi(deg(6 + step), q.p);
-    wood(q.c, q.out, q.t, 0.3 * q.g, hz);
-    drum(q.c, q.out, q.t, 0.18 * q.g, 104, 0.16, 0.7);
+    wood(q.c, q.out, q.t, 0.42 * q.g, hz);
+    drum(q.c, q.out, q.t, 0.24 * q.g, 104, 0.16, 0.7);
     // The tail: the bell of that same note, and the room holding its breath.
     bell(q.c, q.out, q.t + 0.01, 0.2 * q.g, hz, 1.9);
     breath(q.c, q.out, q.t + 0.04, 0.1 * q.g, hz / 2, 0.12, 0.5, 0.9);
@@ -1006,8 +1006,8 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /** A symbol arriving in its cell. Twenty of these a spin, so: quiet. */
   symbolLand: (q) => {
     const j = 0.9 + Math.random() * 0.22;
-    hiss(q.c, q.out, { at: q.t, gain: 0.07 * q.g, decay: 0.03, freq: 1500 * j, q: 2.2 });
-    hiss(q.c, q.out, { at: q.t, gain: 0.05 * q.g, decay: 0.05, freq: 300, q: 0.8, type: 'lowpass' });
+    hiss(q.c, q.out, { at: q.t, gain: 0.09 * q.g, decay: 0.03, freq: 1500 * j, q: 2.2 });
+    hiss(q.c, q.out, { at: q.t, gain: 0.065 * q.g, decay: 0.05, freq: 300, q: 0.8, type: 'lowpass' });
     tone(q.c, q.out, {
       at: q.t,
       gain: 0.05 * q.g,
@@ -1029,7 +1029,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winSmall: (q) =>
     fanfare(q, {
-      level: 0.42,
+      level: 0.53,
       base: 5,
       reps: 1,
       step: 0.115,
@@ -1043,7 +1043,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winMedium: (q) =>
     fanfare(q, {
-      level: 0.5,
+      level: 0.46,
       base: 5,
       reps: 1,
       step: 0.13,
@@ -1057,7 +1057,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winBig: (q) =>
     fanfare(q, {
-      level: 0.6,
+      level: 0.61,
       base: 0,
       reps: 2,
       step: 0.145,
@@ -1071,7 +1071,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winMega: (q) =>
     fanfare(q, {
-      level: 0.68,
+      level: 0.63,
       base: 0,
       reps: 2,
       step: 0.155,
@@ -1085,7 +1085,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winEpic: (q) =>
     fanfare(q, {
-      level: 0.74,
+      level: 0.75,
       base: 0,
       reps: 3,
       step: 0.16,
@@ -1099,7 +1099,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   winLegendary: (q) => {
     fanfare(q, {
-      level: 0.8,
+      level: 0.84,
       base: -5,
       reps: 4,
       step: 0.165,
@@ -1133,10 +1133,10 @@ const CUES: Record<CueName, (q: Cue) => void> = {
     meterStep = 0;
     meterStepAt = -99;
     const hz = semi(deg(10), q.p);
-    pluck(q.c, q.out, q.t, 0.3 * q.g, hz, 1.4, 1);
-    pluck(q.c, q.out, q.t, 0.16 * q.g, hz / 2, 1.8, 0.7);
-    bell(q.c, q.out, q.t + 0.02, 0.24 * q.g, hz, 2.6);
-    drum(q.c, q.out, q.t, 0.2 * q.g, 78, 0.4, 0.9);
+    pluck(q.c, q.out, q.t, 0.21 * q.g, hz, 1.4, 1);
+    pluck(q.c, q.out, q.t, 0.11 * q.g, hz / 2, 1.8, 0.7);
+    bell(q.c, q.out, q.t + 0.02, 0.17 * q.g, hz, 2.6);
+    drum(q.c, q.out, q.t, 0.14 * q.g, 78, 0.4, 0.9);
   },
 
   /* --- features --- */
@@ -1248,11 +1248,11 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /** The dragon. Low brass bending up, a growl over it and the floor under it. */
   dragonRoar: (q) => {
     const f = semi(deg(-10), q.p);
-    brass(q.c, q.out, q.t, 0.44 * q.g, f, 0.12, 0.5, 0.9, 1.14);
+    brass(q.c, q.out, q.t, 0.27 * q.g, f, 0.12, 0.5, 0.9, 1.14);
     // The growl: noise through a moving formant, which is what makes it animal.
     hiss(q.c, q.out, {
       at: q.t,
-      gain: 0.26 * q.g,
+      gain: 0.16 * q.g,
       attack: 0.05,
       hold: 0.4,
       decay: 0.6,
@@ -1262,7 +1262,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
     });
     hiss(q.c, q.out, {
       at: q.t + 0.02,
-      gain: 0.14 * q.g,
+      gain: 0.09 * q.g,
       attack: 0.08,
       hold: 0.4,
       decay: 0.7,
@@ -1272,7 +1272,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
     });
     tone(q.c, q.out, {
       at: q.t,
-      gain: 0.28 * q.g,
+      gain: 0.17 * q.g,
       freq: f / 2,
       freqEnd: (f / 2) * 1.1,
       glide: 0.6,
@@ -1280,7 +1280,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
       hold: 0.5,
       decay: 0.9,
     });
-    drum(q.c, q.out, q.t, 0.24 * q.g, 54, 0.5, 0.8);
+    drum(q.c, q.out, q.t, 0.15 * q.g, 54, 0.5, 0.8);
   },
 
   /** The dragon crossing a reel and turning it wild: a pass, not a roar. */
@@ -1364,9 +1364,9 @@ const CUES: Record<CueName, (q: Cue) => void> = {
 
   /** The board full. The one thing in the link that is not restrained. */
   holdFull: (q) => {
-    gong(q.c, q.out, q.t, 0.6 * q.g, deg(-5), 4.2);
+    gong(q.c, q.out, q.t, 0.48 * q.g, deg(-5), 4.2);
     fanfare(q, {
-      level: 0.62,
+      level: 0.55,
       base: 0,
       reps: 3,
       step: 0.15,
@@ -1379,7 +1379,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
     });
     tone(q.c, q.out, {
       at: q.t,
-      gain: 0.3 * q.g,
+      gain: 0.24 * q.g,
       freq: 120,
       freqEnd: 44,
       glide: 0.5,
@@ -1393,7 +1393,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /** MINI: a bell triad and nothing else. It is a nice win, not an event. */
   jackpotMini: (q) =>
     fanfare(q, {
-      level: 0.5,
+      level: 0.62,
       base: 5,
       reps: 1,
       step: 0.12,
@@ -1408,7 +1408,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /** MINOR: the motif twice, a drum under it, one gong. */
   jackpotMinor: (q) =>
     fanfare(q, {
-      level: 0.62,
+      level: 0.66,
       base: 0,
       reps: 2,
       step: 0.14,
@@ -1489,15 +1489,15 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   gambleFlip: (q) => {
     hiss(q.c, q.out, {
       at: q.t,
-      gain: 0.14 * q.g,
+      gain: 0.2 * q.g,
       attack: 0.03,
       decay: 0.16,
       freq: 1800,
       freqEnd: 4200,
       q: 0.7,
     });
-    wood(q.c, q.out, q.t + 0.2, 0.16 * q.g, 1100);
-    hiss(q.c, q.out, { at: q.t + 0.2, gain: 0.08 * q.g, decay: 0.05, freq: 3400, q: 1.4 });
+    wood(q.c, q.out, q.t + 0.2, 0.23 * q.g, 1100);
+    hiss(q.c, q.out, { at: q.t + 0.2, gain: 0.11 * q.g, decay: 0.05, freq: 3400, q: 1.4 });
   },
 
   /** Doubled. Short, bright, up a fourth, and over before the next choice. */
@@ -1533,18 +1533,18 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /* --- interface: the quietest band in the file --- */
 
   buttonPress: (q) => {
-    wood(q.c, q.out, q.t, 0.13 * q.g, 1250);
+    wood(q.c, q.out, q.t, 0.2 * q.g, 1250);
   },
 
   buttonToggle: (q) => {
-    wood(q.c, q.out, q.t, 0.11 * q.g, 1050);
-    pluck(q.c, q.out, q.t + 0.045, 0.09 * q.g, semi(deg(12), q.p), 0.22, 1.3);
+    wood(q.c, q.out, q.t, 0.17 * q.g, 1050);
+    pluck(q.c, q.out, q.t + 0.045, 0.13 * q.g, semi(deg(12), q.p), 0.22, 1.3);
   },
 
   /** The stake moving. `pitch` walks it up and down the ladder. */
   betChange: (q) => {
-    wood(q.c, q.out, q.t, 0.09 * q.g, 900);
-    pluck(q.c, q.out, q.t, 0.12 * q.g, semi(deg(9), q.p), 0.3, 1.2);
+    wood(q.c, q.out, q.t, 0.13 * q.g, 900);
+    pluck(q.c, q.out, q.t, 0.17 * q.g, semi(deg(9), q.p), 0.3, 1.2);
   },
 
   /**
@@ -1884,8 +1884,8 @@ function startEffectLoop(name: LoopName, opts: SoundOptions) {
   const g = opts.gain ?? 1;
   let loop: Loop;
   if (name === 'reelLoop') loop = startReelLoop(c, sfxBus, 0.5 * g);
-  else if (name === 'anticipation') loop = startAnticipation(c, sfxBus, 0.62 * g, opts.pitch ?? 0);
-  else loop = startFreeAmbience(c, sfxBus, 0.55 * g);
+  else if (name === 'anticipation') loop = startAnticipation(c, sfxBus, 0.34 * g, opts.pitch ?? 0);
+  else loop = startFreeAmbience(c, sfxBus, 0.78 * g);
   loops.set(name, loop);
 }
 

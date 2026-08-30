@@ -193,8 +193,11 @@ export function Segmented<T extends string>({
   ariaLabel?: string;
 }) {
   return (
+    /* `group` with pressed buttons rather than a tablist: these switch a
+       section in place and nothing here implements a tablist's arrow-key
+       contract, so promising one would be a lie a screen reader acts on. */
     <div
-      role="tablist"
+      role="group"
       aria-label={ariaLabel}
       className={cn('inline-flex rounded-md border border-white/10 bg-ink-900 p-0.5', className)}
     >
@@ -202,8 +205,7 @@ export function Segmented<T extends string>({
         <button
           key={opt.value}
           type="button"
-          role="tab"
-          aria-selected={value === opt.value}
+          aria-pressed={value === opt.value}
           title={opt.title}
           onClick={() => onChange(opt.value)}
           className={cn(

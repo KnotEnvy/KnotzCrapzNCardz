@@ -142,7 +142,7 @@ function AutoplayMenu({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 4, scale: 0.98 }}
           transition={{ duration: 0.12 }}
-          role="menu"
+          role="group"
           aria-label="Autoplay spins"
           className="absolute right-0 bottom-full z-40 mb-2 w-40 rounded-lg border border-gold-800/50 bg-ink-900/98 p-1.5 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95)] backdrop-blur"
         >
@@ -152,7 +152,6 @@ function AutoplayMenu({
               <button
                 key={String(n)}
                 type="button"
-                role="menuitem"
                 onClick={() => {
                   onPick(n);
                   onClose();
@@ -508,8 +507,9 @@ export function ControlDeck(): React.JSX.Element {
           <Button
             size="md"
             variant="deck"
-            disabled={inFeature || (phase !== 'IDLE' && autoplay === null)}
-            aria-haspopup="menu"
+            /* Starting autoplay needs a settled machine; stopping it must
+               never be gated -- including from inside a feature it triggered. */
+            disabled={autoplay === null && (phase !== 'IDLE' || inFeature)}
             aria-expanded={autoOpen}
             onClick={() => {
               if (autoplay !== null) {

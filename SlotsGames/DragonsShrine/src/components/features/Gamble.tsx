@@ -167,10 +167,10 @@ export function Gamble({
               )}
             />
           ))}
-          <li className="numeric ml-1.5 text-[10px] text-ink-400">
-            step {Math.min(step + 1, GAMBLE_MAX_STEPS)} / {GAMBLE_MAX_STEPS}
-          </li>
         </ol>
+        <span className="numeric text-[10px] text-ink-400">
+          step {Math.min(step + 1, GAMBLE_MAX_STEPS)} / {GAMBLE_MAX_STEPS}
+        </span>
 
         <ol className="flex items-center gap-1" aria-label="This run so far">
           {history.map((h, i) => (

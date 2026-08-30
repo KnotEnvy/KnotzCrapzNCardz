@@ -112,7 +112,7 @@ export const HOLD_TRIGGER_ORBS = 6;
 export const HOLD_RESPINS = 3;
 
 /** Chance an empty cell catches an orb on a respin. */
-export const HOLD_LAND_CHANCE = 0.088;
+export const HOLD_LAND_CHANCE = 0.03;
 
 /** Orb credit values, in units of `totalBet`, and how often each appears. */
 export const ORB_VALUES = [1, 2, 3, 5, 8, 10, 15, 20, 30, 50] as const;
