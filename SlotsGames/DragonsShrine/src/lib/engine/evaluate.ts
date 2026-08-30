@@ -116,9 +116,16 @@ function evaluateLine(
   const firstRow = cells[0].row;
   const firstSymbol = grid[0][firstRow];
   const firstWild = wild[0][firstRow];
-  if (!firstWild && !isPaying(firstSymbol)) return null;
-
-  const candidates: readonly PayingSymbol[] = firstWild ? PAYING_SYMBOLS : [firstSymbol];
+  /*
+   * Written as a branch rather than a ternary so the narrowing survives: in
+   * the non-wild arm `isPaying` is a type guard, and reading it inline leaves
+   * the compiler unable to see that reel 1's symbol has already been proved to
+   * be one that pays.
+   */
+  let candidates: readonly PayingSymbol[];
+  if (firstWild) candidates = PAYING_SYMBOLS;
+  else if (isPaying(firstSymbol)) candidates = [firstSymbol];
+  else return null;
 
   let bestSymbol: PayingSymbol | null = null;
   let bestCount = 0;
