@@ -1,0 +1,605 @@
+/* ------------------------------------------------------------------ *
+ * The reel window.
+ *
+ * Two rules govern everything below.
+ *
+ * Every dimension comes from `--cell-size`, which one ResizeObserver resolves
+ * once per layout change. There is not a single magic pixel in this file, and
+ * that is what lets the same window fill a 1440px desktop and a 360px phone in
+ * portrait without a media query.
+ *
+ * Anything that moves during a spin moves on `transform`, `opacity` or
+ * `filter` -- never on a geometric property. The band is the extreme case:
+ * during a spin it is one composited layer whose transform is rewritten sixty
+ * times a second, and if anything in here forced it to re-layout the whole
+ * machine would fall over on a phone.
+ * ------------------------------------------------------------------ */
+
+.ds-window-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The cabinet lays this out inside a flex column; without an explicit zero
+     minimum a flex item refuses to shrink below its content and the page
+     grows a scrollbar instead of the reels getting smaller. */
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+}
+
+/* ------------------------------------------------------------------ *
+ * Joinery
+ * ------------------------------------------------------------------ */
+
+.ds-cabinet {
+  position: relative;
+  isolation: isolate;
+  border-radius: calc(var(--cell-size) * 0.14);
+  /* The cabinet is lit from behind the glass. This is the spill. */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-gold-800) 60%, transparent),
+    0 calc(var(--cell-size) * 0.08) calc(var(--cell-size) * 0.4) rgb(0 0 0 / 0.65),
+    0 0 calc(var(--cell-size) * 0.9) color-mix(in srgb, var(--color-gold-700) 22%, transparent);
+  background:
+    radial-gradient(120% 90% at 50% 8%, #1b1626 0%, #0b0d15 55%, #05060a 100%);
+}
+
+.ds-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* The playing surface: five columns, no gap between rows because a reel band
+   is continuous and a horizontal rule across it would be a lie. */
+.ds-grid {
+  position: absolute;
+  display: grid;
+  grid-auto-flow: column;
+  gap: var(--reel-gap);
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * A reel
+ * ------------------------------------------------------------------ */
+
+.ds-reel {
+  position: relative;
+  width: var(--cell-size);
+  height: calc(var(--cell-size) * var(--ds-rows));
+  overflow: hidden;
+  border-radius: calc(var(--cell-size) * 0.06);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-ink-950) 92%, transparent) 0%,
+      color-mix(in srgb, var(--color-ink-900) 70%, transparent) 18%,
+      color-mix(in srgb, var(--color-ink-900) 55%, transparent) 82%,
+      color-mix(in srgb, var(--color-ink-950) 92%, transparent) 100%
+    );
+  transition: filter 220ms ease;
+}
+
+.ds-band {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.ds-band-cell {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  will-change: transform;
+}
+
+.ds-band-cell > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ds-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: repeat(var(--ds-rows), 1fr);
+}
+
+.ds-face .ds-sym {
+  width: 100%;
+  height: 100%;
+}
+
+/* Only one of the two layers is ever painted. `visibility` rather than
+   `display` so neither layer is relaid out when the reel starts or stops. */
+.ds-reel[data-moving='1'] .ds-face {
+  visibility: hidden;
+}
+.ds-reel[data-moving='0'] .ds-band {
+  visibility: hidden;
+}
+
+/* The landing bounce.
+   The band decelerates past the stop and comes to rest a fifth of a symbol
+   low; the face layer takes over from exactly there and springs up into the
+   detent. Because the hand-over happens at zero velocity the seam is
+   invisible, and because the bounce is on the face it is the *real* symbols
+   that bounce -- including any the feature turned wild. */
+.ds-reel[data-land='1'] .ds-face {
+  animation: ds-reel-bounce var(--ds-settle) cubic-bezier(0.16, 0.9, 0.3, 1) 1;
+}
+
+@keyframes ds-reel-bounce {
+  0% {
+    transform: translateY(var(--ds-over));
+  }
+  46% {
+    transform: translateY(calc(var(--ds-over) * -0.34));
+  }
+  74% {
+    transform: translateY(calc(var(--ds-over) * 0.12));
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* The impact tick: a hard line of light where the reel hits the detent, and a
+   puff of dust off the bottom rail. Sold in 180ms and gone. */
+.ds-impact {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 3;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-gold-200) 55%, transparent) 46%,
+      color-mix(in srgb, var(--color-gold-300) 25%, transparent) 52%,
+      transparent 100%
+    ),
+    radial-gradient(
+      70% 22% at 50% 100%,
+      color-mix(in srgb, var(--color-gold-400) 40%, transparent) 0%,
+      transparent 70%
+    );
+}
+.ds-reel[data-land='1'] .ds-impact {
+  animation: ds-impact 200ms ease-out 1;
+}
+@keyframes ds-impact {
+  0% {
+    opacity: 0.85;
+    transform: scaleY(0.4) translateY(6%);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(1.6) translateY(0);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The tease
+ *
+ * The most important eight hundred milliseconds the game has. Three things
+ * happen at once, and all three are needed: the reel itself lights up, the
+ * rest of the window steps back, and a shaft of light climbs the column so
+ * the eye is dragged to it whether the player was looking or not.
+ * ------------------------------------------------------------------ */
+
+.ds-reel-tease {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: inherit;
+  transition: opacity 220ms ease;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-ember-400) 34%, transparent) 0%,
+    transparent 32%,
+    transparent 68%,
+    color-mix(in srgb, var(--color-ember-500) 34%, transparent) 100%
+  );
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--color-gold-300) 85%, transparent),
+    inset 0 0 calc(var(--cell-size) * 0.4) color-mix(in srgb, var(--color-ember-400) 45%, transparent),
+    0 0 calc(var(--cell-size) * 0.55) color-mix(in srgb, var(--color-ember-500) 60%, transparent);
+}
+
+.ds-reel[data-status='TEASE'] .ds-reel-tease {
+  opacity: 1;
+  animation: ds-tease-pulse 620ms ease-in-out infinite alternate;
+}
+
+/* The shaft: a bar of light running up the column, once every beat. */
+.ds-reel-tease::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--color-gold-200) 30%, transparent),
+    transparent
+  );
+  transform: translateY(240%);
+}
+.ds-reel[data-status='TEASE'] .ds-reel-tease::after {
+  animation: ds-tease-shaft 900ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes ds-tease-pulse {
+  from {
+    filter: brightness(0.85);
+  }
+  to {
+    filter: brightness(1.25);
+  }
+}
+@keyframes ds-tease-shaft {
+  0% {
+    transform: translateY(240%);
+    opacity: 0;
+  }
+  20%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-140%);
+    opacity: 0;
+  }
+}
+
+/* The rest of the window steps back so the teasing reel is the only lit
+   thing on the glass. This is the whole point of an anticipation. */
+.ds-cabinet[data-tease='1'] .ds-reel:not([data-status='TEASE']) {
+  filter: brightness(0.52) saturate(0.7);
+}
+.ds-cabinet[data-tease='1'] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-gold-500) 80%, transparent),
+    0 calc(var(--cell-size) * 0.08) calc(var(--cell-size) * 0.4) rgb(0 0 0 / 0.65),
+    0 0 calc(var(--cell-size) * 1.4) color-mix(in srgb, var(--color-ember-500) 45%, transparent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Glass
+ *
+ * A cabinet's reels sit behind a sheet of glass with a light above it. Two
+ * layers do all of the work: a vertical vignette so the band reads as
+ * continuing past the window, and a single soft reflection sweeping the top
+ * third. Both are pointer-transparent and neither ever repaints.
+ * ------------------------------------------------------------------ */
+
+.ds-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.62) 0%,
+      rgb(0 0 0 / 0.16) 7%,
+      transparent 20%,
+      transparent 80%,
+      rgb(0 0 0 / 0.16) 93%,
+      rgb(0 0 0 / 0.62) 100%
+    ),
+    radial-gradient(120% 60% at 50% -10%, rgb(255 255 255 / 0.07) 0%, transparent 60%);
+}
+
+.ds-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.ds-sheen::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  width: 26%;
+  left: -40%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(255 255 255 / 0.055),
+    rgb(255 255 255 / 0.11),
+    rgb(255 255 255 / 0.04),
+    transparent
+  );
+  transform: skewX(-14deg);
+  animation: ds-sheen 9s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+@keyframes ds-sheen {
+  0%,
+  58% {
+    left: -40%;
+  }
+  92%,
+  100% {
+    left: 128%;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Overlays: paylines, win frames, dragon reels, orbs
+ * ------------------------------------------------------------------ */
+
+.ds-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
+}
+
+.ds-line-glow {
+  animation: ds-line-breathe 1200ms ease-in-out infinite;
+}
+@keyframes ds-line-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+/* The travelling glow: a short bright dash chasing along the payline, which
+   is how a player's eye is taught the direction a win is read in. */
+.ds-line-run {
+  animation: ds-line-run 1100ms linear infinite;
+}
+@keyframes ds-line-run {
+  from {
+    stroke-dashoffset: var(--ds-dash);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.ds-win-frame {
+  animation: ds-win-frame 1400ms linear infinite;
+}
+@keyframes ds-win-frame {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+.ds-dragon-reel {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  animation: ds-dragon-in 420ms cubic-bezier(0.2, 1.1, 0.35, 1) 1;
+}
+.ds-dragon-reel > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@keyframes ds-dragon-in {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+.ds-dr-head {
+  animation: ds-dr-head 4200ms ease-in-out infinite;
+}
+.ds-dr-mane {
+  animation: ds-dr-mane 2600ms ease-in-out infinite;
+}
+.ds-dr-tail {
+  animation: ds-dr-tail 3000ms ease-in-out infinite;
+}
+.ds-dr-whisker {
+  animation: ds-dr-whisker 3800ms ease-in-out infinite;
+}
+.ds-dr-glow {
+  animation: ds-dr-glow 2400ms ease-in-out infinite;
+}
+.ds-dr-eye {
+  animation: ds-dr-eye 1600ms ease-in-out infinite alternate;
+}
+@keyframes ds-dr-head {
+  0%,
+  100% {
+    transform: rotate(-1.4deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1.4deg) translateY(-3px);
+  }
+}
+@keyframes ds-dr-mane {
+  0%,
+  100% {
+    transform: scale(1) rotate(-1deg);
+  }
+  50% {
+    transform: scale(1.05) rotate(1.6deg);
+  }
+}
+@keyframes ds-dr-tail {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+@keyframes ds-dr-whisker {
+  0%,
+  100% {
+    transform: rotate(-1.6deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+@keyframes ds-dr-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ds-dr-eye {
+  from {
+    filter: none;
+  }
+  to {
+    filter: drop-shadow(0 0 6px var(--color-ember-300));
+  }
+}
+
+/* Locked orbs sit on top of the board and do not move with the reels --
+   that is the entire promise of the link feature, so they are a separate
+   layer rather than a symbol state. */
+.ds-orb {
+  position: absolute;
+  z-index: 7;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.ds-orb-value {
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 0.35em;
+  border-radius: 999px;
+  font-size: calc(var(--cell-size) * 0.19);
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-ink-950);
+  background: linear-gradient(180deg, var(--color-gold-200), var(--color-gold-500));
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.5);
+  white-space: nowrap;
+}
+.ds-orb[data-jackpot] .ds-orb-value {
+  color: var(--color-ink-950);
+  background: linear-gradient(180deg, #fff, var(--ds-jackpot));
+}
+.ds-orb[data-jackpot]::after {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 2px var(--ds-jackpot),
+    0 0 calc(var(--cell-size) * 0.35) var(--ds-jackpot);
+  opacity: 0.85;
+}
+.ds-orb {
+  animation: ds-orb-lock 420ms cubic-bezier(0.2, 1.5, 0.4, 1) 1;
+}
+@keyframes ds-orb-lock {
+  0% {
+    transform: scale(1.55);
+    filter: brightness(2.2);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Screen readers
+ * ------------------------------------------------------------------ */
+
+.ds-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reduced motion
+ *
+ * The reels are not switched off -- a slot with static reels cannot be read
+ * at all. The band never runs, the blur never happens, and the outcome simply
+ * arrives with a short cross-fade, which is legible, obvious, and still says
+ * "the reel stopped here".
+ * ------------------------------------------------------------------ */
+
+.ds-cabinet[data-reduced-motion='1'] .ds-band {
+  visibility: hidden !important;
+  filter: none !important;
+}
+.ds-cabinet[data-reduced-motion='1'] .ds-face {
+  visibility: visible !important;
+  animation: none !important;
+}
+.ds-cabinet[data-reduced-motion='1'] .ds-reel[data-land='1'] .ds-face {
+  animation: ds-reel-arrive 160ms ease-out 1 !important;
+}
+@keyframes ds-reel-arrive {
+  from {
+    opacity: 0.25;
+    transform: translateY(-4%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ds-cabinet[data-reduced-motion='1'] .ds-sheen::before,
+.ds-cabinet[data-reduced-motion='1'] .ds-impact,
+.ds-cabinet[data-reduced-motion='1'] .ds-reel-tease::after {
+  animation: none !important;
+}
+.ds-cabinet[data-reduced-motion='1'] .ds-line-run,
+.ds-cabinet[data-reduced-motion='1'] .ds-line-glow,
+.ds-cabinet[data-reduced-motion='1'] .ds-win-frame {
+  animation: none !important;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-sheen::before,
+  .ds-reel-tease::after,
+  .ds-impact {
+    animation: none !important;
+  }
+}

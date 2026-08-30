@@ -1,0 +1,278 @@
+/* ------------------------------------------------------------------ *
+ * Shared effect paint.
+ *
+ * Owned by the effects workstream, imported by globals.css, and deliberately
+ * small: the particles live on a canvas and the shrine lives in an SVG, so the
+ * only things that belong here are the handful of keyframes several layers
+ * need to agree on — the shimmer that runs across gold, the glow that breathes
+ * under a win, the pulse that marks a lit cell, and the shake the whole
+ * cabinet takes when something big lands.
+ *
+ * Two conventions:
+ *
+ *   Everything is prefixed `fx-`, and everything that is decoration rather
+ *   than information also carries `fx-decorative`, which globals.css already
+ *   switches off under the OS reduced-motion setting.
+ *
+ *   Reduced motion is honoured twice, because the two sources disagree: the OS
+ *   query below, and `[data-reduced-motion='true']` which the effects layer
+ *   stamps on <html> from the store's own preference. A player who has turned
+ *   motion down in the settings menu has not necessarily turned it down in
+ *   their OS, and the menu has to win.
+ * ------------------------------------------------------------------ */
+
+/* A band of light travelling across a surface: gold leaf, a meter, a lit
+   symbol. Wants a background-image with a gradient in it and 200% width. */
+@keyframes fx-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Something lit from inside, breathing. Drives opacity and filter rather than
+   box-shadow: an animated shadow repaints its whole stacking context. */
+@keyframes fx-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.35);
+  }
+}
+
+/* A cell or badge marking itself. Scale only, so it composites. */
+@keyframes fx-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* The cabinet taking a hit. Amplitude comes from --fx-shake-amp so one
+   keyframe covers a MEGA and a GRAND; the effects layer sets it and removes
+   the class when the animation ends. */
+@keyframes fx-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  10% {
+    transform: translate3d(calc(var(--fx-shake-amp, 4px) * -1), var(--fx-shake-amp, 4px), 0);
+  }
+  25% {
+    transform: translate3d(var(--fx-shake-amp, 4px), calc(var(--fx-shake-amp, 4px) * -0.6), 0);
+  }
+  40% {
+    transform: translate3d(calc(var(--fx-shake-amp, 4px) * -0.7), calc(var(--fx-shake-amp, 4px) * -0.4), 0);
+  }
+  55% {
+    transform: translate3d(calc(var(--fx-shake-amp, 4px) * 0.6), var(--fx-shake-amp, 4px), 0);
+  }
+  70% {
+    transform: translate3d(calc(var(--fx-shake-amp, 4px) * -0.4), calc(var(--fx-shake-amp, 4px) * 0.3), 0);
+  }
+  85% {
+    transform: translate3d(calc(var(--fx-shake-amp, 4px) * 0.25), calc(var(--fx-shake-amp, 4px) * -0.2), 0);
+  }
+}
+
+/* An ember or a lantern, never quite steady. */
+@keyframes fx-flicker {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  18% {
+    opacity: 1;
+  }
+  32% {
+    opacity: 0.6;
+  }
+  54% {
+    opacity: 0.95;
+  }
+  71% {
+    opacity: 0.68;
+  }
+}
+
+/* Mist, or anything else crossing the frame and wrapping. Paired with a
+   sibling offset by half the duration, the pair reads as continuous. */
+@keyframes fx-drift {
+  from {
+    transform: translate3d(-14%, 0, 0);
+  }
+  to {
+    transform: translate3d(14%, 0, 0);
+  }
+}
+
+/* Something rising and fading out: an ember off a lantern, a spark off gold. */
+@keyframes fx-rise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.7);
+    opacity: 0;
+  }
+  12% {
+    opacity: var(--fx-rise-opacity, 0.9);
+  }
+  80% {
+    opacity: var(--fx-rise-opacity, 0.9);
+  }
+  100% {
+    transform: translate3d(var(--fx-rise-x, 12px), var(--fx-rise-y, -180px), 0) scale(1.05);
+    opacity: 0;
+  }
+}
+
+/* A light beam crossing the glass. */
+@keyframes fx-sweep {
+  from {
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+  }
+  to {
+    transform: translate3d(220%, 0, 0) skewX(-18deg);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Utilities
+ * ------------------------------------------------------------------ */
+
+.fx-shimmer {
+  background-size: 200% 100%;
+  animation: fx-shimmer 2.6s linear infinite;
+}
+
+.fx-glow {
+  animation: fx-glow 2.4s ease-in-out infinite;
+}
+
+.fx-pulse {
+  animation: fx-pulse 1.1s ease-in-out infinite;
+}
+
+.fx-flicker {
+  animation: fx-flicker 3.7s ease-in-out infinite;
+}
+
+/* Applied to <body> by the effects layer for one animation and then removed.
+   On the body rather than a wrapper so the reels, the meters and the controls
+   all move together — a shake that only moves the reels reads as a bug. */
+.fx-shake {
+  animation: fx-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* The particle canvas. Fixed, above the cabinet, and never a tap target. */
+.fx-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  touch-action: none;
+  contain: strict;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reduced motion
+ *
+ * The store's preference first, then the OS. Neither switches the effects off
+ * — a slot that stops celebrating has stopped being a slot — they stop things
+ * moving across the screen and leave the light behind.
+ * ------------------------------------------------------------------ */
+
+[data-reduced-motion='true'] .fx-shimmer,
+[data-reduced-motion='true'] .fx-pulse,
+[data-reduced-motion='true'] .fx-flicker,
+[data-reduced-motion='true'] .fx-shake,
+[data-reduced-motion='true'] .fx-decorative {
+  animation: none !important;
+}
+
+[data-reduced-motion='true'] .fx-glow {
+  animation: fx-glow 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-shimmer,
+  .fx-pulse,
+  .fx-flicker,
+  .fx-shake {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The shrine's own motion
+ *
+ * Only the two the backdrop cannot express as one of the utilities above: a
+ * silhouette crossing the whole frame and then staying away for most of a
+ * minute, and the slow warm breathing of the light behind the temple.
+ * ------------------------------------------------------------------ */
+
+@keyframes fx-cross {
+  0% {
+    transform: translate3d(-32%, 0, 0);
+    opacity: 0;
+  }
+  8% {
+    opacity: var(--fx-cross-opacity, 0.45);
+  }
+  46% {
+    opacity: var(--fx-cross-opacity, 0.45);
+  }
+  62%,
+  100% {
+    transform: translate3d(118%, -7%, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes fx-breathe {
+  0%,
+  100% {
+    opacity: var(--fx-breathe-low, 0.35);
+  }
+  50% {
+    opacity: var(--fx-breathe-high, 0.7);
+  }
+}
+
+.fx-cross {
+  animation: fx-cross var(--fx-cross-time, 47s) linear infinite;
+}
+
+.fx-breathe {
+  animation: fx-breathe var(--fx-breathe-time, 7s) ease-in-out infinite;
+}
+
+[data-reduced-motion='true'] .fx-cross,
+[data-reduced-motion='true'] .fx-drift,
+[data-reduced-motion='true'] .fx-rise {
+  animation: none !important;
+}
+
+[data-reduced-motion='true'] .fx-cross {
+  opacity: 0;
+}
+
+[data-reduced-motion='true'] .fx-rise {
+  opacity: 0.35;
+}
+
+.fx-drift {
+  animation: fx-drift var(--fx-drift-time, 40s) ease-in-out infinite alternate;
+}
+
+.fx-rise {
+  animation: fx-rise var(--fx-rise-time, 9s) linear infinite;
+}

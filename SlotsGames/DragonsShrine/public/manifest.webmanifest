@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Dragon's Shrine",
+  "short_name": "Dragon's Shrine",
+  "description": "A five-reel video slot with free spins, a hold-and-win link, four jackpots and a dragon that does not sit still.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
+  "theme_color": "#05060a",
+  "background_color": "#05060a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

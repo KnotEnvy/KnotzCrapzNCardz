@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+@import '../styles/fx.css';
+
+/* ------------------------------------------------------------------ *
+ * Palette
+ *
+ * A mountain shrine after dark: lacquered black timber, cinnabar
+ * uprights, jade under the eaves, and gold leaf catching the lantern
+ * light. Everything on screen is lit from the reels outward, so the
+ * chrome is dark and the only saturated colour is what the machine
+ * itself is doing.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  /* Structure -- the cabinet and everything behind the glass. */
+  --color-ink-950: #05060a;
+  --color-ink-900: #0a0c12;
+  --color-ink-850: #10131c;
+  --color-ink-800: #161a25;
+  --color-ink-700: #212635;
+  --color-ink-600: #333a4d;
+  --color-ink-500: #4a5368;
+  --color-ink-400: #6d7891;
+  --color-ink-300: #9aa4bb;
+  --color-ink-200: #c3cad9;
+  --color-ink-100: #e8ecf4;
+
+  /* Cinnabar -- the lacquer on the posts and the losing side of the gamble. */
+  --color-cinnabar-900: #4a0d0d;
+  --color-cinnabar-800: #6b1414;
+  --color-cinnabar-700: #8e1b1b;
+  --color-cinnabar-600: #b52323;
+  --color-cinnabar-500: #d93030;
+  --color-cinnabar-400: #ef5350;
+  --color-cinnabar-300: #ff8a80;
+
+  /* Jade -- under the eaves, and every affirmative in the interface. */
+  --color-jade-900: #06281f;
+  --color-jade-800: #0a3d2e;
+  --color-jade-700: #0f5941;
+  --color-jade-600: #157a58;
+  --color-jade-500: #1fa06f;
+  --color-jade-400: #35c98d;
+  --color-jade-300: #6fe4b2;
+
+  /* Gold leaf -- the frame, the meter, and anything worth money. */
+  --color-gold-900: #4a3708;
+  --color-gold-800: #6d5010;
+  --color-gold-700: #96701a;
+  --color-gold-600: #c19426;
+  --color-gold-500: #e0b33a;
+  --color-gold-400: #f2cc5c;
+  --color-gold-300: #ffe08a;
+  --color-gold-200: #fff0c2;
+
+  /* Ember -- the orbs, the dragon, and the heat under a big win. */
+  --color-ember-700: #7a2408;
+  --color-ember-600: #a83a0c;
+  --color-ember-500: #d95b16;
+  --color-ember-400: #f57f2a;
+  --color-ember-300: #ffab5e;
+  --color-ember-200: #ffd0a0;
+
+  /* Imperial violet -- the link feature, so it never reads as the base game. */
+  --color-violet-900: #2a1046;
+  --color-violet-800: #3e1866;
+  --color-violet-700: #57228f;
+  --color-violet-600: #7433b8;
+  --color-violet-500: #9450d9;
+  --color-violet-400: #b47cee;
+
+  /* Verdicts. */
+  --color-win: #4ade80;
+  --color-lose: #f87171;
+
+  --font-display: var(--font-cinzel), 'Times New Roman', serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: var(--font-orbitron), ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* The four jackpot ladders, which are colour-coded on the glass and stay that
+   colour everywhere else they appear -- the orb, the banner, the history. */
+:root {
+  --jackpot-mini: #6fe4b2;
+  --jackpot-minor: #63b3f5;
+  --jackpot-major: #b47cee;
+  --jackpot-grand: #ffd76a;
+
+  /* The reel window's own dimensions, resolved once by the cabinet and read by
+     every layer that has to line up with it -- the payline overlay, the orb
+     grid, the particle canvas. */
+  --cell-size: 96px;
+  --reel-gap: 6px;
+}
+
+html,
+body {
+  height: 100%;
+  /* On a phone `100%` resolves against a viewport that grows and shrinks as the
+     browser chrome slides away, which leaves the cabinet either clipped or
+     short. `dvh` tracks the space actually on screen. */
+  height: 100dvh;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 50% -20%, #1a1424 0%, #0a0c12 55%, #05060a 100%);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+
+  /* `viewport-fit=cover` lets the shrine run under the notch and the home
+     indicator. Padding the body back out by the insets keeps the spin button
+     and the bet rail reachable while the art still bleeds to the edge. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+
+  /* A slot is a tap surface. Without this iOS treats a double-tap on the spin
+     button as a zoom and a drag near the edge as a page swipe. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Numbers that change -- meters, bets, jackpots -- are tabular, or every tick
+   of a count-up shuffles the whole figure sideways. */
+.numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.display {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reduced motion
+ *
+ * The machine is almost entirely motion, so this cannot simply switch
+ * animation off -- a slot with no reel movement is unreadable. Instead the
+ * store drops to short, linear transitions and the FX layer stops emitting
+ * particles; this rule catches anything decorative that is purely CSS.
+ * ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-decorative {
+    animation: none !important;
+  }
+}
+
+/* Anything that should never be dragged, selected or long-pressed into a
+   context menu: the glass, the symbols, the buttons. */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A focus ring that reads against gold, dark timber and a lit reel alike. */
+:focus-visible {
+  outline: 2px solid var(--color-gold-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-600);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
