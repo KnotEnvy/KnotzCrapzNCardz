@@ -319,9 +319,26 @@ function ms(base: number, kind: Beat): number {
  * Small pure helpers
  * ------------------------------------------------------------------ */
 
-/** A believable idle board, drawn from the real base strips rather than invented. */
-function openingGrid(seed: string): Grid {
-  const r = createRng(`${seed}:idle`);
+/**
+ * The board the machine is showing before anyone has pulled anything.
+ *
+ * Drawn from the real base strips rather than invented, so that the reels read
+ * as a stopped machine rather than as a placeholder -- but drawn from a FIXED
+ * seed rather than the session's.
+ *
+ * That last part is not cosmetic. The game is a static export: the page is
+ * rendered once at build time and hydrated in the browser, and anything that
+ * differs between those two renders is a hydration mismatch. Seeding the idle
+ * board from the session seed put a different board in the prerendered HTML
+ * from the one React then built, which threw on every first load and made
+ * React discard and rebuild the whole tree. A fixed board is also the honest
+ * thing to show: nothing has been decided yet, so nothing here should look
+ * like it has.
+ */
+const IDLE_SEED = "dragons-shrine:idle";
+
+function openingGrid(): Grid {
+  const r = createRng(IDLE_SEED);
   return STRIPS.BASE.map((strip) => {
     const at = r.int(strip.length);
     return Array.from({ length: ROWS }, (_, row) => strip[(at + row) % strip.length]);
@@ -443,7 +460,7 @@ function freshState(seed: string, prefs: Preferences, bankroll = STARTING_BANKRO
   return {
     phase: 'IDLE' as const,
     spinToken: 0,
-    grid: openingGrid(seed),
+    grid: openingGrid(),
     reels: new Array<'IDLE'>(REELS).fill('IDLE'),
     stops: new Array<number>(REELS).fill(0),
     strips: 'BASE' as const,

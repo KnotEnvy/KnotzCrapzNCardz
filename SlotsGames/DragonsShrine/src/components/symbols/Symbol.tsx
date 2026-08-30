@@ -41,6 +41,20 @@ export interface SymbolArtProps {
   state?: SymbolState;
   /** Multiplier on the base cell size; 1 is a reel cell. */
   scale?: number;
+  /**
+   * Fill the parent box instead of taking a cell-sized one.
+   *
+   * For callers that have already sized their container -- a paytable card, an
+   * orb sitting in a niche -- and want the art to match it. Reaching for
+   * `className="h-full w-full"` instead does not work and fails in the least
+   * obvious way possible: the utility and `.ds-sym` have the same specificity,
+   * so which one wins depends on the order the stylesheets happened to be
+   * concatenated in, and when `.ds-sym` wins the art keeps its 96px box inside
+   * a smaller `overflow-hidden` parent and is silently cropped to its own
+   * top-left corner. This prop is an attribute selector and therefore always
+   * wins.
+   */
+  fit?: boolean;
   className?: string;
 }
 
@@ -55,6 +69,7 @@ export const SymbolArt = React.memo(function SymbolArt({
   id,
   state = 'idle',
   scale = 1,
+  fit = false,
   className,
 }: SymbolArtProps): React.JSX.Element {
   const meta = SYMBOL_META[id];
@@ -65,6 +80,7 @@ export const SymbolArt = React.memo(function SymbolArt({
       data-sym={id}
       data-state={state}
       data-tier={meta.tier}
+      data-fit={fit ? 'true' : undefined}
       style={{ '--sym-scale': scale } as React.CSSProperties}
       role="img"
       aria-label={meta.label}

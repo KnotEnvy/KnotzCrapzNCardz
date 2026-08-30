@@ -99,7 +99,7 @@ function Niche({
         boxShadow: `0 0 22px -6px ${color}, 0 1px 0 rgba(255,255,255,0.12) inset`,
       }}
     >
-      <SymbolArt id="ORB" className="absolute inset-0 h-full w-full opacity-45" />
+      <SymbolArt id="ORB" fit className="absolute inset-0 opacity-45" />
       {jackpot ? (
         <span
           className="relative text-[8px] leading-none font-black tracking-[0.14em] uppercase sm:text-[10px]"

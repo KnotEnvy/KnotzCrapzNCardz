@@ -1,0 +1,153 @@
+{
+  "project": "Dragon's Shrine",
+  "path": "SlotsGames/DragonsShrine",
+  "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots, a fair gamble and priced feature buys -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.36%.",
+  "handoffDate": "2026-08-30",
+  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, a production build at 0.9 MB of JS (0.3 MB gzipped), and a twenty-million-spin RTP simulation landing at 96.359% inside its 95.5-96.8% target band. Built from an empty folder in one session by five parallel workstreams under an orchestrator. NOT yet play-tested in a real browser -- see openItems, which is the single largest unverified risk at handoff.",
+  "howItWasBuilt": {
+    "shape": "One orchestrator fixed the contracts first -- engine types, geometry and timing config, the seeded RNG, the fifty paylines, a first-pass paytable and strips, and the store interface -- and committed them before any workstream started. Five agents then worked in strict, non-overlapping file lanes against those contracts: maths, store, symbols and reels, cabinet and feature screens, audio and effects. Nothing was blocked on anything else because every boundary was a published signature rather than a conversation.",
+    "whatMadeItWork": "Writing the contracts first, and stubbing both cross-lane boundaries (an inert store, a no-op audio module) so that every lane compiled and typechecked from minute one against interfaces that were real even when the implementations were not.",
+    "interruptions": "The session hit its API limit twice, killing all five agents mid-edit both times. Each time the in-flight work was committed immediately and the agents were resumed by message rather than respawned, so they kept their own reasoning. The second interruption left the maths lane mid-calibration; see openItems and keyDecisions for what that cost and how it was caught."
+  },
+  "architecture": {
+    "engineIsPure": "src/lib/engine is seeded, synchronous and side-effect free. spin(ctx) takes a generator, a stake and a mode and returns everything that spin did. It is the only thing that decides money.",
+    "storeNeverInventsMoney": "src/lib/store debits, asks the engine, and pays exactly what came back. It deliberately does not import evaluateGrid at all -- a second opinion about what a board is worth is the bug you never find.",
+    "presentationIsPure": "Every screen selects from useSlots and knows nothing else. The feature components take explicit props and are wired by FeatureOverlay, which is why they could be built before the store existed.",
+    "oneSeedOneSession": "Every random word is drawn in an order documented at the top of spin.ts. That is what makes the RTP figure a measurement rather than an estimate, and what lets a disputed spin be replayed exactly.",
+    "moneyIsIntegerCents": "Everywhere, with no exceptions. Line pays multiply betPerLine; scatter, orb and jackpot pays multiply totalBet. Confusing those two is the easiest way to be off by fifty times, so every field carrying a multiplier says which one it is."
+  },
+  "keyDecisions": [
+    {
+      "decision": "No three.js and no Rapier, unlike the craps table next door.",
+      "why": "Craps needs a physics engine because its dice are rigid bodies whose landing must match what the RNG called. A slot cabinet is a 2D machine. SVG symbols with a canvas particle layer are crisper at every size, animate more cheaply, and ship 0.3 MB gzipped against craps' 1.4 MB."
+    },
+    {
+      "decision": "Reel strips are declared as symbol counts per reel and expanded deterministically, rather than written out as bands.",
+      "why": "Tuning the return means moving one symbol's frequency on one reel, which is a single number in a count table and a needle in a haystack in a sixty-entry literal. The expansion spreads each symbol as evenly as its count allows, so a band cannot accidentally print four dragons in a row -- which reads as a broken reel whatever it does to the maths."
+    },
+    {
+      "decision": "The wild never appears on reel 1 of the base band, and the dragon never takes reel 1 in free spins.",
+      "why": "A wild on the leftmost reel promotes every three of a kind to a four. It is a large and completely invisible chunk of return. In free spins the same asymmetry is worse: with reel 1 wild, a three-dragon-reel spin is fifty lines of five wilds and one spin outweighs the rest of the session."
+    },
+    {
+      "decision": "MAJOR and GRAND are board awards -- won by filling eighteen or twenty cells -- and can never be carried by an orb.",
+      "why": "A top prize that can arrive unannounced on the first respin is a lottery ticket. One you can watch yourself approach is a feature."
+    },
+    {
+      "decision": "Feature buy prices are measured, not chosen.",
+      "why": "Each was found by pinning its cost at 1x and reading what the simulation said the feature returns -- 75.5x, 59.8x, 240x -- then dividing by the base game's measured return and taking the middle of the resulting window. Both ends of that window are asserted: too cheap and the button is the only correct play, too dear and it is a trap sold to the player least willing to wait."
+    },
+    {
+      "decision": "The engine's draw order is pinned by a test that counts random words, not by one that checks a board.",
+      "why": "Retuning the strips changes every board and is a routine thing to do. Inserting or removing a draw silently invalidates every seeded expectation in the repository at once. The word-count assertion catches the second without being falsified by the first."
+    },
+    {
+      "decision": "The store's test suite replays the engine to discover its own anchors rather than hard-coding seed and spin numbers.",
+      "why": "Its first draft did hard-code them, and they went stale within the hour when the maths lane retuned a draw. It now asks 'which spin of this seed triggers?' and asserts the store agrees, so it survives further tuning."
+    },
+    {
+      "decision": "Persisted state is bankroll, stake, preferences, stats and history -- never a phase, a result, a feature or a spin token.",
+      "why": "A refresh in the middle of a hold-and-win would otherwise resume into a machine that cannot be finished. Asserted by the persistence tests."
+    },
+    {
+      "decision": "Turbo scales every timing except the anticipation beats.",
+      "why": "A tease that is over before it registers is worse than no tease at all."
+    }
+  ],
+  "measured": {
+    "rtp": 0.96556,
+    "interval95": 0.00595,
+    "spinsMeasured": 20000000,
+    "note": "The committed default. SIM_SPINS overrides the sample size for quick tuning runs, but the suite fails any run whose interval is wider than half the target band, so a short run cannot be mistaken for a measurement.",
+    "split": {
+      "baseLineWins": 0.5003,
+      "scatterPays": 0.01071,
+      "freeSpins": 0.34262,
+      "holdAndWinOrbCredits": 0.07188,
+      "jackpotMini": 0.00887,
+      "jackpotMinor": 0.00609,
+      "jackpotMajor": 0.01735,
+      "jackpotGrand": 0.00775
+    },
+    "hitFrequency": 0.33129,
+    "volatility": 13.58,
+    "maxSingleSpin": "5640x stake",
+    "freeSpinsTrigger": "1 in 222",
+    "holdAndWinTrigger": "1 in 539",
+    "jackpotFrequency": {
+      "MINI": "1 in 2,256",
+      "MINOR": "1 in 8,210",
+      "MAJOR": "1 in 28,818",
+      "GRAND": "1 in 645,161"
+    },
+    "buys": {
+      "FREE_SPINS": {
+        "cost": 80,
+        "rtp": 0.9399
+      },
+      "HOLD_AND_WIN": {
+        "cost": 64,
+        "rtp": 0.93086
+      },
+      "SUPER": {
+        "cost": 255,
+        "rtp": 0.94321
+      }
+    }
+  },
+  "bugsFoundAndFixed": [
+    "The session ran on a different seed from the one shown on the glass, so the seed a player could copy reproduced nothing.",
+    "A hold-and-win jackpot was announced and counted twice -- once when its orb landed, once when the board settled.",
+    "gamble() threw past its step cap instead of collecting, so a sixth double was reachable from the store.",
+    "The win presentation deducted its own lead-in from the meter's count time, so every count-up ran short.",
+    "Autoplay resumed after a feature had lit.",
+    "unlockAudio() was never called: the game would have shipped completely silent.",
+    "All three feature buys were priced at 1x total bet -- a calibration probe left behind when the maths lane was interrupted. It would have sold a feature worth 75x the stake for one. Caught by a store test asserting that an unaffordable buy is refused, which instead found it affordable.",
+    "A hydration mismatch on every first load: the idle board was seeded from the random session seed, so the statically prerendered HTML disagreed with what the client built and React discarded and rebuilt the whole tree. The idle board is now drawn from a fixed seed, which is also the honest thing to show -- nothing has been decided yet.",
+    "Every symbol in the paytable was cropped to its own top-left corner. `.ds-sym` sets a 96px box and the caller tried to override it with `h-full w-full`, which ties on specificity -- so which one won depended on stylesheet concatenation order, inside an overflow-hidden card. SymbolArt now has a `fit` prop implemented as an attribute selector, which cannot lose that tie."
+  ],
+  "openItems": [
+    {
+      "item": "Features have not been watched in a browser.",
+      "severity": "high",
+      "detail": "The base game was play-tested for real: the app was driven in headless Chromium, spun repeatedly, the paytable opened, and it reported zero console errors, no page scroll in either axis, correct meters and a correct bankroll. What has NOT been seen is free spins, the hold-and-win board, the gamble, or any big-win takeover -- none of them triggered in the spins that were driven. Those code paths are unit-tested and the screens render from props, but nobody has watched them. Trigger them deliberately (the buy-feature button is the fastest route) before calling the presentation done."
+    },
+    {
+      "item": "The audio has never been listened to.",
+      "severity": "medium",
+      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement."
+    },
+    {
+      "item": "prefers-reduced-motion is implemented everywhere but never exercised in a browser in either polarity.",
+      "severity": "medium",
+      "detail": "The same risk that bit the craps table at its first handoff. The machine is almost entirely motion, so the reduced path is a genuinely different presentation rather than a switch, and it needs watching rather than reading."
+    },
+    {
+      "item": "Only tested at one viewport (1440x900 desktop).",
+      "severity": "medium",
+      "detail": "The layout is built to reflow and the body does not scroll at that size, but portrait phone, landscape phone and tablet are unverified."
+    },
+    {
+      "item": "No service worker, so the installed app still needs the network to load.",
+      "severity": "low"
+    },
+    {
+      "item": "The four jackpots are fixed multiples of the stake rather than progressives.",
+      "severity": "low",
+      "detail": "The honest thing to do without a server. A jackpot that genuinely grows across sessions and players needs one."
+    }
+  ],
+  "ifYouChangeOneThing": {
+    "theStrips": "Re-run npm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
+    "theDrawOrder": "Expect engine.test.ts's draw-order pin to fail, and know that every seeded expectation in both suites has moved at the same time.",
+    "theContracts": "src/lib/engine/types.ts and src/lib/store/contract.ts are published: add to them, never rename or remove. Everything else compiles against them."
+  },
+  "verifiedBy": {
+    "typecheck": "clean",
+    "lint": "clean, zero warnings",
+    "fastTests": "125 passing in about two seconds (71 engine, 54 store)",
+    "simulation": "8/8 passing over 20,000,000 seeded spins",
+    "build": "production static export, 0.9 MB of JS, 0.3 MB gzipped",
+    "browser": "headless Chromium: loads, spins repeatedly, paytable opens, zero console errors, no page scroll, meters and bankroll correct"
+  }
+}

@@ -30,6 +30,20 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+ * `fit`: fill the parent rather than take a cell-sized box.
+ *
+ * An attribute selector, so it outranks the `.ds-sym` sizing above no matter
+ * which order the stylesheets end up in. That ordering is exactly what broke
+ * the paytable thumbnails once already -- a `w-full` utility tying on
+ * specificity with `.ds-sym` and losing the tie-break, leaving 96px of artwork
+ * cropped inside a 56px card.
+ */
+.ds-sym[data-fit='true'] {
+  width: 100%;
+  height: 100%;
+}
+
 /* Give the whole symbol something to transform against. `view-box` is the
    SVG default and the one every transform-origin in the art assumes. */
 .ds-sym * {

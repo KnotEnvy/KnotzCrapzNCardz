@@ -94,7 +94,7 @@ function Tile({ id, className }: { id: SymbolId; className?: string }) {
         className,
       )}
     >
-      <SymbolArt id={id} className="h-full w-full" />
+      <SymbolArt id={id} fit />
     </span>
   );
 }

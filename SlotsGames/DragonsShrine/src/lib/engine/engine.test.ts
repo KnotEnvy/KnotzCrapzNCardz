@@ -54,6 +54,7 @@ import {
   REELS,
   ROWS,
   type Cell,
+  type FeatureTrigger,
   type Grid,
   type Orb,
   type Stake,
@@ -66,11 +67,6 @@ import {
 
 /** $1 a spin: 2c on each of the fifty lines. The ladder's second rung. */
 const STAKE: Stake = { betPerLine: 2, totalBet: 100 };
-
-/** A board of a single symbol, which no payline can accidentally miss. */
-function fill(symbol: SymbolId): Grid {
-  return Array.from({ length: REELS }, () => Array.from({ length: ROWS }, () => symbol));
-}
 
 /**
  * A board that pays nothing.
@@ -514,7 +510,7 @@ describe('anticipation', () => {
  * ------------------------------------------------------------------ */
 
 describe('free spins', () => {
-  const trigger = { feature: 'FREE_SPINS', cells: [], count: 3, spins: 10 } as const;
+  const trigger: FeatureTrigger = { feature: 'FREE_SPINS', cells: [], count: 3, spins: 10 };
 
   it('opens on the awarded count and freezes the stake', () => {
     const state = startFreeSpins(trigger, STAKE, false);
