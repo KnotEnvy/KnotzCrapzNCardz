@@ -70,7 +70,7 @@ export const RETRIGGER_SPINS = 5;
 export const MULTIPLIER_TRAIL = [1, 2, 3, 5, 10] as const;
 
 /** Chance per free spin that the dragon turns a reel wild, by how many reels. */
-export const DRAGON_REEL_CHANCE = { one: 0.16, two: 0.05, three: 0.012 } as const;
+export const DRAGON_REEL_CHANCE = { one: 0.074, two: 0.0071, three: 0.00098 } as const;
 
 /** The reels the dragon is allowed to take. Never reel 1 -- that is the anchor. */
 export const DRAGON_REEL_CANDIDATES = [1, 2, 3] as const;
@@ -95,7 +95,7 @@ export const ORB_TEASE_AT = 4;
  * ------------------------------------------------------------------ */
 
 /** Chance a base spin wakes the dragon. */
-export const RAGE_CHANCE = 0.028;
+export const RAGE_CHANCE = 0.012;
 
 /** How many cells it turns wild, and how likely each count is. */
 export const RAGE_WILDS = [2, 3, 4, 5, 6] as const;
@@ -112,7 +112,7 @@ export const HOLD_TRIGGER_ORBS = 6;
 export const HOLD_RESPINS = 3;
 
 /** Chance an empty cell catches an orb on a respin. */
-export const HOLD_LAND_CHANCE = 0.03;
+export const HOLD_LAND_CHANCE = 0.05;
 
 /** Orb credit values, in units of `totalBet`, and how often each appears. */
 export const ORB_VALUES = [1, 2, 3, 5, 8, 10, 15, 20, 30, 50] as const;

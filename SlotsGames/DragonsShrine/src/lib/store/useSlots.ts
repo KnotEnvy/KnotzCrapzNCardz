@@ -944,6 +944,12 @@ function settleSpin(result: SpinResult, mode: 'BASE' | 'FREE'): void {
   useSlots.setState({ meter: won, win: won, highlight: null, dimmed: [], banner: null });
 
   if (mode === 'FREE') {
+    // Deliberately not routed through `enterFeature`. Inside free spins the
+    // base band's orbs are not on the reels at all, so the only trigger the
+    // engine can hand back is a retrigger of the shrine itself -- and
+    // `applyFreeSpin` has already folded its extra spins into `awarded`.
+    // Treating it as a fresh trigger here would open a second session inside
+    // the first one.
     continueFreeSpins();
     return;
   }

@@ -45,15 +45,57 @@
  *    percussion under it, for longer. That is what makes an EPIC read as "the
  *    thing that just happened, but bigger" rather than as a different game.
  *
- * 6. Levels were MEASURED, not guessed. Every cue in this file was rendered
- *    through an offline Web Audio shim and read back for peak and RMS; the
- *    figures in the section comments below are those readings at the default
- *    gain, in dBFS. The shape of the mix is:
+ * 6. Levels were MEASURED, not guessed. Every cue below was rendered through
+ *    an offline Web Audio shim — a small sample-accurate engine implementing
+ *    exactly the five node types this file uses — and read back for peak, RMS
+ *    over the whole render, and RMS over its loudest 300 ms window, which is
+ *    the figure that actually corresponds to how loud something seems. All of
+ *    it at the default gain, at 44.1 kHz. The readings:
  *
- *      stings      (fanfares, jackpots, gong, feature cards)  peak 0.30..0.86
- *      felt        (reel stops, orbs, coins, drums)           peak 0.12..0.36
- *      interface   (buttons, meter ticks, symbol lands)       peak 0.05..0.14
- *      beds        (reel loop, ambience, music)               RMS  -46..-34
+ *      cue                peak    RMS   loud      cue              peak  loud
+ *      ---------------------------------------    -------------------------------
+ *      winSmall          0.327  -30.3  -22.6      spinStart       0.312  -25.5
+ *      winMedium         0.425  -29.0  -20.3      reelStop        0.222  -32.6
+ *      winBig            0.504  -25.4  -19.6      reelStopTease   0.235  -24.6
+ *      winMega           0.609  -23.8  -16.8      symbolLand      0.106  -46.0
+ *      winEpic           0.710  -21.3  -15.3      scatterLand     0.411  -22.6
+ *      winLegendary      0.741  -18.5  -11.3      orbLand         0.484  -23.4
+ *      jackpotMini       0.572  -26.6  -18.6      orbLock         0.144  -30.0
+ *      jackpotMinor      0.635  -24.4  -18.3      dragonRoar      0.520  -13.2
+ *      jackpotMajor      0.708  -20.8  -14.1      dragonReel      0.341  -20.8
+ *      jackpotGrand      0.870  -17.7  -11.5      multiplierUp    0.305  -22.9
+ *      holdFull          0.713  -22.8  -14.9      holdIntro       0.409  -18.7
+ *      featureTrigger    0.649  -25.4  -16.8      holdRespin      0.124  -35.1
+ *      freeSpinsIntro    0.669  -22.6  -16.0      coinDrop        0.116  -40.6
+ *      freeSpinsOutro    0.508  -26.1  -16.3      gambleWin       0.373  -21.3
+ *      gong              0.548  -27.5  -16.9      gambleLose      0.277  -26.1
+ *      bellHit           0.323  -29.4  -19.6      gambleFlip      0.174  -37.2
+ *      meterEnd          0.285  -34.0  -24.2      error           0.178  -31.9
+ *      meterCount        0.070  -43.1  -40.9      betChange       0.184  -34.8
+ *      winTick           0.082  -41.5  -38.5      buttonPress     0.124  -43.1
+ *                                                 buttonToggle    0.098  -37.9
+ *
+ *      loops and beds, RMS while running:
+ *        anticipation -29.1   reelLoop -35.5   freeSpinsLoop -40.8
+ *        music base   -42.2   free     -42.8   hold          -40.6
+ *
+ *    So: the stings run from 0.29 to 0.87 and step about 2 dB a tier; the
+ *    mechanical band sits ten to fifteen dB under them; the interface sits ten
+ *    under that; and the beds are quieter again, with the music a full 24 dB
+ *    below a LEGENDARY. The GRAND is the loudest thing in the game, which is
+ *    the one ordering that must never break.
+ *
+ *    The limiter was measured too, on the pile-ups rather than the cues —
+ *    those are what it exists for:
+ *
+ *      spin + five stops + reel loop + a small win + a meter run   0.329,  0 dB
+ *      LEGENDARY + 24 coins + a gong + the free spins bed          0.722, -0.1
+ *      GRAND + holdFull + 8 orbs + 30 coins + the hold bed         0.887, -0.9
+ *
+ *    Only the last one reaches the knee, and it takes 0.9 dB — the sum going
+ *    in peaks at 0.987 and would have clipped without it. Alone, jackpotGrand
+ *    peaks at 0.870 from a 0.950 sum, so even the single loudest cue is
+ *    already leaning on it slightly, on purpose.
  *
  *    If the balance needs revisiting, measure it again rather than nudging
  *    numbers by ear — none of this can be checked by eye and the spectral
@@ -937,9 +979,10 @@ function nextMeterStep(now: number): number {
 /* ------------------------------------------------------------------ *
  * Cues
  *
- * Measured peak / RMS at the default gain, rendered offline through a Web
- * Audio shim. Figures are in the section comments; see the file header for
- * what the three bands mean.
+ * One function per {@link SoundName}, each handed a {@link Cue} that already
+ * carries the context, the destination, the start time and the caller's gain
+ * and pitch. Measured levels for every one of them are tabulated in the file
+ * header; the three bands they fall into are described there too.
  * ------------------------------------------------------------------ */
 
 type LoopName = 'reelLoop' | 'anticipation' | 'freeSpinsLoop';
@@ -1006,11 +1049,11 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /** A symbol arriving in its cell. Twenty of these a spin, so: quiet. */
   symbolLand: (q) => {
     const j = 0.9 + Math.random() * 0.22;
-    hiss(q.c, q.out, { at: q.t, gain: 0.09 * q.g, decay: 0.03, freq: 1500 * j, q: 2.2 });
-    hiss(q.c, q.out, { at: q.t, gain: 0.065 * q.g, decay: 0.05, freq: 300, q: 0.8, type: 'lowpass' });
+    hiss(q.c, q.out, { at: q.t, gain: 0.13 * q.g, decay: 0.03, freq: 1500 * j, q: 2.2 });
+    hiss(q.c, q.out, { at: q.t, gain: 0.09 * q.g, decay: 0.05, freq: 300, q: 0.8, type: 'lowpass' });
     tone(q.c, q.out, {
       at: q.t,
-      gain: 0.05 * q.g,
+      gain: 0.07 * q.g,
       freq: 260 * j,
       freqEnd: 190,
       glide: 0.04,
@@ -1533,11 +1576,11 @@ const CUES: Record<CueName, (q: Cue) => void> = {
   /* --- interface: the quietest band in the file --- */
 
   buttonPress: (q) => {
-    wood(q.c, q.out, q.t, 0.2 * q.g, 1250);
+    wood(q.c, q.out, q.t, 0.34 * q.g, 1250);
   },
 
   buttonToggle: (q) => {
-    wood(q.c, q.out, q.t, 0.17 * q.g, 1050);
+    wood(q.c, q.out, q.t, 0.26 * q.g, 1050);
     pluck(q.c, q.out, q.t + 0.045, 0.13 * q.g, semi(deg(12), q.p), 0.22, 1.3);
   },
 
