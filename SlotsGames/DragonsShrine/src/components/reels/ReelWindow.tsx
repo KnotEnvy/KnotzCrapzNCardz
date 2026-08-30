@@ -205,10 +205,22 @@ export function ReelWindow({ className }: { className?: string }): React.JSX.Ele
   }, [reels, stops]);
 
   /* ---- which reels have physically come to rest ---- */
+  /*
+   * Reset on a new spin, adjusted during render rather than in an effect.
+   *
+   * An effect would paint one frame with the previous spin's settled reels
+   * still marked as landed -- a visible flash of stale win frames on a fast
+   * respin -- and then re-render to correct it. React's documented pattern for
+   * "this state derives from a prop that changed" is to compare against the
+   * value the state was computed for and set both during render, which throws
+   * the in-progress render away before it ever reaches the DOM.
+   */
   const [settledMask, setSettledMask] = React.useState(0);
-  React.useEffect(() => {
+  const [settledFor, setSettledFor] = React.useState(spinToken);
+  if (settledFor !== spinToken) {
+    setSettledFor(spinToken);
     setSettledMask(0);
-  }, [spinToken]);
+  }
   const onSettle = React.useCallback((index: number) => {
     setSettledMask((mask) => mask | (1 << index));
   }, []);

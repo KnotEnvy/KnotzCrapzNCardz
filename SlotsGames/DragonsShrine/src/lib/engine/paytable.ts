@@ -150,14 +150,26 @@ export type BuyOption = 'FREE_SPINS' | 'HOLD_AND_WIN' | 'SUPER';
 /**
  * What a feature costs, in units of `totalBet`.
  *
- * Priced so that buying returns very slightly less than playing for it, which
- * is both how a real buy is priced and what stops the button from being the
- * only correct way to play. `rtp.sim.test.ts` measures each one.
+ * These three numbers are measurements, not choices. Each one was found by
+ * pinning its cost at 1x and letting `rtp.sim.test.ts` report what the feature
+ * is raw-worth -- 75.5x for the shrine, 59.8x for the link, 240x for the super
+ * buy -- and then dividing by the return the base game was measured at. The
+ * cost is set to the middle of the window that leaves the buy's own return at
+ * or just below the base game's, which is where the measurement error has the
+ * most room on both sides.
+ *
+ * Both ends of that window matter. Priced too low, the button is the only
+ * correct way to play and the base game is decoration. Priced too high it is a
+ * trap: the most expensive thing on the machine, sold to the player who is
+ * least willing to wait, and they are entitled to roughly the deal the spin
+ * button gives them minus a small premium. `rtp.sim.test.ts` asserts both ends.
+ *
+ * Retune the strips and these move. Re-measure them; do not scale them by eye.
  */
 export const BUY_COSTS: Record<BuyOption, number> = {
-  FREE_SPINS: 1,
-  HOLD_AND_WIN: 1,
-  SUPER: 1,
+  FREE_SPINS: 80,
+  HOLD_AND_WIN: 64,
+  SUPER: 255,
 };
 
 /** What each buy actually hands over. */
