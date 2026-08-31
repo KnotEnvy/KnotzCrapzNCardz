@@ -2,6 +2,29 @@
 @import '../styles/fx.css';
 
 /* ------------------------------------------------------------------ *
+ * `tight` -- the landscape phone
+ *
+ * A cabinet is a tall thing. Stacked vertically, the fixed chrome (marquee,
+ * jackpot ladder, meters, deck) needs about 330px before the reels get a
+ * single pixel, so on a landscape phone the reel window -- the only flexible
+ * band in the column -- was collapsing to exactly zero height. The game was
+ * not small; it was absent.
+ *
+ * Compressing the chrome cannot rescue it: halving all four bands still
+ * leaves about 120px for four rows of symbols, which is unreadable. The only
+ * honest answer on a short, wide screen is to stop stacking and put the deck
+ * beside the board instead of beneath it, which is what every cabinet built
+ * for a landscape panel does.
+ *
+ * Declared after the Tailwind import so these utilities sort last and win
+ * against the `sm:` rules they are overriding -- the rail is narrow even
+ * though the viewport is wide, which is exactly the case a width-only
+ * breakpoint gets wrong.
+ * ------------------------------------------------------------------ */
+
+@custom-variant tight (@media (max-height: 560px) and (min-width: 700px));
+
+/* ------------------------------------------------------------------ *
  * Palette
  *
  * A mountain shrine after dark: lacquered black timber, cinnabar

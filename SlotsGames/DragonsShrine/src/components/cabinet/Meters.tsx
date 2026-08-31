@@ -99,7 +99,10 @@ export function Meters(): React.JSX.Element {
 
   return (
     <section
-      className="grid w-full max-w-5xl shrink-0 grid-cols-2 items-stretch gap-1.5 sm:grid-cols-[1fr_1fr_1.4fr_1.6fr] sm:gap-2"
+      /* Credit carries the longest string on the deck -- five figures and a
+         decimal -- while Bet never exceeds "$100.00". An even 1fr/1fr split
+         truncated the bankroll at tablet widths, so credit borrows from bet. */
+      className="grid w-full max-w-5xl shrink-0 grid-cols-2 items-stretch gap-1.5 sm:grid-cols-[1.2fr_0.9fr_1.4fr_1.6fr] sm:gap-2 tight:grid-cols-2 tight:gap-1"
       aria-label="Meters"
     >
       <Plate
@@ -107,19 +110,19 @@ export function Meters(): React.JSX.Element {
         value={money(bankroll)}
         live="polite"
         tone="neutral"
-        valueClassName="text-[clamp(0.85rem,3.4vw,1.25rem)]"
+        valueClassName="text-[clamp(0.85rem,3.4vw,1.25rem)] tight:text-[1rem]"
       />
 
       <Plate
         label="Bet"
         value={money(totalBet)}
         tone="neutral"
-        valueClassName="text-[clamp(0.85rem,3.4vw,1.25rem)]"
+        valueClassName="text-[clamp(0.85rem,3.4vw,1.25rem)] tight:text-[1rem]"
         sub={`${money(betPerLine)} x ${LINES} lines`}
       />
 
       <motion.div
-        className="col-span-2 min-w-0 sm:col-span-1"
+        className="col-span-2 min-w-0 sm:col-span-1 tight:col-span-2"
         animate={winning && !reduced ? { scale: [1, 1.015, 1] } : { scale: 1 }}
         transition={
           winning && !reduced
@@ -136,12 +139,12 @@ export function Meters(): React.JSX.Element {
           value={money(meter)}
           live="polite"
           tone="gold"
-          valueClassName="text-[clamp(1.05rem,5vw,1.9rem)]"
+          valueClassName="text-[clamp(1.05rem,5vw,1.9rem)] tight:text-[1.35rem]"
           sub={meter > 0 ? `${ratio(meter, totalBet)} the stake` : undefined}
         />
       </motion.div>
 
-      <div className="col-span-2 min-w-0 rounded-md border border-gold-800/40 bg-ink-950/80 px-2.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset] sm:col-span-1">
+      <div className="col-span-2 min-w-0 rounded-md border border-gold-800/40 bg-ink-950/80 px-2.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset] sm:col-span-1 tight:hidden">
         <HistoryStrip />
       </div>
     </section>

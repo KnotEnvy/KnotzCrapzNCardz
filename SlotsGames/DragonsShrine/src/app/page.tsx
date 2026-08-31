@@ -18,8 +18,15 @@
  *
  * The layout is a column that fits the viewport exactly and never scrolls:
  * the reels take whatever height is left after the fixed chrome, which is what
- * keeps the spin button reachable on a phone in either orientation without a
- * media query per breakpoint.
+ * keeps the spin button reachable on a phone in portrait without a media query
+ * per breakpoint.
+ *
+ * On a short, wide screen -- a landscape phone -- that column does not work at
+ * any size, because the chrome's own height is larger than the viewport and
+ * the reels are the band that yields. There the layout turns: the board keeps
+ * the left, and the meters and the deck stand in a rail down the right. See
+ * the `tight` variant in globals.css for why compressing the chrome instead
+ * was measured and rejected.
  */
 
 import { useEffect } from 'react';
@@ -59,13 +66,29 @@ export default function Page() {
       <Backdrop />
 
       <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col items-center gap-1 px-2 py-1 sm:gap-2 sm:px-4 sm:py-2">
+        {/* The marquee stays across the top in both layouts: it carries the
+            free-spins counter and the banner, and both want the full width. */}
         <TopGlass />
-        <JackpotLadder />
-        {/* min-h-0 is what lets the reel window shrink inside a flex column
-            instead of forcing the controls off the bottom of a short screen. */}
-        <ReelWindow className="min-h-0 w-full flex-1" />
-        <Meters />
-        <ControlDeck />
+
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center gap-1 sm:gap-2 tight:flex-row tight:items-stretch">
+          {/* The board. Jackpots ride directly above it, which is where the
+              top box lives on a real cabinet, and they travel together when
+              the layout turns. */}
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center gap-1 sm:gap-2">
+            <JackpotLadder />
+            {/* min-h-0 is what lets the reel window shrink inside a flex column
+                instead of forcing the controls off the bottom of a short
+                screen. */}
+            <ReelWindow className="min-h-0 w-full flex-1" />
+          </div>
+
+          {/* Meters and deck: beneath the board when there is height for them,
+              beside it when there is not. */}
+          <div className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 sm:gap-2 tight:w-[34%] tight:max-w-[330px] tight:min-w-[236px] tight:justify-end">
+            <Meters />
+            <ControlDeck />
+          </div>
+        </div>
       </div>
 
       <FeatureOverlay />

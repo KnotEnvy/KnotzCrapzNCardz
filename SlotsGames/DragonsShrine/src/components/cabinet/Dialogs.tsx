@@ -38,8 +38,6 @@ import {
 import { STARTING_BANKROLL } from '@/lib/engine/config';
 import { PAYLINES } from '@/lib/engine/lines';
 import {
-  BUY_COSTS,
-  BUY_GRANTS,
   DRAGON_REEL_CHANCE,
   FREE_SPIN_AWARD,
   GAMBLE_MAX_RATIO,
@@ -54,7 +52,6 @@ import {
   RETRIGGER_SPINS,
   SCATTER_PAYS,
   SCATTER_TRIGGER,
-  type BuyOption,
 } from '@/lib/engine/paytable';
 import {
   CELLS,
@@ -611,94 +608,6 @@ function SessionDialog({ onClose, reduced }: { onClose: () => void; reduced: boo
 }
 
 /* ------------------------------------------------------------------ *
- * Buy feature
- * ------------------------------------------------------------------ */
-
-const BUY_COPY: Record<BuyOption, { name: string; blurb: string; accent: string }> = {
-  FREE_SPINS: {
-    name: 'Shrine of Flames',
-    blurb: 'Enters free spins on three pearls, the same as landing them.',
-    accent: 'var(--color-ember-400)',
-  },
-  HOLD_AND_WIN: {
-    name: 'Shrine Link',
-    blurb: 'Lights the link with a full six-orb trigger and three respins.',
-    accent: 'var(--color-violet-400)',
-  },
-  SUPER: {
-    name: 'Super Shrine',
-    blurb: 'Enters free spins on five pearls: the longest run the shrine gives.',
-    accent: 'var(--jackpot-grand)',
-  },
-};
-
-function BuyDialog({ onClose, reduced }: { onClose: () => void; reduced: boolean }) {
-  const totalBet = useSlots((s) => s.totalBet);
-  const bankroll = useSlots((s) => s.bankroll);
-  const buyFeature = useSlots((s) => s.buyFeature);
-
-  const options: BuyOption[] = ['FREE_SPINS', 'HOLD_AND_WIN', 'SUPER'];
-
-  return (
-    <Dialog open onClose={onClose} title="Buy a feature" width="max-w-2xl" reducedMotion={reduced}>
-      <p className="mb-3 text-[11px] leading-relaxed text-ink-400">
-        Priced at the stake on the deck &mdash; {money(totalBet)} a spin. Buying returns very
-        slightly less than waiting for the feature to arrive on its own, which is what a real buy
-        button costs and why it is not simply the better way to play.
-      </p>
-
-      <ul className="grid gap-2 sm:grid-cols-3">
-        {options.map((opt) => {
-          const cost = BUY_COSTS[opt] * totalBet;
-          const grant = BUY_GRANTS[opt];
-          const afford = bankroll >= cost;
-          const copy = BUY_COPY[opt];
-          return (
-            <li
-              key={opt}
-              className="flex flex-col rounded-lg border bg-ink-950/60 p-3"
-              style={{ borderColor: copy.accent }}
-            >
-              <span
-                className="display text-[11px] font-black tracking-[0.16em] uppercase"
-                style={{ color: copy.accent }}
-              >
-                {copy.name}
-              </span>
-              <span className="numeric mt-1 text-lg leading-none font-black text-gold-300">
-                {money(cost)}
-              </span>
-              <span className="numeric text-[9px] text-ink-500">{BUY_COSTS[opt]}x stake</span>
-              <p className="mt-2 flex-1 text-[10px] leading-relaxed text-ink-400">{copy.blurb}</p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {grant.scatters ? (
-                  <Badge className="bg-gold-800/50 text-gold-300">{grant.scatters} pearls</Badge>
-                ) : null}
-                {grant.orbs ? (
-                  <Badge className="bg-ember-700/40 text-ember-300">{grant.orbs} orbs</Badge>
-                ) : null}
-              </div>
-              <Button
-                variant="gilt"
-                size="md"
-                disabled={!afford}
-                className="mt-3 w-full"
-                onClick={() => {
-                  buyFeature(opt);
-                  onClose();
-                }}
-              >
-                {afford ? 'BUY' : 'NOT ENOUGH CREDIT'}
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
-    </Dialog>
-  );
-}
-
-/* ------------------------------------------------------------------ *
  * Out of credit
  * ------------------------------------------------------------------ */
 
@@ -753,7 +662,6 @@ export function Dialogs(): React.JSX.Element {
       {dialog === 'paytable' ? <PaytableDialog onClose={close} reduced={reduced} /> : null}
       {dialog === 'settings' ? <SettingsDialog onClose={close} reduced={reduced} /> : null}
       {dialog === 'session' ? <SessionDialog onClose={close} reduced={reduced} /> : null}
-      {dialog === 'buy' ? <BuyDialog onClose={close} reduced={reduced} /> : null}
       {message !== null ? <MessageDialog message={message} reduced={reduced} /> : null}
     </>
   );

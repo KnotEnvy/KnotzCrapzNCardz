@@ -394,7 +394,7 @@ export function Plate({
   return (
     <div
       className={cn(
-        'min-w-0 rounded-md border border-gold-800/40 bg-ink-950/80 px-2.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset]',
+        'min-w-0 rounded-md border border-gold-800/40 bg-ink-950/80 px-2.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset] tight:px-2 tight:py-1',
         className,
       )}
     >
@@ -412,7 +412,11 @@ export function Plate({
       >
         {value}
       </div>
-      {sub ? <div className="numeric mt-0.5 truncate text-[9px] text-ink-500">{sub}</div> : null}
+      {/* Secondary by definition: the figure above it is the one being read,
+          and in the landscape rail there is no height to spend on a gloss. */}
+      {sub ? (
+        <div className="numeric mt-0.5 truncate text-[9px] text-ink-500 tight:hidden">{sub}</div>
+      ) : null}
     </div>
   );
 }

@@ -17,7 +17,7 @@
 
 import { create } from 'zustand';
 
-export type DialogId = 'paytable' | 'settings' | 'session' | 'buy' | 'autoplay';
+export type DialogId = 'paytable' | 'settings' | 'session' | 'autoplay';
 
 interface UiState {
   dialog: DialogId | null;

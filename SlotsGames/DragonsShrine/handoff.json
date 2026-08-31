@@ -1,9 +1,9 @@
 {
   "project": "Dragon's Shrine",
   "path": "SlotsGames/DragonsShrine",
-  "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots, a fair gamble and priced feature buys -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.36%.",
+  "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots and a fair gamble -- every feature won at the reels, never bought -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.36%.",
   "handoffDate": "2026-08-30",
-  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, a production build at 0.9 MB of JS (0.3 MB gzipped), and a twenty-million-spin RTP simulation landing at 96.359% inside its 95.5-96.8% target band. Built from an empty folder in one session by five parallel workstreams under an orchestrator. NOT yet play-tested in a real browser -- see openItems, which is the single largest unverified risk at handoff.",
+  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, and a twenty-million-spin RTP simulation landing inside its target band. Play-tested in a real browser at four viewports with zero console errors: base game, free spins, hold and win, the gamble (win, loss and collect) and a MEGA takeover have all now been watched. Feature buys have been removed from the machine -- see keyDecisions. The audio is the one substantial thing still never verified.",
   "howItWasBuilt": {
     "shape": "One orchestrator fixed the contracts first -- engine types, geometry and timing config, the seeded RNG, the fifty paylines, a first-pass paytable and strips, and the store interface -- and committed them before any workstream started. Five agents then worked in strict, non-overlapping file lanes against those contracts: maths, store, symbols and reels, cabinet and feature screens, audio and effects. Nothing was blocked on anything else because every boundary was a published signature rather than a conversation.",
     "whatMadeItWork": "Writing the contracts first, and stubbing both cross-lane boundaries (an inert store, a no-op audio module) so that every lane compiled and typechecked from minute one against interfaces that were real even when the implementations were not.",
@@ -17,6 +17,10 @@
     "moneyIsIntegerCents": "Everywhere, with no exceptions. Line pays multiply betPerLine; scatter, orb and jackpot pays multiply totalBet. Confusing those two is the easiest way to be off by fifty times, so every field carrying a multiplier says which one it is."
   },
   "keyDecisions": [
+    {
+      "decision": "There is no feature buy. Every feature is won at the reels.",
+      "why": "A buy button is an online-casino affordance, not a cabinet one, and it quietly changes what the machine is: the interesting question stops being 'will it come?' and becomes 'is it priced correctly?'. Dragon's Shrine is trying to be a machine you sit down at, so the shrine lights when the pearls land and not before. The engine's buy path (buyCost, buyForce, BUY_COSTS, the store's buyFeature) is deliberately kept and still asserted by the simulation, because forcing a trigger is how features get driven in a test or a browser now that no button does it -- but nothing in the cabinet can reach it."
+    },
     {
       "decision": "No three.js and no Rapier, unlike the craps table next door.",
       "why": "Craps needs a physics engine because its dice are rigid bodies whose landing must match what the RNG called. A slot cabinet is a 2D machine. SVG symbols with a canvas particle layer are crisper at every size, animate more cheaply, and ship 0.3 MB gzipped against craps' 1.4 MB."
@@ -104,28 +108,37 @@
     "unlockAudio() was never called: the game would have shipped completely silent.",
     "All three feature buys were priced at 1x total bet -- a calibration probe left behind when the maths lane was interrupted. It would have sold a feature worth 75x the stake for one. Caught by a store test asserting that an unaffordable buy is refused, which instead found it affordable.",
     "A hydration mismatch on every first load: the idle board was seeded from the random session seed, so the statically prerendered HTML disagreed with what the client built and React discarded and rebuilt the whole tree. The idle board is now drawn from a fixed seed, which is also the honest thing to show -- nothing has been decided yet.",
-    "Every symbol in the paytable was cropped to its own top-left corner. `.ds-sym` sets a 96px box and the caller tried to override it with `h-full w-full`, which ties on specificity -- so which one won depended on stylesheet concatenation order, inside an overflow-hidden card. SymbolArt now has a `fit` prop implemented as an attribute selector, which cannot lose that tie."
+    "Every symbol in the paytable was cropped to its own top-left corner. `.ds-sym` sets a 96px box and the caller tried to override it with `h-full w-full`, which ties on specificity -- so which one won depended on stylesheet concatenation order, inside an overflow-hidden card. SymbolArt now has a `fit` prop implemented as an attribute selector, which cannot lose that tie.",
+    "On a landscape phone the game was not there. The layout is a column of fixed chrome around one flexible reel window, and at 812x375 the chrome's own height exceeded the viewport, so the reels -- the only band that yields -- were laid out at exactly zero pixels. No overflow, no scrollbar, no error: just no game. Compressing the chrome was measured and rejected (it leaves ~120px for four rows), so short-and-wide screens now put the deck beside the board instead of beneath it.",
+    "The total-bet plate was crushed to 28px of content on a 375px phone -- narrower than the string '$1.00' -- because the deck row split its width evenly between the bet rail and the action column. The player could not read their own stake. The rail now takes its own row below `sm`.",
+    "The spin button was smaller than BUY FEATURE on a phone and sat in the wrong corner, with the secondary action under the thumb. It is now the largest control on the deck and takes the thumb corner, mirrored by the left-handed preference like everything else.",
+    "The credit plate truncated a five-figure bankroll at tablet widths: it shared an even 1fr with the bet plate, which never needs more than '$100.00'."
   ],
   "openItems": [
     {
       "item": "The audio has never been listened to.",
       "severity": "medium",
-      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement. This is now the largest unverified risk in the project."
+      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement. With the browser pass done this is now, unambiguously, the largest unverified risk in the project."
     },
     {
-      "item": "The gamble and the big-win takeovers have still not been watched.",
+      "item": "There is no volume control, only mute switches.",
       "severity": "medium",
-      "detail": "Free spins and the link were both played through in a browser and both are correct. The gamble needs a qualifying win to offer itself and no takeover above BIG happened in the spins that were driven, so those two screens remain the only presentation code nobody has seen run. They render from explicit props and are unit-tested, but that is not the same thing."
+      "detail": "Preferences carry `sound` and `music` as booleans. A cabinet gives you a master level and usually separate effects and music levels. MASTER is a module constant at 1."
     },
     {
-      "item": "prefers-reduced-motion is implemented everywhere but never exercised in a browser in either polarity.",
+      "item": "No responsible-gaming layer, and the measured RTP is not disclosed in the game.",
       "severity": "medium",
-      "detail": "The same risk that bit the craps table at its first handoff. The machine is almost entirely motion, so the reduced path is a genuinely different presentation rather than a switch, and it needs watching rather than reading."
+      "detail": "AUTOPLAY_COUNTS includes Infinity with no loss limit, no single-win limit and no session reminder; autoplay stop conditions are a requirement in every regulated market. The measured 96.36% appears nowhere in the paytable, which is otherwise thorough."
     },
     {
-      "item": "Only tested at one viewport (1440x900 desktop).",
+      "item": "No error boundary anywhere.",
       "severity": "medium",
-      "detail": "The layout is built to reflow and the body does not scroll at that size, but portrait phone, landscape phone and tablet are unverified."
+      "detail": "src/app has no error.tsx or global-error.tsx and no React boundary. A throw during a hold-and-win render is a white screen, and because feature state is deliberately not persisted the player loses an in-flight link with no way back to it."
+    },
+    {
+      "item": "The FX layer has never been profiled on a real phone.",
+      "severity": "low",
+      "detail": "A large canvas particle system that has only ever run on desktop. Reduced motion cuts it to 20% of particles, so the accessible path is likely fine; the default path on a mid-range Android during a twenty-orb link is unmeasured."
     },
     {
       "item": "No service worker, so the installed app still needs the network to load.",
@@ -134,13 +147,14 @@
     {
       "item": "The four jackpots are fixed multiples of the stake rather than progressives.",
       "severity": "low",
-      "detail": "The honest thing to do without a server. A jackpot that genuinely grows across sessions and players needs one."
+      "detail": "The honest thing to do without a server. A jackpot that genuinely grows needs one."
     }
   ],
   "ifYouChangeOneThing": {
     "theStrips": "Re-run npm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
     "theDrawOrder": "Expect engine.test.ts's draw-order pin to fail, and know that every seeded expectation in both suites has moved at the same time.",
-    "theContracts": "src/lib/engine/types.ts and src/lib/store/contract.ts are published: add to them, never rename or remove. Everything else compiles against them."
+    "theContracts": "src/lib/engine/types.ts and src/lib/store/contract.ts are published: add to them, never rename or remove. Everything else compiles against them.",
+    "theLayout": "There are two layouts, not one. `tight` in globals.css (short and wide) puts the deck in a rail beside the board; everything else stacks. The rail is ~265px wide while the viewport is 812px, so `sm:` utilities are actively wrong inside it -- that is why the tight variant is declared after the Tailwind import, so its utilities sort last and win. Check both."
   },
   "verifiedBy": {
     "typecheck": "clean",
@@ -148,6 +162,6 @@
     "fastTests": "125 passing in about two seconds (71 engine, 54 store)",
     "simulation": "8/8 passing over 20,000,000 seeded spins",
     "build": "production static export, 0.9 MB of JS, 0.3 MB gzipped",
-    "browser": "headless Chromium, zero console errors throughout. Base game: loads, spins repeatedly, paytable opens with every symbol drawn correctly, no page scroll in either axis, meters and bankroll correct. Free spins: bought and played through all ten spins -- the counter counts down (and says '1 FREE SPIN LEFT', singular), the multiplier trail announces 3X, 5X and 10X as it climbs, dragon reels fire, and the feature total accumulates to the amount actually paid. Hold and win: bought and played to the end -- six orbs lock with their values, a new orb lands and resets the respins, a MINI jackpot orb lands and is announced once, and the board settles at the sum of what is on it."
+    "browser": "Chromium at 1440x900, 768x1024 (tablet), 375x812 (portrait phone) and 812x375 (landscape phone). Zero console errors throughout, and no page scroll in either axis at any of the four. Base game: loads, spins, paytable correct. Free spins: triggered NATURALLY from a probed seed (not bought) -- ten spins, counter counts down, multiplier trail steps, feature total accumulates to $14.60 and the bankroll agrees. Hold and win: triggered naturally -- nine orbs lock, respins reset, board settles at $21.00 and the bankroll agrees. Gamble: offered on a 4x win, played a losing call, a winning call (black doubled $4 to $8) and a collect, bankroll correct after each. Takeover: a 50.4x MEGA counted up to $50.40 and matched the engine to the cent. Reduced motion: watched in both polarities -- the takeover still says everything it said, faster and calmer."
   }
 }

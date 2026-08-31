@@ -26,7 +26,6 @@ import {
   BoltIcon,
   CardsIcon,
   ChartIcon,
-  CoinsIcon,
   GearIcon,
   InfoIcon,
   LoopIcon,
@@ -62,10 +61,12 @@ function SpinButton({
   mode,
   onPress,
   autoLeft,
+  className,
 }: {
   mode: SpinMode;
   onPress: () => void;
   autoLeft: number | null;
+  className?: string;
 }) {
   const busy = mode === 'BUSY';
   return (
@@ -76,13 +77,15 @@ function SpinButton({
       aria-label={SPIN_LABEL[mode]}
       className={cn(
         'no-select relative grid aspect-square shrink-0 place-items-center rounded-full transition-all duration-100',
-        'h-[clamp(4.25rem,17vw,6rem)] w-[clamp(4.25rem,17vw,6rem)]',
+        'h-[clamp(5.25rem,17vw,6rem)] w-[clamp(5.25rem,17vw,6rem)]',
+        'tight:h-[4.5rem] tight:w-[4.5rem]',
         'active:translate-y-0.5 active:shadow-[0_2px_0_var(--color-gold-900),0_6px_14px_-8px_rgba(0,0,0,0.9)]',
         busy
           ? 'cursor-default border-4 border-ink-700 bg-ink-850 text-ink-500'
           : mode === 'SPIN'
             ? 'border-4 border-gold-700/70 bg-[radial-gradient(120%_120%_at_50%_18%,var(--color-gold-200),var(--color-gold-400)_42%,var(--color-gold-700)_100%)] text-ink-950 shadow-[0_6px_0_var(--color-gold-900),0_16px_36px_-14px_rgba(224,179,58,0.95),0_2px_0_rgba(255,255,255,0.6)_inset]'
             : 'border-4 border-cinnabar-800 bg-[radial-gradient(120%_120%_at_50%_18%,var(--color-cinnabar-400),var(--color-cinnabar-600)_45%,var(--color-cinnabar-900)_100%)] text-gold-200 shadow-[0_6px_0_var(--color-cinnabar-900),0_16px_36px_-14px_rgba(217,48,48,0.9),0_2px_0_rgba(255,255,255,0.35)_inset]',
+        className,
       )}
     >
       <span className="display px-1 text-center text-[clamp(0.6rem,2.3vw,0.85rem)] leading-none font-black tracking-[0.1em]">
@@ -188,7 +191,13 @@ function BetRail({ locked }: { locked: boolean }) {
   const top = BET_LADDER.length - 1;
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+    /* Below `sm` this rail owns a whole row of the deck: at 375px, sharing one
+       row with the spin button and the action column crushed the total-bet
+       plate to 28px of content -- narrower than the word "$1.00" -- and a
+       player who cannot read their own stake has no business being asked to
+       press spin. Portrait phones have the vertical room; landscape phones are
+       already past `sm` on width and keep the single row. */
+    <div className="order-1 flex min-w-0 basis-full items-center gap-1.5 sm:flex-1 sm:basis-auto tight:basis-full">
       <IconButton
         label="Lower the bet"
         size="md"
@@ -201,12 +210,12 @@ function BetRail({ locked }: { locked: boolean }) {
         <MinusIcon />
       </IconButton>
 
-      <div className="min-w-0 flex-1 rounded-md border border-gold-800/40 bg-ink-950/80 px-2 py-1 text-center shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset]">
+      <div className="min-w-0 flex-1 rounded-md border border-gold-800/40 bg-ink-950/80 px-2 py-1 text-center shadow-[0_2px_10px_rgba(0,0,0,0.6)_inset] tight:py-0.5">
         <PlateLabel>Total bet</PlateLabel>
         <div className="numeric mt-0.5 truncate text-[clamp(0.85rem,3.6vw,1.15rem)] leading-none font-bold text-gold-300">
           {money(totalBet)}
         </div>
-        <div className="numeric mt-0.5 truncate text-[9px] text-ink-500">
+        <div className="numeric mt-0.5 truncate text-[9px] text-ink-500 tight:hidden">
           {money(betPerLine)} x {LINES} &middot; rung {betIndex + 1}/{BET_LADDER.length}
         </div>
         {/* The ladder itself, tappable. A player who wants $10 a spin should
@@ -252,7 +261,7 @@ function BetRail({ locked }: { locked: boolean }) {
           maxBet();
           playSound('betChange');
         }}
-        className="hidden shrink-0 px-2 text-[10px] tracking-[0.14em] sm:inline-flex"
+        className="shrink-0 px-2 text-[10px] tracking-[0.14em] tight:hidden"
       >
         MAX BET
       </Button>
@@ -399,7 +408,7 @@ export function ControlDeck(): React.JSX.Element {
   return (
     <footer className="w-full max-w-5xl shrink-0 pb-0.5">
       {/* The utility rail. Small, out of the way of the thumb. */}
-      <div className="mb-1.5 flex items-center justify-between gap-1">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
         <div className="flex items-center gap-1">
           <IconButton
             size="sm"
@@ -475,7 +484,7 @@ export function ControlDeck(): React.JSX.Element {
       {/* The deck proper. Mirrored for a left-handed player. */}
       <div
         className={cn(
-          'flex items-center gap-2 sm:gap-3',
+          'flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3 tight:flex-wrap tight:gap-1.5',
           prefs.leftHanded && 'flex-row-reverse',
         )}
       >
@@ -485,25 +494,15 @@ export function ControlDeck(): React.JSX.Element {
           mode={mode}
           onPress={press}
           autoLeft={autoplay !== null ? autoplay.left : null}
+          className="order-3 sm:order-2 tight:order-3"
         />
 
         <div
           className={cn(
-            'relative flex min-w-0 flex-1 flex-col gap-1.5',
+            'relative order-2 flex min-w-0 flex-1 flex-col gap-1.5 sm:order-3 tight:order-2',
             prefs.leftHanded ? 'items-start' : 'items-end',
           )}
         >
-          <Button
-            size="md"
-            variant="violet"
-            disabled={phase !== 'IDLE' || autoplay !== null || inFeature}
-            onClick={() => openDialog('buy')}
-            className="w-full max-w-[10rem] gap-1.5 text-[10px] tracking-[0.12em] sm:text-[11px]"
-          >
-            <CoinsIcon />
-            BUY FEATURE
-          </Button>
-
           <Button
             size="md"
             variant="deck"
