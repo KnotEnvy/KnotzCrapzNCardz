@@ -293,6 +293,7 @@ export function ControlDeck(): React.JSX.Element {
   const setPref = useSlots((s) => s.setPref);
 
   const dialog = useCabinetUi((s) => s.dialog);
+  const started = useCabinetUi((s) => s.started);
   const openDialog = useCabinetUi((s) => s.open);
 
   const [autoOpen, setAutoOpen] = React.useState(false);
@@ -334,14 +335,16 @@ export function ControlDeck(): React.JSX.Element {
   /*
    * Keyboard.
    *
-   * Two guards, and both matter. A dialog owns the keyboard while it is up --
+   * Three guards, and all of them matter. Attract mode owns the keyboard until
+   * the player has pressed PLAY, or the same key press would both start the
+   * machine and spend the first stake. A dialog owns it while it is up --
    * space in the seed box types a space, it does not spin fifty dollars. And
    * any editable target is left alone regardless, because a shortcut that
    * fires while someone is typing is a bug report about "random spins".
    */
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (dialog !== null) return;
+      if (!started || dialog !== null) return;
       const el = e.target as HTMLElement | null;
       if (
         el &&
@@ -390,6 +393,7 @@ export function ControlDeck(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, [
     dialog,
+    started,
     autoOpen,
     betLocked,
     press,

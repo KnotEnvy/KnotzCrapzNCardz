@@ -168,6 +168,12 @@ export type SoundName =
 export interface Preferences {
   sound: boolean;
   music: boolean;
+  /** Master level, 0..1. The mix is designed at 1 and there is no louder. */
+  masterLevel: number;
+  /** Effects level under the master, 0..1. */
+  sfxLevel: number;
+  /** Music level under the master, 0..1. */
+  musicLevel: number;
   turbo: boolean;
   /** Skip the takeover screens; the meter still counts. */
   quickWins: boolean;

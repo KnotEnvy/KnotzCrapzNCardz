@@ -153,10 +153,25 @@ let musicOn = true;
 /**
  * The whole machine's level, in one place.
  *
- * Held at unity so that `gain` on a voice means what it says: the peak
- * amplitude that voice puts on the bus, and therefore on the output.
+ * The design level is unity, so that `gain` on a voice means what it says: the
+ * peak amplitude that voice puts on the bus, and therefore on the output. Every
+ * figure in the table above is measured at unity and the soft clip's ceiling is
+ * only meaningful there.
+ *
+ * The player's master control scales this, and only downward -- there is no
+ * setting above 1, because the mix has no headroom left to give and turning it
+ * up would buy loudness purely in limiter distortion.
  */
 const MASTER = 1;
+
+/** The player's master level, 0..1. Multiplies {@link MASTER}. */
+let masterLevel = 1;
+
+/** The player's effects level, 0..1, under the master. */
+let sfxLevel = 1;
+
+/** The player's music level, 0..1, under the master and {@link MUSIC_LEVEL}. */
+let musicLevel = 1;
 
 /**
  * How far under the effects the music sits.
@@ -222,15 +237,15 @@ function audio(): AudioContext | null {
     shaper.connect(ctx.destination);
 
     bus = ctx.createGain();
-    bus.gain.value = MASTER;
+    bus.gain.value = MASTER * masterLevel;
     bus.connect(shaper);
 
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = 1;
+    sfxBus.gain.value = sfxLevel;
     sfxBus.connect(bus);
 
     musicBus = ctx.createGain();
-    musicBus.gain.value = musicOn ? MUSIC_LEVEL : 0;
+    musicBus.gain.value = musicOn ? MUSIC_LEVEL * musicLevel : 0;
     musicBus.connect(bus);
   }
   // Browsers start the context suspended until a gesture; nudge it each time.
@@ -259,13 +274,44 @@ export function setSoundEnabled(on: boolean): void {
   }
 }
 
+/**
+ * The three level controls.
+ *
+ * Ramped rather than set, because a slider dragged across its range sets a new
+ * value every frame and a bare assignment on a live gain node clicks audibly at
+ * every step. 40 ms is short enough to feel immediate and long enough to be
+ * silent. Clamped to 0..1: see {@link MASTER} for why there is no louder.
+ */
+function ride(node: GainNode | null, to: number): void {
+  const c = ctx;
+  if (!node || !c) return;
+  node.gain.cancelScheduledValues(c.currentTime);
+  node.gain.setValueAtTime(node.gain.value, c.currentTime);
+  node.gain.linearRampToValueAtTime(to, c.currentTime + 0.04);
+}
+
+export function setMasterLevel(v: number): void {
+  masterLevel = clamp(v, 0, 1);
+  ride(bus, MASTER * masterLevel);
+}
+
+export function setSfxLevel(v: number): void {
+  sfxLevel = clamp(v, 0, 1);
+  ride(sfxBus, sfxLevel);
+}
+
+export function setMusicLevel(v: number): void {
+  musicLevel = clamp(v, 0, 1);
+  if (musicOn) ride(musicBus, MUSIC_LEVEL * musicLevel);
+}
+
 export function setMusicEnabled(on: boolean): void {
   musicOn = on;
   const c = audio();
   if (!c || !musicBus) return;
   musicBus.gain.cancelScheduledValues(c.currentTime);
   musicBus.gain.setValueAtTime(musicBus.gain.value, c.currentTime);
-  musicBus.gain.linearRampToValueAtTime(on ? MUSIC_LEVEL : 0, c.currentTime + 0.35);
+  musicBus.gain.linearRampToValueAtTime(on ? MUSIC_LEVEL * musicLevel : 0, c.currentTime + 0.35);
   if (on) {
     if (wantedTrack && !musicTrack) startMusic(wantedTrack);
   } else if (musicTrack) {
@@ -2174,6 +2220,9 @@ export function __resetAudioForMeasurement(): void {
   wantedTrack = null;
   reelStep = 0;
   reelStepAt = -99;
+  masterLevel = 1;
+  sfxLevel = 1;
+  musicLevel = 1;
   ctx = null;
   bus = null;
   sfxBus = null;
@@ -2218,6 +2267,9 @@ if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
     stopMusic,
     setSoundEnabled,
     setMusicEnabled,
+    setMasterLevel,
+    setSfxLevel,
+    setMusicLevel,
     reset: __resetAudioForMeasurement,
   };
 }

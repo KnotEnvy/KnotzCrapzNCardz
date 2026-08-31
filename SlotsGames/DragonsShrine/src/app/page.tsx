@@ -38,6 +38,7 @@ import { JackpotLadder } from '@/components/cabinet/JackpotLadder';
 import { Meters } from '@/components/cabinet/Meters';
 import { TopGlass } from '@/components/cabinet/TopGlass';
 import { FeatureOverlay } from '@/components/features/FeatureOverlay';
+import { StartScreen } from '@/components/cabinet/StartScreen';
 import { ReelWindow } from '@/components/reels/ReelWindow';
 import { unlockAudio } from '@/lib/audio';
 
@@ -94,6 +95,10 @@ export default function Page() {
       <FeatureOverlay />
       <FxLayer />
       <Dialogs />
+      {/* Last in the tree so it wins the tie against the particle canvas, but
+          at z-40 so the dialogs still open over it -- reading the paytable
+          before putting anything at stake is the point of having it here. */}
+      <StartScreen />
     </main>
   );
 }

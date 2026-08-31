@@ -183,6 +183,9 @@ function reset(seed: string): void {
     prefs: {
       sound: true,
       music: true,
+      masterLevel: 0.8,
+      sfxLevel: 1,
+      musicLevel: 1,
       turbo: false,
       quickWins: false,
       reducedMotion: false,

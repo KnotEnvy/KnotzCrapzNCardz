@@ -1,9 +1,9 @@
 {
   "project": "Dragon's Shrine",
   "path": "SlotsGames/DragonsShrine",
-  "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots and a fair gamble -- every feature won at the reels, never bought -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.36%.",
-  "handoffDate": "2026-08-30",
-  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, and a twenty-million-spin RTP simulation landing inside its target band. Play-tested in a real browser at four viewports with zero console errors: base game, free spins, hold and win, the gamble (win, loss and collect) and a MEGA takeover have all now been watched. Feature buys have been removed from the machine -- see keyDecisions. The audio is the one substantial thing still never verified.",
+  "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots and a fair gamble -- every feature won at the reels, never bought -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.56%.",
+  "handoffDate": "2026-08-31",
+  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, and a twenty-million-spin RTP simulation inside its target band. Play-tested in a browser at four viewports with zero console errors, including both features through their natural triggers now that buys are gone. The mix has been measured properly -- every cue rendered through Chromium's own OfflineAudioContext, five renders each -- which found and fixed a broken loudness ordering. It has still never been listened to by a person, and that is now the last big unknown.",
   "howItWasBuilt": {
     "shape": "One orchestrator fixed the contracts first -- engine types, geometry and timing config, the seeded RNG, the fifty paylines, a first-pass paytable and strips, and the store interface -- and committed them before any workstream started. Five agents then worked in strict, non-overlapping file lanes against those contracts: maths, store, symbols and reels, cabinet and feature screens, audio and effects. Nothing was blocked on anything else because every boundary was a published signature rather than a conversation.",
     "whatMadeItWork": "Writing the contracts first, and stubbing both cross-lane boundaries (an inert store, a no-op audio module) so that every lane compiled and typechecked from minute one against interfaces that were real even when the implementations were not.",
@@ -17,6 +17,10 @@
     "moneyIsIntegerCents": "Everywhere, with no exceptions. Line pays multiply betPerLine; scatter, orb and jackpot pays multiply totalBet. Confusing those two is the easiest way to be off by fifty times, so every field carrying a multiplier says which one it is."
   },
   "keyDecisions": [
+    {
+      "decision": "The machine opens on an attract screen, and PLAY is the first thing a player presses.",
+      "why": "Partly because that is what a cabinet does, and partly for two concrete reasons. Browsers will not open an AudioContext without a gesture, and until this existed the first gesture might have been the spin button itself -- which made the machine's own opening cue the sound most likely to be swallowed. And it is where the measured return is stated: 96.56%, with the hit frequency, the volatility and the largest spin the committed simulation ever saw. A game that has measured itself to five decimal places and then declines to tell the player is being coy about the only number they are owed. `started` lives in the UI store and is deliberately not persisted: attract mode is where a cabinet sits when nobody is playing it."
+    },
     {
       "decision": "There is no feature buy. Every feature is won at the reels.",
       "why": "A buy button is an online-casino affordance, not a cabinet one, and it quietly changes what the machine is: the interesting question stops being 'will it come?' and becomes 'is it priced correctly?'. Dragon's Shrine is trying to be a machine you sit down at, so the shrine lights when the pearls land and not before. The engine's buy path (buyCost, buyForce, BUY_COSTS, the store's buyFeature) is deliberately kept and still asserted by the simulation, because forcing a trigger is how features get driven in a test or a browser now that no button does it -- but nothing in the cabinet can reach it."
@@ -62,7 +66,7 @@
     "rtp": 0.96556,
     "interval95": 0.00595,
     "spinsMeasured": 20000000,
-    "note": "The committed default. SIM_SPINS overrides the sample size for quick tuning runs, but the suite fails any run whose interval is wider than half the target band, so a short run cannot be mistaken for a measurement.",
+    "note": "The committed default. SIM_SPINS overrides the sample size for quick tuning runs, but the suite fails any run whose interval is wider than half the target band, so a short run cannot be mistaken for a measurement. Re-run 2026-08-31: 96.556% +/-0.595% over 20,000,000 spins, 8/8 green. An earlier draft of this file quoted 96.359% in its status line, which was simply wrong -- the `rtp` field here was right, and it is the figure the attract screen now shows the player.",
     "split": {
       "baseLineWins": 0.5003,
       "scatterPays": 0.01071,
@@ -85,6 +89,7 @@
       "GRAND": "1 in 645,161"
     },
     "buys": {
+      "note": "The buy buttons are gone from the cabinet -- see keyDecisions. The prices and their assertions are kept because the simulation still proves the forced-trigger path returns less than the base game, which is what makes the engine's `force` safe to use for testing.",
       "FREE_SPINS": {
         "cost": 80,
         "rtp": 0.9399
@@ -112,23 +117,20 @@
     "On a landscape phone the game was not there. The layout is a column of fixed chrome around one flexible reel window, and at 812x375 the chrome's own height exceeded the viewport, so the reels -- the only band that yields -- were laid out at exactly zero pixels. No overflow, no scrollbar, no error: just no game. Compressing the chrome was measured and rejected (it leaves ~120px for four rows), so short-and-wide screens now put the deck beside the board instead of beneath it.",
     "The total-bet plate was crushed to 28px of content on a 375px phone -- narrower than the string '$1.00' -- because the deck row split its width evenly between the bet rail and the action column. The player could not read their own stake. The rail now takes its own row below `sm`.",
     "The spin button was smaller than BUY FEATURE on a phone and sat in the wrong corner, with the secondary action under the thumb. It is now the largest control on the deck and takes the thumb corner, mirrored by the left-handed preference like everything else.",
-    "The credit plate truncated a five-figure bankroll at tablet widths: it shared an even 1fr with the bet plate, which never needs more than '$100.00'."
+    "The credit plate truncated a five-figure bankroll at tablet widths: it shared an even 1fr with the bet plate, which never needs more than '$100.00'.",
+    "The GRAND was not the loudest thing in the game. Measured over the loudest 300 ms window, winLegendary delivered -11.08 dB against jackpotGrand's -11.40, consistently and with no overlap between the two distributions -- the top jackpot was quieter than a win tier, which audio.ts's own header calls the one ordering that must never break. The cause is that jackpotGrand peaks at 0.893 on every render with zero variance, and 0.893 is exactly the soft clip's asymptote: its sum arrives at or past full scale and is hard-clamped, so it could not be raised to win the comparison. winLegendary came down from 0.84 instead.",
+    "The old header table was a set of single-shot renders. The noise buffer is regenerated per context and noiseTrim can multiply a narrowband voice by twelve, so one render of dragonReel is a sample from a distribution (0.32 to 0.79), not a measurement of dragonReel. The table is now medians of five."
   ],
   "openItems": [
     {
-      "item": "The audio has never been listened to.",
+      "item": "Nobody has listened to the audio.",
       "severity": "medium",
-      "detail": "Every sound is synthesised and the module is structured around a measured mix, but the levels were reasoned about rather than rendered offline and read back the way the craps table's were. Twenty coins, a fanfare, a gong and a music bed can run at once; the soft clip should hold it, but that is an argument rather than a measurement. With the browser pass done this is now, unambiguously, the largest unverified risk in the project."
+      "detail": "It is now genuinely measured rather than argued about -- every cue rendered five times through a real Web Audio implementation, both loudness ladders monotonic, the limiter's behaviour on the pile-ups understood, and one real ordering bug found and fixed by measurement. But measurement is not listening, and the things measurement cannot tell you are exactly the ones that matter next: whether the GRAND is harsh, whether the reel loop grates over a long session, whether the fanfares are annoying the fifth time. Put headphones on and play for ten minutes."
     },
     {
-      "item": "There is no volume control, only mute switches.",
+      "item": "No responsible-gaming layer.",
       "severity": "medium",
-      "detail": "Preferences carry `sound` and `music` as booleans. A cabinet gives you a master level and usually separate effects and music levels. MASTER is a module constant at 1."
-    },
-    {
-      "item": "No responsible-gaming layer, and the measured RTP is not disclosed in the game.",
-      "severity": "medium",
-      "detail": "AUTOPLAY_COUNTS includes Infinity with no loss limit, no single-win limit and no session reminder; autoplay stop conditions are a requirement in every regulated market. The measured 96.36% appears nowhere in the paytable, which is otherwise thorough."
+      "detail": "AUTOPLAY_COUNTS still includes Infinity with no loss limit, no single-win limit and no session reminder. Autoplay stop conditions are a requirement in every regulated market. The RTP disclosure that used to sit alongside this item is done -- it is on the attract screen."
     },
     {
       "item": "No error boundary anywhere.",
@@ -154,14 +156,16 @@
     "theStrips": "Re-run npm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
     "theDrawOrder": "Expect engine.test.ts's draw-order pin to fail, and know that every seeded expectation in both suites has moved at the same time.",
     "theContracts": "src/lib/engine/types.ts and src/lib/store/contract.ts are published: add to them, never rename or remove. Everything else compiles against them.",
-    "theLayout": "There are two layouts, not one. `tight` in globals.css (short and wide) puts the deck in a rail beside the board; everything else stacks. The rail is ~265px wide while the viewport is 812px, so `sm:` utilities are actively wrong inside it -- that is why the tight variant is declared after the Tailwind import, so its utilities sort last and win. Check both."
+    "theLayout": "There are two layouts, not one. `tight` in globals.css (short and wide) puts the deck in a rail beside the board; everything else stacks. The rail is ~265px wide while the viewport is 812px, so `sm:` utilities are actively wrong inside it -- that is why the tight variant is declared after the Tailwind import, so its utilities sort last and win. Check both.",
+    "aFanfare": "Re-run the harness in tools/measure-audio.md and check the one invariant at the bottom of it: jackpotGrand must be louder than winLegendary. It was not, for the whole of the previous handoff, and nothing but a measurement would have caught it."
   },
   "verifiedBy": {
     "typecheck": "clean",
     "lint": "clean, zero warnings",
     "fastTests": "125 passing in about two seconds (71 engine, 54 store)",
-    "simulation": "8/8 passing over 20,000,000 seeded spins",
+    "simulation": "8/8 passing over 20,000,000 seeded spins, re-run 2026-08-31 at 96.556% +/-0.595%.",
     "build": "production static export, 0.9 MB of JS, 0.3 MB gzipped",
-    "browser": "Chromium at 1440x900, 768x1024 (tablet), 375x812 (portrait phone) and 812x375 (landscape phone). Zero console errors throughout, and no page scroll in either axis at any of the four. Base game: loads, spins, paytable correct. Free spins: triggered NATURALLY from a probed seed (not bought) -- ten spins, counter counts down, multiplier trail steps, feature total accumulates to $14.60 and the bankroll agrees. Hold and win: triggered naturally -- nine orbs lock, respins reset, board settles at $21.00 and the bankroll agrees. Gamble: offered on a 4x win, played a losing call, a winning call (black doubled $4 to $8) and a collect, bankroll correct after each. Takeover: a 50.4x MEGA counted up to $50.40 and matched the engine to the cent. Reduced motion: watched in both polarities -- the takeover still says everything it said, faster and calmer."
+    "browser": "Chromium at 1440x900, 768x1024 (tablet), 375x812 (portrait phone) and 812x375 (landscape phone). Zero console errors throughout, and no page scroll in either axis at any of the four. Base game: loads, spins, paytable correct. Free spins: triggered NATURALLY from a probed seed (not bought) -- ten spins, counter counts down, multiplier trail steps, feature total accumulates to $14.60 and the bankroll agrees. Hold and win: triggered naturally -- nine orbs lock, respins reset, board settles at $21.00 and the bankroll agrees. Gamble: offered on a 4x win, played a losing call, a winning call (black doubled $4 to $8) and a collect, bankroll correct after each. Takeover: a 50.4x MEGA counted up to $50.40 and matched the engine to the cent. Reduced motion: watched in both polarities -- the takeover still says everything it said, faster and calmer.",
+    "audio": "Every cue rendered through Chromium's OfflineAudioContext at 44.1 kHz, five renders each, median reported; peak and the RMS of the loudest 300 ms window. Both ladders climb and neither crosses the other, the GRAND leads a LEGENDARY by 0.62 dB, nothing is inaudible (quietest is meterCount at -40.7) and the pile-ups behave: an ordinary spin peaks at 0.358 and only the jackpot cases reach the limiter. The harness and its three traps are in tools/measure-audio.md -- the sharpest being that loops must never be measured inside an offline render, because their setInterval schedulers keep wall time and will report the limiter's ceiling for an ordinary spin."
   }
 }

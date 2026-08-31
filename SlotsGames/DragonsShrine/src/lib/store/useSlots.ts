@@ -77,7 +77,10 @@ import {
 import { createRng, randomSeed, type Rng } from '@/lib/engine/rng';
 import {
   playSound,
+  setMasterLevel,
   setMusicEnabled,
+  setMusicLevel,
+  setSfxLevel,
   setSoundEnabled,
   startMusic,
   stopLoop,
@@ -398,6 +401,9 @@ function emptyStats(bankroll: number): SessionStats {
 const DEFAULT_PREFS: Preferences = {
   sound: true,
   music: true,
+  masterLevel: 0.8,
+  sfxLevel: 1,
+  musicLevel: 1,
   turbo: false,
   quickWins: false,
   reducedMotion: false,
@@ -601,6 +607,16 @@ export const useSlots = create<SlotsState>()(
         }
         setSoundEnabled(state.prefs.sound);
         setMusicEnabled(state.prefs.music);
+        /*
+         * Levels are restored before the first cue rather than on the first
+         * change: a returning player who had turned the machine down does not
+         * want it back at full for one spin. `??` because a save written
+         * before these existed has no levels in it, and dropping the whole
+         * save over a missing volume would be a poor trade.
+         */
+        setMasterLevel(state.prefs.masterLevel ?? 0.8);
+        setSfxLevel(state.prefs.sfxLevel ?? 1);
+        setMusicLevel(state.prefs.musicLevel ?? 1);
       },
   }),
 );
@@ -1671,6 +1687,15 @@ function applyPref<K extends keyof Preferences>(key: K, value: Preferences[K]): 
     if (value) playSound('buttonToggle');
   } else if (key === 'music') {
     setMusicEnabled(value as boolean);
+  } else if (key === 'masterLevel') {
+    setMasterLevel(value as number);
+  } else if (key === 'sfxLevel') {
+    setSfxLevel(value as number);
+    // The click is the preview: a level control you cannot hear while you drag
+    // it is a number, not a volume knob.
+    playSound('buttonToggle');
+  } else if (key === 'musicLevel') {
+    setMusicLevel(value as number);
   } else {
     playSound('buttonToggle');
   }

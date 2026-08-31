@@ -19,6 +19,30 @@ import type { JackpotId, PayingSymbol } from './types';
 /** The target return band. The simulation fails outside it. */
 export const RTP_TARGET = { min: 0.955, max: 0.968 } as const;
 
+/**
+ * What the machine says about itself, on the glass.
+ *
+ * Every figure here is a reading from `rtp.sim.test.ts`, not a design
+ * intention: the return, the hit frequency and the volatility all come out of
+ * the same twenty-million-spin run that gates the build, and the largest single
+ * spin is the largest one that run actually saw. They are stated in the game
+ * because a machine that has measured itself this precisely and then declines
+ * to say so is being coy about the only number a player has any right to.
+ *
+ * Re-run the simulation after touching the strips or the paytable and copy the
+ * numbers across; they are quoted to the same precision the run supports.
+ */
+export const GAME_INFO = {
+  /** Measured return to player over the committed simulation. */
+  rtp: 0.96556,
+  /** How often a spin pays anything at all. */
+  hitFrequency: 0.33129,
+  /** Standard deviation of return per spin. Above about 10 reads as high. */
+  volatility: 13.58,
+  /** The largest single spin the committed run saw, as a multiple of stake. */
+  maxWin: 5640,
+} as const;
+
 /* ------------------------------------------------------------------ *
  * Line pays
  * ------------------------------------------------------------------ */

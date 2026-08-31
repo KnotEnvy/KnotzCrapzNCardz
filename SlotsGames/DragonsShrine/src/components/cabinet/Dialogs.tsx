@@ -23,7 +23,7 @@
  */
 
 import * as React from 'react';
-import { useCabinetUi } from './uiState';
+import { JACKPOT_COLOR, useCabinetUi } from './uiState';
 import { SymbolArt, SYMBOL_META } from '@/components/symbols/Symbol';
 import {
   Badge,
@@ -32,6 +32,7 @@ import {
   Plate,
   PlateLabel,
   Segmented,
+  Slider,
   Toggle,
   cn,
 } from '@/components/ui/primitives';
@@ -60,7 +61,6 @@ import {
   PAYING_SYMBOLS,
   REELS,
   ROWS,
-  type JackpotId,
   type PayingSymbol,
   type SymbolId,
   type WinTier,
@@ -68,13 +68,6 @@ import {
 import { clock, count, linePay, money, moneyShort, ratio } from '@/lib/format';
 import type { Preferences } from '@/lib/store/contract';
 import { useSlots } from '@/lib/store/useSlots';
-
-const JACKPOT_COLOR: Record<JackpotId, string> = {
-  MINI: 'var(--jackpot-mini)',
-  MINOR: 'var(--jackpot-minor)',
-  MAJOR: 'var(--jackpot-major)',
-  GRAND: 'var(--jackpot-grand)',
-};
 
 /** Paytable order is descending value, which is how a paytable is read. */
 const PAY_ORDER: PayingSymbol[] = [...PAYING_SYMBOLS].reverse();
@@ -391,9 +384,11 @@ function SettingsDialog({ onClose, reduced }: { onClose: () => void; reduced: bo
 
   const [draftSeed, setDraftSeed] = React.useState(seed);
 
-  const toggles: Array<{ key: keyof Preferences; label: string; hint?: string }> = [
-    { key: 'sound', label: 'Sound effects' },
-    { key: 'music', label: 'Music' },
+  type BoolPref = {
+    [K in keyof Preferences]: Preferences[K] extends boolean ? K : never;
+  }[keyof Preferences];
+
+  const toggles: Array<{ key: BoolPref; label: string; hint?: string }> = [
     { key: 'turbo', label: 'Turbo spin', hint: 'Shortens every beat of a spin except the teases' },
     {
       key: 'quickWins',
@@ -409,8 +404,56 @@ function SettingsDialog({ onClose, reduced }: { onClose: () => void; reduced: bo
     { key: 'leftHanded', label: 'Left-handed deck', hint: 'Puts the spin button on the other side' },
   ];
 
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+
   return (
     <Dialog open onClose={onClose} title="Settings" width="max-w-md" reducedMotion={reduced}>
+      <section className="mb-4">
+        <SectionTitle>Sound</SectionTitle>
+        <Toggle
+          label="Sound effects"
+          checked={prefs.sound}
+          onChange={(v) => setPref('sound', v)}
+        />
+        <Toggle label="Music" checked={prefs.music} onChange={(v) => setPref('music', v)} />
+        <div className="mt-3 space-y-3">
+          <Slider
+            label="Master"
+            min={0}
+            max={1}
+            step={0.05}
+            value={prefs.masterLevel}
+            valueLabel={pct(prefs.masterLevel)}
+            onChange={(v) => setPref('masterLevel', v)}
+          />
+          <Slider
+            label="Effects"
+            min={0}
+            max={1}
+            step={0.05}
+            value={prefs.sfxLevel}
+            valueLabel={pct(prefs.sfxLevel)}
+            disabled={!prefs.sound}
+            onChange={(v) => setPref('sfxLevel', v)}
+          />
+          <Slider
+            label="Music level"
+            min={0}
+            max={1}
+            step={0.05}
+            value={prefs.musicLevel}
+            valueLabel={pct(prefs.musicLevel)}
+            disabled={!prefs.music}
+            onChange={(v) => setPref('musicLevel', v)}
+          />
+        </div>
+        {/* The mix is measured at unity and the soft clip has no headroom left
+            to give, so the master scales down and never up. */}
+        <p className="mt-2 text-[10px] leading-relaxed text-ink-500">
+          The mix is built and measured at full; the master only takes away.
+        </p>
+      </section>
+
       <section className="mb-4">
         <SectionTitle>Machine</SectionTitle>
         {toggles.map((t) => (
