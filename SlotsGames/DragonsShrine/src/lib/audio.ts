@@ -45,61 +45,78 @@
  *    percussion under it, for longer. That is what makes an EPIC read as "the
  *    thing that just happened, but bigger" rather than as a different game.
  *
- * 6. Levels were MEASURED, not guessed. Every cue below was rendered through
- *    an offline Web Audio shim — a small sample-accurate engine implementing
- *    exactly the five node types this file uses — and read back for peak, RMS
- *    over the whole render, and RMS over its loudest 300 ms window, which is
- *    the figure that actually corresponds to how loud something seems. All of
- *    it at the default gain, at 44.1 kHz. The readings:
+ * 6. Levels were MEASURED, not guessed -- and re-measured, in a real browser.
  *
- *      cue                peak    RMS   loud      cue              peak  loud
- *      ---------------------------------------    -------------------------------
- *      winSmall          0.327  -30.3  -22.6      spinStart       0.312  -25.5
- *      winMedium         0.425  -29.0  -20.3      reelStop        0.222  -32.6
- *      winBig            0.504  -25.4  -19.6      reelStopTease   0.235  -24.6
- *      winMega           0.609  -23.8  -16.8      symbolLand      0.106  -46.0
- *      winEpic           0.710  -21.3  -15.3      scatterLand     0.411  -22.6
- *      winLegendary      0.741  -18.5  -11.3      orbLand         0.484  -23.4
- *      jackpotMini       0.572  -26.6  -18.6      orbLock         0.144  -30.0
- *      jackpotMinor      0.635  -24.4  -18.3      dragonRoar      0.520  -13.2
- *      jackpotMajor      0.708  -20.8  -14.1      dragonReel      0.341  -20.8
- *      jackpotGrand      0.870  -17.7  -11.5      multiplierUp    0.305  -22.9
- *      holdFull          0.713  -22.8  -14.9      holdIntro       0.409  -18.7
- *      featureTrigger    0.649  -25.4  -16.8      holdRespin      0.124  -35.1
- *      freeSpinsIntro    0.669  -22.6  -16.0      coinDrop        0.116  -40.6
- *      freeSpinsOutro    0.508  -26.1  -16.3      gambleWin       0.373  -21.3
- *      gong              0.548  -27.5  -16.9      gambleLose      0.277  -26.1
- *      bellHit           0.323  -29.4  -19.6      gambleFlip      0.174  -37.2
- *      meterEnd          0.285  -34.0  -24.2      error           0.178  -31.9
- *      meterCount        0.070  -43.1  -40.9      betChange       0.184  -34.8
- *      winTick           0.082  -41.5  -38.5      buttonPress     0.124  -43.1
- *                                                 buttonToggle    0.098  -37.9
+ *    The table below comes from rendering every cue through Chromium's own
+ *    OfflineAudioContext at 44.1 kHz, at the default gain, five times each,
+ *    and taking the median. Five times because it matters: the shared noise
+ *    buffer is regenerated per context, {@link noiseTrim} can multiply a
+ *    narrowband voice by up to 12, and white noise peaks well above its own
+ *    RMS -- so a single render of a noise-heavy cue is not a measurement of
+ *    that cue, it is one sample of a distribution. dragonReel ranges 0.32 to
+ *    0.79 across renders; holdFull 0.65 to 0.88. `peak` is the median and
+ *    `loud` is the RMS of the loudest 300 ms window, which is the figure that
+ *    corresponds to how loud something actually seems and the one the ordering
+ *    below is judged on. Whole-render RMS is deliberately not tabulated: it is
+ *    a function of how long the render was, not of the sound.
  *
- *      loops and beds, RMS while running:
- *        anticipation -29.1   reelLoop -35.5   freeSpinsLoop -40.8
- *        music base   -42.2   free     -42.8   hold          -40.6
+ *      cue                peak   loud       cue              peak   loud
+ *      --------------------------------     -------------------------------
+ *      winSmall          0.327  -25.3       spinStart       0.301  -25.5
+ *      winMedium         0.473  -21.2       reelStop        0.324  -31.7
+ *      winBig            0.583  -19.2       reelStopTease   0.376  -24.3
+ *      winMega           0.656  -16.7       symbolLand      0.096  -43.8
+ *      winEpic           0.769  -14.3       scatterLand     0.366  -22.6
+ *      winLegendary      0.756  -11.9       orbLand         0.406  -24.5
+ *      jackpotMini       0.554  -19.2       orbLock         0.202  -29.8
+ *      jackpotMinor      0.626  -16.7       dragonRoar      0.518  -13.7
+ *      jackpotMajor      0.668  -14.6       dragonReel      0.332  -21.4
+ *      jackpotGrand      0.893  -11.4       multiplierUp    0.323  -22.9
+ *      holdFull          0.679  -15.1       holdIntro       0.438  -18.7
+ *      featureTrigger    0.633  -16.7       holdRespin      0.119  -35.0
+ *      freeSpinsIntro    0.732  -15.7       coinDrop        0.129  -39.6
+ *      freeSpinsOutro    0.619  -16.5       gambleWin       0.400  -21.3
+ *      gong              0.581  -16.8       gambleLose      0.336  -25.9
+ *      bellHit           0.343  -19.6       gambleFlip      0.142  -37.3
+ *      meterEnd          0.296  -21.8       error           0.206  -31.4
+ *      meterCount        0.074  -40.7       betChange       0.138  -34.7
+ *      winTick           0.085  -38.4       buttonPress     0.189  -39.5
+ *                                           buttonToggle    0.142  -36.3
  *
- *    So: the stings run from 0.29 to 0.87 and step about 2 dB a tier; the
- *    mechanical band sits ten to fifteen dB under them; the interface sits ten
- *    under that; and the beds are quieter again, with the music a full 24 dB
- *    below a LEGENDARY. The GRAND is the loudest thing in the game, which is
- *    the one ordering that must never break.
+ *      loops and beds, alone:
+ *        anticipation -28.5   reelLoop -36.0   freeSpinsLoop -36.7
+ *        music base   -40.4
  *
- *    The limiter was measured too, on the pile-ups rather than the cues —
- *    those are what it exists for:
+ *    Both ladders climb and neither crosses the other: the win tiers run
+ *    -25.3, -21.2, -19.4, -16.7, -14.2, -11.9, and the jackpots -19.2, -16.7,
+ *    -14.6, -11.4. The GRAND is the loudest thing in the game by 0.6 dB over a
+ *    LEGENDARY, which is the one ordering that must never break -- and it did
+ *    break, measurably, until winLegendary was brought down from 0.84. See the
+ *    note on that cue: GRAND could not be raised to win the comparison because
+ *    it is already flat against the soft clip.
  *
- *      spin + five stops + reel loop + a small win + a meter run   0.329,  0 dB
- *      LEGENDARY + 24 coins + a gong + the free spins bed          0.722, -0.1
- *      GRAND + holdFull + 8 orbs + 30 coins + the hold bed         0.887, -0.9
+ *    That is the limiter's real story, and it is louder than the old note here
+ *    claimed. jackpotGrand alone peaks at 0.893 on every render, with no
+ *    variance at all, and 0.893 is exactly the curve's asymptote -- so its own
+ *    sum is arriving at or past full scale and being hard-clamped, not gently
+ *    leaned on. Measured on the pile-ups, cue content only:
  *
- *    Only the last one reaches the knee, and it takes 0.9 dB — the sum going
- *    in peaks at 0.987 and would have clipped without it. Alone, jackpotGrand
- *    peaks at 0.870 from a 0.950 sum, so even the single loudest cue is
- *    already leaning on it slightly, on purpose.
+ *      an ordinary spin: start, five stops, a small win, a meter run   0.358
+ *      LEGENDARY + a gong + 24 coins                                   0.843
+ *      GRAND + holdFull + 8 orb locks + 30 coins                       0.893
+ *      everything above at once                                        0.893
+ *
+ *    Loops and beds are excluded from those figures on purpose: their
+ *    schedulers are `setInterval`, which does not keep offline-render time, so
+ *    a loop measured inside an offline render reports whatever its scheduler
+ *    happened to dump in and not what a player hears. They are measured alone,
+ *    above, where they are 25 to 30 dB below the stings and contribute far
+ *    more to the RMS than to the peak.
  *
  *    If the balance needs revisiting, measure it again rather than nudging
- *    numbers by ear — none of this can be checked by eye and the spectral
- *    split is where the real mistakes hide.
+ *    numbers by ear -- none of this can be checked by eye, a single render is
+ *    not a measurement, and the spectral split is where the real mistakes
+ *    hide. tools/measure-audio.md has the harness.
  *
  * The module is safe to import with no Web Audio at all: nothing touches
  * `window` until a call is made, and every call returns quietly when there is
@@ -1141,8 +1158,16 @@ const CUES: Record<CueName, (q: Cue) => void> = {
     }),
 
   winLegendary: (q) => {
+    /*
+     * 0.84 until it was measured. At that level LEGENDARY delivered -11.1 dB
+     * in its loudest 300 ms against jackpotGrand's -11.4: the top jackpot was
+     * quieter than a win tier, which the header calls the one ordering that
+     * must never break. GRAND could not simply be raised to fix it -- it is
+     * already flat against the soft clip at 0.893, which is why it lost in the
+     * first place -- so the tier below it gives way instead.
+     */
     fanfare(q, {
-      level: 0.84,
+      level: 0.76,
       base: -5,
       reps: 4,
       step: 0.165,
@@ -1154,7 +1179,7 @@ const CUES: Record<CueName, (q: Cue) => void> = {
       preroll: 0.85,
     });
     // The dragon under it. LEGENDARY is the only win tier that gets one.
-    brass(q.c, q.out, q.t + 0.6, 0.24 * q.g, semi(deg(-10), q.p), 0.4, 1.6, 2.4, 1.06);
+    brass(q.c, q.out, q.t + 0.6, 0.21 * q.g, semi(deg(-10), q.p), 0.4, 1.6, 2.4, 1.06);
   },
 
   /**
@@ -2127,6 +2152,36 @@ export function stopMusic(): void {
  * ------------------------------------------------------------------ */
 
 /**
+ * Drops the whole graph so a fresh one can be built.
+ *
+ * The module opens exactly one AudioContext and keeps it for the life of the
+ * page, which is right for a cabinet and wrong for the thing that produced the
+ * table in this file's header: a harness measuring forty-two cues has to
+ * render each one into its own OfflineAudioContext, and cannot do that while a
+ * previous context is cached here.
+ *
+ * This is the only reason it exists. Nothing in the cabinet calls it, and
+ * calling it mid-session would silence the machine until the next cue rebuilt
+ * the graph. See tools/measure-audio.md for the harness that uses it.
+ */
+export function __resetAudioForMeasurement(): void {
+  for (const name of Array.from(loops.keys())) {
+    const loop = loops.get(name);
+    if (loop?.timer !== null && loop?.timer !== undefined) clearInterval(loop.timer);
+  }
+  loops.clear();
+  musicTrack = null;
+  wantedTrack = null;
+  reelStep = 0;
+  reelStepAt = -99;
+  ctx = null;
+  bus = null;
+  sfxBus = null;
+  musicBus = null;
+  noise = null;
+}
+
+/**
  * Plays a sound.
  *
  * `delay` places it on the spin's timeline, `gain` scales this one voice, and
@@ -2143,4 +2198,26 @@ export function playSound(name: SoundName, opts: SoundOptions = {}): void {
   const q = begin(opts);
   if (!q) return;
   CUES[name as CueName](q);
+}
+
+/* ------------------------------------------------------------------ *
+ * The measurement hook
+ *
+ * Development only, and stripped from a production build by the constant
+ * fold on NODE_ENV. The harness in tools/measure-audio.md drives the module
+ * from the browser console, which is the only place a real Web Audio
+ * implementation exists -- measuring against a hand-written shim measures the
+ * shim as much as the mix.
+ * ------------------------------------------------------------------ */
+
+if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+  (window as unknown as { __dsAudio?: unknown }).__dsAudio = {
+    playSound,
+    stopLoop,
+    startMusic,
+    stopMusic,
+    setSoundEnabled,
+    setMusicEnabled,
+    reset: __resetAudioForMeasurement,
+  };
 }
