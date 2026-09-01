@@ -33,10 +33,24 @@ exactly what the RNG called. See [the Dragon's Shrine
 README](SlotsGames/DragonsShrine/README.md) for the paytable, the two features,
 and what the return actually measures at.
 
-## Deploying a game
+## Running the arcade
 
 Each game is client-side, so each one builds to static files and ships as an
-nginx container rather than as a running Node app.
+nginx container rather than as a running Node app. The `docker-compose.yml` at
+the root builds and runs both of them together:
+
+```bash
+docker compose up -d --build            # craps on :8080, Dragon's Shrine on :8081
+docker compose logs -f
+docker compose down
+```
+
+They deliberately take different host ports, so both can run at once — the
+arcade is two independent containers that happen to be started by one file, not
+a shared server.
+
+To run only one game, use its own compose file instead. Those still work
+standalone and take the same ports:
 
 ```bash
 cd TableGames/craps
@@ -46,7 +60,10 @@ cd SlotsGames/DragonsShrine
 docker compose up -d --build            # http://localhost:8081
 ```
 
-They deliberately take different host ports, so both can run at once.
+Pick one way or the other for a given game, not both at once. Container names
+are pinned so they stay predictable, and Docker will not give the same name to
+two containers, so a game started from its own folder has to come down before
+the root file can start it.
 
 That is also what makes them playable on a phone: the same address on your
 network installs to a home screen as an app. Each game's `DEPLOY.md` —
@@ -65,6 +82,7 @@ SlotsGames/DragonsShrine/ Dragon's Shrine — Next.js, TypeScript, SVG, canvas
   Dockerfile              same shape: static build, nginx, no Node in production
   DEPLOY.md               running it, and putting it on the web
 cardArt/                  a full 52-card PNG deck, shared by the card games
+docker-compose.yml        builds and runs both games at once
 crapsPlan.md              the original specification for craps
 ```
 

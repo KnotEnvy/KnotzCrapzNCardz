@@ -1,0 +1,73 @@
+# The whole arcade, in one place.
+#
+#   docker compose up -d --build     build and run both games
+#   docker compose logs -f           watch them
+#   docker compose down              stop them
+#
+# Craps answers on http://localhost:8080 and Dragon's Shrine on
+# http://localhost:8081 -- the same ports the per-game files use, so a bookmark
+# or a home-screen install does not care which of the two ways you started it.
+#
+# The per-game files under TableGames/craps and SlotsGames/DragonsShrine still
+# stand on their own. What cannot happen is both ways at once: the container
+# names are pinned so they stay predictable, and Docker will not give the same
+# name to two containers. Bring an individually-started game down before coming
+# up from here.
+#
+# The two service blocks are near-identical and deliberately not folded into a
+# YAML anchor. They match today because both games happen to be static sites;
+# the first one that wants a volume, an environment variable or a different
+# base image would have to be pulled back out again, and an anchor that fits
+# exactly two things until it doesn't is not worth the indirection.
+
+services:
+  craps:
+    build:
+      context: ./TableGames/craps
+      dockerfile: Dockerfile
+    image: knotz-craps:latest
+    container_name: knotz-craps
+    restart: unless-stopped
+    ports:
+      # Host 8080 rather than 80: on Windows, 80 is often already taken, and
+      # nothing here needs a privileged port. Change the left number freely.
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # The container serves files and holds no state, so it has no business
+    # writing to its own filesystem outside of nginx's scratch directories.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+
+  dragons-shrine:
+    build:
+      context: ./SlotsGames/DragonsShrine
+      dockerfile: Dockerfile
+    image: dragons-shrine:latest
+    container_name: dragons-shrine
+    restart: unless-stopped
+    ports:
+      # Host 8081 rather than 8080, so this and the craps table can run side by
+      # side on one machine. Change the left number freely.
+      - "8081:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Same reasoning as above: static files, no state, no reason to be writable.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
