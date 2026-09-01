@@ -3,12 +3,43 @@
   "path": "SlotsGames/DragonsShrine",
   "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots and a fair gamble -- every feature won at the reels, never bought -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.56%.",
   "handoffDate": "2026-08-31",
-  "status": "Feature complete and green: 125 fast tests, typecheck, lint with zero warnings, and a twenty-million-spin RTP simulation inside its target band. Play-tested in a browser at four viewports with zero console errors, including both features through their natural triggers now that buys are gone. The mix has been measured properly -- every cue rendered through Chromium's own OfflineAudioContext, five renders each -- which found and fixed a broken loudness ordering. It has still never been listened to by a person, and that is now the last big unknown.",
-  "howItWasBuilt": {
-    "shape": "One orchestrator fixed the contracts first -- engine types, geometry and timing config, the seeded RNG, the fifty paylines, a first-pass paytable and strips, and the store interface -- and committed them before any workstream started. Five agents then worked in strict, non-overlapping file lanes against those contracts: maths, store, symbols and reels, cabinet and feature screens, audio and effects. Nothing was blocked on anything else because every boundary was a published signature rather than a conversation.",
-    "whatMadeItWork": "Writing the contracts first, and stubbing both cross-lane boundaries (an inert store, a no-op audio module) so that every lane compiled and typechecked from minute one against interfaces that were real even when the implementations were not.",
-    "interruptions": "The session hit its API limit twice, killing all five agents mid-edit both times. Each time the in-flight work was committed immediately and the agents were resumed by message rather than respawned, so they kept their own reasoning. The second interruption left the maths lane mid-calibration; see openItems and keyDecisions for what that cost and how it was caught."
-  },
+  "status": "Feature complete, measured, and play-tested. 125 fast tests, typecheck, lint at zero warnings, a twenty-million-spin simulation returning 96.556% inside its target band, and a browser pass at four viewports with no console errors -- both features driven through their natural triggers, the gamble played through win, loss and collect, and reduced motion watched in both polarities. The mix is measured rather than argued about. What is left is a short, known list: see whatIsLeft, which is ordered.",
+  "whatIsLeft": [
+    {
+      "item": "A responsible-gaming layer.",
+      "priority": 1,
+      "status": "next up, assigned",
+      "detail": "The largest remaining gap, and the only one that would block a real release. AUTOPLAY_COUNTS still offers Infinity with no loss limit, no single-win limit and no session reminder; autoplay stop conditions are a hard requirement in every regulated market. The shape that fits this cabinet: a loss limit and a single-win limit chosen when autoplay starts, both stopping the run rather than warning about it, plus a periodic reality check on elapsed time and net position. The autoplay menu already exists as a popover and is the natural home. Note the RTP disclosure that used to sit with this item is done -- it is on the attract screen."
+    },
+    {
+      "item": "An error boundary.",
+      "priority": 2,
+      "status": "next up, assigned",
+      "detail": "src/app has no error.tsx and no global-error.tsx, and there is no React boundary anywhere. A throw during a hold-and-win render is a white screen, and because feature state is deliberately never persisted the player loses an in-flight link with no way back to it. The boundary needs to do more than apologise: it should offer to end the feature and settle at what is on the board, because the alternative is a player who watched nine orbs lock and got nothing. Small job, removes the worst failure mode in the app."
+    },
+    {
+      "item": "Listen to the audio.",
+      "priority": 3,
+      "status": "needs a person, not a tool",
+      "detail": "It is now genuinely measured -- every cue rendered five times through a real Web Audio implementation, both loudness ladders monotonic, the limiter's behaviour on the pile-ups understood, and one real ordering bug found and fixed by measurement alone. But measurement is not listening, and what it cannot tell you is exactly what matters next: whether the GRAND is harsh where it is clamped, whether the reel loop grates across a long session, whether the fanfares wear out by the fifth time. Ten minutes on headphones."
+    },
+    {
+      "item": "Profile the FX layer on a real phone.",
+      "priority": 4,
+      "detail": "A large canvas particle system that has only ever run on desktop. Reduced motion cuts it to 20% of particles so the accessible path is likely fine; the default path on a mid-range Android during a twenty-orb link is unmeasured."
+    },
+    {
+      "item": "A service worker.",
+      "priority": 5,
+      "detail": "The app installs as a PWA but still needs the network to load. Everything it serves is static and versioned, so this is a precache manifest rather than a caching strategy."
+    },
+    {
+      "item": "Progressive jackpots.",
+      "priority": 6,
+      "status": "deliberately not done",
+      "detail": "The four jackpots are fixed multiples of the stake. A jackpot that genuinely grows across sessions and players needs a server, and inventing one client-side would be a lie told in the most sensitive place on the machine. Listed so nobody mistakes it for an oversight."
+    }
+  ],
   "architecture": {
     "engineIsPure": "src/lib/engine is seeded, synchronous and side-effect free. spin(ctx) takes a generator, a stake and a mode and returns everything that spin did. It is the only thing that decides money.",
     "storeNeverInventsMoney": "src/lib/store debits, asks the engine, and pays exactly what came back. It deliberately does not import evaluateGrid at all -- a second opinion about what a board is worth is the bug you never find.",
@@ -40,10 +71,6 @@
     {
       "decision": "MAJOR and GRAND are board awards -- won by filling eighteen or twenty cells -- and can never be carried by an orb.",
       "why": "A top prize that can arrive unannounced on the first respin is a lottery ticket. One you can watch yourself approach is a feature."
-    },
-    {
-      "decision": "Feature buy prices are measured, not chosen.",
-      "why": "Each was found by pinning its cost at 1x and reading what the simulation said the feature returns -- 75.5x, 59.8x, 240x -- then dividing by the base game's measured return and taking the middle of the resulting window. Both ends of that window are asserted: too cheap and the button is the only correct play, too dear and it is a trap sold to the player least willing to wait."
     },
     {
       "decision": "The engine's draw order is pinned by a test that counts random words, not by one that checks a board.",
@@ -104,53 +131,12 @@
       }
     }
   },
-  "bugsFoundAndFixed": [
-    "The session ran on a different seed from the one shown on the glass, so the seed a player could copy reproduced nothing.",
-    "A hold-and-win jackpot was announced and counted twice -- once when its orb landed, once when the board settled.",
-    "gamble() threw past its step cap instead of collecting, so a sixth double was reachable from the store.",
-    "The win presentation deducted its own lead-in from the meter's count time, so every count-up ran short.",
-    "Autoplay resumed after a feature had lit.",
-    "unlockAudio() was never called: the game would have shipped completely silent.",
-    "All three feature buys were priced at 1x total bet -- a calibration probe left behind when the maths lane was interrupted. It would have sold a feature worth 75x the stake for one. Caught by a store test asserting that an unaffordable buy is refused, which instead found it affordable.",
-    "A hydration mismatch on every first load: the idle board was seeded from the random session seed, so the statically prerendered HTML disagreed with what the client built and React discarded and rebuilt the whole tree. The idle board is now drawn from a fixed seed, which is also the honest thing to show -- nothing has been decided yet.",
-    "Every symbol in the paytable was cropped to its own top-left corner. `.ds-sym` sets a 96px box and the caller tried to override it with `h-full w-full`, which ties on specificity -- so which one won depended on stylesheet concatenation order, inside an overflow-hidden card. SymbolArt now has a `fit` prop implemented as an attribute selector, which cannot lose that tie.",
-    "On a landscape phone the game was not there. The layout is a column of fixed chrome around one flexible reel window, and at 812x375 the chrome's own height exceeded the viewport, so the reels -- the only band that yields -- were laid out at exactly zero pixels. No overflow, no scrollbar, no error: just no game. Compressing the chrome was measured and rejected (it leaves ~120px for four rows), so short-and-wide screens now put the deck beside the board instead of beneath it.",
-    "The total-bet plate was crushed to 28px of content on a 375px phone -- narrower than the string '$1.00' -- because the deck row split its width evenly between the bet rail and the action column. The player could not read their own stake. The rail now takes its own row below `sm`.",
-    "The spin button was smaller than BUY FEATURE on a phone and sat in the wrong corner, with the secondary action under the thumb. It is now the largest control on the deck and takes the thumb corner, mirrored by the left-handed preference like everything else.",
-    "The credit plate truncated a five-figure bankroll at tablet widths: it shared an even 1fr with the bet plate, which never needs more than '$100.00'.",
-    "The GRAND was not the loudest thing in the game. Measured over the loudest 300 ms window, winLegendary delivered -11.08 dB against jackpotGrand's -11.40, consistently and with no overlap between the two distributions -- the top jackpot was quieter than a win tier, which audio.ts's own header calls the one ordering that must never break. The cause is that jackpotGrand peaks at 0.893 on every render with zero variance, and 0.893 is exactly the soft clip's asymptote: its sum arrives at or past full scale and is hard-clamped, so it could not be raised to win the comparison. winLegendary came down from 0.84 instead.",
-    "The old header table was a set of single-shot renders. The noise buffer is regenerated per context and noiseTrim can multiply a narrowband voice by twelve, so one render of dragonReel is a sample from a distribution (0.32 to 0.79), not a measurement of dragonReel. The table is now medians of five."
-  ],
-  "openItems": [
-    {
-      "item": "Nobody has listened to the audio.",
-      "severity": "medium",
-      "detail": "It is now genuinely measured rather than argued about -- every cue rendered five times through a real Web Audio implementation, both loudness ladders monotonic, the limiter's behaviour on the pile-ups understood, and one real ordering bug found and fixed by measurement. But measurement is not listening, and the things measurement cannot tell you are exactly the ones that matter next: whether the GRAND is harsh, whether the reel loop grates over a long session, whether the fanfares are annoying the fifth time. Put headphones on and play for ten minutes."
-    },
-    {
-      "item": "No responsible-gaming layer.",
-      "severity": "medium",
-      "detail": "AUTOPLAY_COUNTS still includes Infinity with no loss limit, no single-win limit and no session reminder. Autoplay stop conditions are a requirement in every regulated market. The RTP disclosure that used to sit alongside this item is done -- it is on the attract screen."
-    },
-    {
-      "item": "No error boundary anywhere.",
-      "severity": "medium",
-      "detail": "src/app has no error.tsx or global-error.tsx and no React boundary. A throw during a hold-and-win render is a white screen, and because feature state is deliberately not persisted the player loses an in-flight link with no way back to it."
-    },
-    {
-      "item": "The FX layer has never been profiled on a real phone.",
-      "severity": "low",
-      "detail": "A large canvas particle system that has only ever run on desktop. Reduced motion cuts it to 20% of particles, so the accessible path is likely fine; the default path on a mid-range Android during a twenty-orb link is unmeasured."
-    },
-    {
-      "item": "No service worker, so the installed app still needs the network to load.",
-      "severity": "low"
-    },
-    {
-      "item": "The four jackpots are fixed multiples of the stake rather than progressives.",
-      "severity": "low",
-      "detail": "The honest thing to do without a server. A jackpot that genuinely grows needs one."
-    }
+  "trapsWorthKnowing": [
+    "Money is integer cents everywhere, and line pays multiply betPerLine while scatter, orb and jackpot pays multiply totalBet. Confusing the two is a factor-of-fifty error that still typechecks. Every field carrying a multiplier says which one it is; keep it that way.",
+    "The store never asks what a board is worth. It debits, calls the engine, and pays exactly what came back -- it does not import evaluateGrid at all. A second opinion about a board's value is the bug you never find. The store tests assert `bankroll === STARTING_BANKROLL - wagered + won` after every settled spin, which catches that whole class in one line.",
+    "There are two layouts. The `tight` variant (short and wide -- a landscape phone) puts the deck in a ~265px rail beside the board while the viewport is 812px wide, so `sm:` utilities are actively wrong inside that rail. The variant is declared after the Tailwind import so its utilities sort last and win. Any deck or meter change has to be checked in both.",
+    "Never measure a loop or a music bed inside an offline audio render. Their schedulers are setInterval, which keeps wall time and knows nothing about render time, and one of them will cheerfully report the limiter's ceiling for an ordinary spin that actually peaks at 0.358. Measure them alone. See tools/measure-audio.md.",
+    "One audio render is not a measurement. The noise buffer is regenerated per context and noiseTrim can multiply a narrowband voice by twelve, so a single render of dragonReel lands anywhere between 0.32 and 0.79. Take the median of five."
   ],
   "ifYouChangeOneThing": {
     "theStrips": "Re-run npm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
