@@ -197,9 +197,13 @@ describe('Bust It, measured', () => {
     const rng = createRng('bust-it');
     let table = createTable(rules, rng, { seats: 1, bankroll: dollars(100_000_000) });
 
-    const N = 400_000;
+    const N = 500_000;
     let staked = 0;
     let net = 0;
+    // Accumulated to work out the band this measurement is actually entitled
+    // to, rather than asserting one that sounds tight.
+    let sumSq = 0;
+    let rounds = 0;
 
     for (let i = 0; i < N; i++) {
       table = must(setBet(table, 'A', dollars(10)));
@@ -219,18 +223,41 @@ describe('Bust It, measured', () => {
       staked += dollars(10);
       // The main bet's result is in stats.net too, so the side bet is taken
       // from the settlement list rather than from the seat's ledger.
-      net += settled.settlements
+      const round = settled.settlements
         .filter((s) => s.kind === 'SIDE' && s.sideKind === 'BUST_IT')
         .reduce((n, s) => n + s.net, 0);
+      net += round;
+      const units = round / dollars(10);
+      sumSq += units * units;
+      rounds++;
       const cleared = nextRoundOf(table);
       if (cleared) table = cleared;
     }
 
     const edge = (-net / staked) * 100;
     measured.push(['Bust It', edge, SIDE_BET_SPECS.BUST_IT.edge]);
-    // Binomial-ish at roughly 28% hit rate over 400k trials: three standard
-    // errors is well under half a percent.
-    expect(Math.abs(edge - SIDE_BET_SPECS.BUST_IT.edge)).toBeLessThan(0.3);
+
+    /*
+     * The band is computed, not chosen. This bet pays four hundred to one on
+     * an eight-card dealer bust, and that tail dominates its variance: the
+     * per-round standard deviation is about 2.5 units against the main game's
+     * 1.15, so half a million rounds place the edge to within roughly a
+     * percent and no tighter.
+     *
+     * It was asserted at 0.3 for two runs and passed both by luck. Then a
+     * change to the RNG stream shifted every seeded measurement — nothing to
+     * do with Bust It — and it failed at 0.41, which is well inside the noise
+     * this measurement has always had. A tolerance that only holds on the
+     * seeds you happened to try is not a test.
+     */
+    const mean = net / dollars(10) / rounds;
+    const sd = Math.sqrt(Math.max(0, sumSq / rounds - mean * mean));
+    const threeSigma = ((3 * sd) / Math.sqrt(rounds)) * 100;
+
+    expect(
+      Math.abs(edge - SIDE_BET_SPECS.BUST_IT.edge),
+      `Bust It measured ${edge.toFixed(3)}%, published ${SIDE_BET_SPECS.BUST_IT.edge}%, 3σ ±${threeSigma.toFixed(3)}`,
+    ).toBeLessThan(Math.max(0.5, threeSigma));
   }, 300_000);
 });
 

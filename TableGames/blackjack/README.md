@@ -82,14 +82,18 @@ six minutes and prints the table.
 The side bets are not measured — they are **enumerated**. Five of the six are
 decided by two or three cards off the top of the shoe, so the suite walks every
 ordered pair and triple, weights each by its exact probability, and sums the
-payout. Those edges carry no sampling error at all:
+payout. Those five edges carry no sampling error at all. Bust It is the
+exception: it is a bet on a hand the dealer plays out, so it has to be dealt,
+and its 400:1 tail gives it six times the main game's variance — half a million
+rounds place it to within about a percent and no tighter, so it is quoted with
+the uncertainty it has.
 
 | Side bet | House edge, six decks |
 | --- | --- |
 | 21 + 3 | 4.62% |
 | Perfect Pairs | 6.11% |
 | Royal Match | 6.67% |
-| Bust It | 6.71% |
+| Bust It | 6.9% ± 0.3 |
 | Super Sevens | 11.40% |
 | Lucky Ladies | 17.63% |
 

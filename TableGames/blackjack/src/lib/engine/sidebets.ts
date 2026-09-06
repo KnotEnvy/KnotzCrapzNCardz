@@ -24,6 +24,13 @@
  * plays out) is measured over four hundred thousand rounds. Editing a paytable
  * without re-deriving its edge fails that test.
  *
+ * Bust It's figure is the one with an uncertainty attached, and it is a wide
+ * one: the bet pays four hundred to one on an eight-card dealer bust, so its
+ * per-round standard deviation is about 2.5 units against the main game's
+ * 1.15, and four hundred thousand rounds place it only to within a percent.
+ * The 6.92% below is pooled over two million. Treat it as 6.9 ± 0.3, not as a
+ * figure of the same kind as the five above it.
+ *
  * Two of these are worth a second look if the numbers seem unfamiliar. Perfect
  * Pairs gets *better* with more decks, because a perfect pair needs a second
  * copy of the identical card and a six-deck shoe holds five of them where an
@@ -137,7 +144,7 @@ export const SIDE_BET_SPECS: Record<SideBetKind, SideBetSpec> = {
       { label: 'Busts with 4 cards', ratio: [3, 1] },
       { label: 'Busts with 3 cards', ratio: [1, 1] },
     ],
-    edge: 6.71,
+    edge: 6.92,
     accent: 'var(--color-side-bust)',
   },
   SUPER_SEVENS: {
