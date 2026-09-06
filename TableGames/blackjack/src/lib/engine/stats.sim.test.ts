@@ -398,11 +398,14 @@ describe('every rule is wired through', () => {
   }
 
   it('re-splitting aces produces more split hands', () => {
-    const { on, off } = pair({ resplitAces: true }, 'rule-rsa');
-    RESULTS.push({ name: '  re-split aces', measured: off.edge - on.edge, model: 0.08, stderr: 0, rounds: N * 2, kind: 'delta' });
-    // About one hand in 240 is a pair of aces, and about one of those in six
-    // draws a third — so the lift is small but far outside the noise on a
-    // count of several thousand splits.
+    // Twice the usual sample. A pair of aces is 0.57% of hands and only about
+    // one in six of those draws a third, so the lift is under a split per
+    // thousand hands — real, and only three standard errors clear at 300,000.
+    const a = measure(base, 600_000, 'rule-rsa');
+    const b = measure({ ...base, resplitAces: true }, 600_000, 'rule-rsa');
+    const on = b;
+    const off = a;
+    RESULTS.push({ name: '  re-split aces', measured: off.edge - on.edge, model: 0.08, stderr: 0, rounds: 1_200_000, kind: 'delta' });
     expect(on.per1000.splits).toBeGreaterThan(off.per1000.splits);
   }, 900_000);
 

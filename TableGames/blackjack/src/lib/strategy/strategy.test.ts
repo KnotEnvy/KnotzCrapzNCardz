@@ -25,6 +25,9 @@ import {
 import { defaultRules, presetById } from '@/lib/engine/rules';
 import { createShoe } from '@/lib/engine/shoe';
 import { createRng } from '@/lib/engine/rng';
+import { createTable } from '@/lib/engine/table';
+import { dollars } from '@/lib/engine/money';
+import { DEFAULT_BOT, playRound } from '@/lib/strategy/autoplay';
 import type { Card, Rank, Suit } from '@/lib/engine/types';
 
 const S = 'spades' as const;
@@ -340,6 +343,59 @@ describe('chart integrity', () => {
     const enhc = chartFor({ ...rules, holeCard: 'ENHC' });
     const peek = chartFor({ ...rules, holeCard: 'PEEK' });
     expect(enhc.hard[11][UPCARDS.indexOf(10)]).not.toBe(peek.hard[11][UPCARDS.indexOf(10)]);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The bot's own reporting
+ * ------------------------------------------------------------------ */
+
+describe('playRound reports what it did', () => {
+  /*
+   * Two thousand rounds, checked against arithmetic rather than against a
+   * recorded figure. Every one of these was silently zero or wrong at some
+   * point: `handsPlayed` compared a value read after the deal against one read
+   * after settlement, and the deal is what increments it, so it was always
+   * zero — invisible until the measurement suite divided by it.
+   */
+  const rng = createRng('report');
+  let table = createTable(presetById('vegas-strip').rules, rng, {
+    seats: 1,
+    bankroll: dollars(1_000_000),
+  });
+  let hands = 0;
+  let wagered = 0;
+  const ROUNDS = 2000;
+  for (let i = 0; i < ROUNDS; i++) {
+    const out = playRound(table, DEFAULT_BOT, rng);
+    table = out.table;
+    hands += out.handsPlayed;
+    wagered += out.wagered;
+  }
+  const stats = table.seats[0].stats;
+
+  it('counts one hand per round', () => {
+    expect(hands).toBe(ROUNDS);
+  });
+
+  it('wagers at least the unit on every hand, and more where it doubled or split', () => {
+    expect(wagered).toBeGreaterThan(ROUNDS * DEFAULT_BOT.unit);
+    expect(wagered).toBe(stats.wagered);
+  });
+
+  it('doubles and splits at something like the published rates', () => {
+    // Basic strategy doubles roughly nine or ten hands in a hundred and splits
+    // roughly two. An order of magnitude either side means the chart is not
+    // reaching the felt.
+    const per1000 = (n: number) => (n / hands) * 1000;
+    expect(per1000(stats.doubles)).toBeGreaterThan(50);
+    expect(per1000(stats.doubles)).toBeLessThan(160);
+    expect(per1000(stats.splits)).toBeGreaterThan(5);
+    expect(per1000(stats.splits)).toBeLessThan(60);
+  });
+
+  it('never surrenders at a table that does not offer it', () => {
+    expect(stats.surrenders).toBe(0);
   });
 });
 

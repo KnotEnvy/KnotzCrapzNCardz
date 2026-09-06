@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete, measured, and through one round of adversarial review. Everything is green: 129 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through a real optimisation pass (66x faster per round) and then a correctness pass: an independent judge graded the build against the craps table next door and found four rule defects, several false claims in the documentation, and a set of statistical tests too wide to fail. All of them are fixed, and the tests that would have caught each one are in the suite.",
+  "status": "Feature complete, measured, and through one round of adversarial review. Everything is green: 133 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through a real optimisation pass (66x faster per round) and then a correctness pass: an independent judge graded the build against the craps table next door and found four rule defects, several false claims in the documentation, and a set of statistical tests too wide to fail. All of them are fixed, and the tests that would have caught each one are in the suite.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -50,7 +50,8 @@
         "betRamp existed twice \u2014 once in counting.ts for the HUD and once in autoplay.ts for the bot \u2014 so the panel could advise one bet while the bot placed another.",
         "The persist merge refunded unresolved side bets but left resolved ones on the felt with their result, so a resumed session displayed a win it had already paid.",
         "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced.",
-        "The session panel reported one net figure, so a hand that lost its wager and hit a side bet showed a positive total beside a hundred-percent loss rate. SeatStats now books sideNet and insuranceNet apart from the whole, and the panel breaks them out."
+        "The session panel reported one net figure, so a hand that lost its wager and hit a side bet showed a positive total beside a hundred-percent loss rate. SeatStats now books sideNet and insuranceNet apart from the whole, and the panel breaks them out.",
+        "playRound read `handsBefore` after the deal and compared it against a value taken after settlement \u2014 but the deal is what increments handsPlayed, so the figure was always zero. It went unnoticed because nothing divided by it until the new per-thousand rule tests did. `insuranceWagered` had the same shape: read before the offers phase opened, so it was always zero too. Both are read at the right moment now, and strategy.test.ts checks the bot's own reporting against arithmetic over two thousand rounds."
       ]
     }
   },
@@ -67,7 +68,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 129 tests, under a second. Run this constantly.",
+    "test": "pnpm test \u2014 133 tests, under a second. Run this constantly.",
     "testStats": "pnpm run test:stats \u2014 26 tests, about four minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
@@ -123,7 +124,8 @@
     "chartFor's cache key must include every rule the chart reads. It omitted holeCard and served a peeking chart to a no-hole-card table.",
     "Chart cell colours and side-bet accents must stay in a plain :root block. Tailwind 4 only emits an @theme variable when a utility referencing it is generated, and these are read through var() in inline styles.",
     "Rules in globals.css that target the same single class as a Tailwind utility win, because they come after it in the cascade. The .stats-rail block is scoped :not(.hidden) for exactly this reason \u2014 without it, opening the tall-viewport layout overrode the `hidden` utility and showed a panel the player had closed.",
-    "A `role=\"status\"` element has to exist before text lands in it. Rendering the toast stack only when there is a toast means the first message of a session is never announced."
+    "A `role=\"status\"` element has to exist before text lands in it. Rendering the toast stack only when there is a toast means the first message of a session is never announced.",
+    "playRound's before-and-after readings are order-sensitive: handsPlayed is incremented by deal() and insurance is placed after it, so one must be read before the deal and the other after the offers close. Both were wrong in the same way and both were silently zero."
   ],
   "verification": {
     "automated": [

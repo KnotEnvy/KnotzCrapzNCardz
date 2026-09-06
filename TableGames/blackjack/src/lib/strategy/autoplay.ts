@@ -211,6 +211,13 @@ export function playRound(
   seats: readonly SeatId[] = ['A'],
 ): RoundOutcome {
   let t = table;
+  /*
+   * Read before the deal, because the deal is what increments it. This used to
+   * be read afterwards and compared against a post-settlement value that never
+   * moves, so `handsPlayed` was always zero — invisible until something
+   * divided by it.
+   */
+  const handsBefore = totalHands(t);
 
   for (const id of seats) {
     const seat = seatOf(t, id);
@@ -223,9 +230,6 @@ export function playRound(
   const dealt = deal(t, rng);
   if (!dealt.ok) return noRound(t);
   t = dealt.table;
-
-  const handsBefore = totalHands(t);
-  const insuranceWagered = t.seats.reduce((n, seat) => n + seat.insurance, 0);
 
   if (t.phase === 'INSURANCE') {
     if (config.basic && config.deviations) {
@@ -271,6 +275,10 @@ export function playRound(
   }
 
   if (t.phase === 'DEALER') t = dealerPlayOut(t);
+
+  // After the offers have closed, so it counts insurance that was actually
+  // taken rather than the zero that stands before the phase opens.
+  const insuranceWagered = t.seats.reduce((n, seat) => n + seat.insurance, 0);
 
   const trueCount = countShoe(t.shoe, config.system, t.rules.decks).true;
   /*
