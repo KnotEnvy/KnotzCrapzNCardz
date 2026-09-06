@@ -22,7 +22,7 @@
 import { handValue, isBlackjack } from './hand';
 import { winnings } from './money';
 import { blackjackRatio, INSURANCE_RATIO } from './rules';
-import { luckyLadiesJackpotUpgrade, resolveBustIt } from './sidebets';
+import { resolveBustIt } from './sidebets';
 import { cardLabel } from './types';
 import type {
   Card,
@@ -204,19 +204,18 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
         settled = { ...sb, net: r.net > 0 ? r.net : -sb.amount, label: r.label };
         if (r.net > 0) bankroll += r.net + sb.amount;
         net += settled.net!;
-      } else if (sb.kind === 'LUCKY_LADIES' && dealerBJ) {
+      } else if (sb.kind === 'LUCKY_LADIES' && dealerBJ && sb.jackpot) {
         // The 200:1 line was paid at the deal; two queens of hearts against a
         // dealer natural is the 1000:1 line, so the difference is paid now.
-        const upgrade = luckyLadiesJackpotUpgrade(seat.hands[0]?.cards ?? [], sb.amount);
-        if (upgrade > 0) {
-          settled = {
-            ...sb,
-            net: (sb.net ?? 0) + upgrade,
-            label: 'Two queens of hearts + dealer blackjack',
-          };
-          bankroll += upgrade;
-          net += upgrade;
-        }
+        // The amount was recorded at grade time — see SideBetWager.jackpot —
+        // because a split has since moved the second queen to another hand.
+        settled = {
+          ...sb,
+          net: (sb.net ?? 0) + sb.jackpot,
+          label: 'Two queens of hearts + dealer blackjack',
+        };
+        bankroll += sb.jackpot;
+        net += sb.jackpot;
       }
 
       if (settled.net !== null) {
@@ -292,8 +291,6 @@ function bumpStats(stats: SeatStats, outcome: HandOutcome): void {
     case 'SURRENDER':
       stats.losses += 1;
       break;
-    case 'INSURANCE_ONLY':
-      break;
   }
 }
 
@@ -311,8 +308,6 @@ export function outcomeLabel(outcome: HandOutcome): string {
       return 'Bust';
     case 'SURRENDER':
       return 'Surrender';
-    case 'INSURANCE_ONLY':
-      return 'Insurance';
   }
 }
 

@@ -386,6 +386,68 @@ body {
 }
 
 /* ------------------------------------------------------------------ *
+ * Touch
+ *
+ * The side-bet circles are 33x30 on the felt, which is right for the layout
+ * and far under a finger. A coarse pointer gets a transparent hit area padded
+ * out to 44px around each one, without moving anything that is drawn — the
+ * felt's spacing is what keeps six of them clear of the next seat, and
+ * growing the boxes themselves would break it.
+ * ------------------------------------------------------------------ */
+
+@media (pointer: coarse) {
+  .sidebet-box::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Tall viewports
+ *
+ * The felt is a fixed 1000x560 that scales to fit, so a tall narrow window —
+ * a tablet held upright, a half-screen browser — leaves a third of the height
+ * empty above and below it. The stats panel is hidden at those widths because
+ * it would squeeze the table sideways; below the table it costs nothing, and
+ * the dead space becomes the panel.
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1179px) and (min-height: 720px) {
+  .table-shell {
+    flex-direction: column;
+  }
+
+  /*
+   * `:not(.hidden)` is load-bearing, not decoration. These rules come after
+   * Tailwind's utilities in the cascade and match on one class, so a bare
+   * `.stats-rail { display: block }` would beat the `hidden` utility and show
+   * the panel the player just closed.
+   */
+  .stats-rail:not(.hidden) {
+    display: block;
+    width: 100%;
+    max-height: 42vh;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    position: static;
+    box-shadow: none;
+    /* The rail is now as wide as the table, so the panels flow in columns. */
+    column-width: 17rem;
+    column-gap: 0.5rem;
+  }
+
+  .stats-rail:not(.hidden) > * {
+    break-inside: avoid;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* ------------------------------------------------------------------ *
  * Short viewports
  *
  * A phone in landscape has about 390 pixels of height, and the felt gets

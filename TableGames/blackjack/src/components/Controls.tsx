@@ -325,9 +325,27 @@ export function useKeyboard(): void {
         return;
       }
       if (table.phase === 'INSURANCE') {
+        // Space declines, because declining is right on almost every hand —
+        // but taking the offer needs a key of its own, or the only way to
+        // insure a hand is with a mouse.
         if (key === 'n' || key === ' ' || key === 'enter') {
           e.preventDefault();
           decline();
+        }
+        if (key === 'i') {
+          e.preventDefault();
+          const { takeInsurance } = useGame.getState();
+          for (const seat of table.seats) {
+            if (seat.hands.length > 0 && seat.insurance === 0) {
+              takeInsurance(seat.id, maxInsurance(seat.hands[0].bet));
+            }
+          }
+        }
+        if (key === 'e') {
+          e.preventDefault();
+          const { takeEvenMoney } = useGame.getState();
+          const seat = table.seats.find((x) => x.hands.length > 0 && x.insurance === 0);
+          if (seat) takeEvenMoney(seat.id);
         }
         if (key === 'r') act('SURRENDER');
         return;

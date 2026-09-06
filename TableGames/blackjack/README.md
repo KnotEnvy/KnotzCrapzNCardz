@@ -26,7 +26,10 @@ attached.
 **Every move.** Hit, stand, double (on any two cards or restricted to 9-11 or
 10-11, with or without soft totals), split to four hands, re-split aces, hit
 split aces, late surrender, early surrender. Each button knows why it is
-unavailable and says so rather than sitting there dead.
+unavailable and says so rather than sitting there dead — and each rule is
+tested for doing something, not only for refusing correctly. Re-split aces
+spent this game's first draft as a switch that priced itself at 0.08% and did
+nothing at all.
 
 **Every rule that matters.** One to eight decks, penetration on a slider,
 dealer stands or hits soft 17, blackjack at 3:2 or 6:5, double after split,
@@ -83,9 +86,9 @@ argument, and it is why the figures are on the chips.
 ## Playing it
 
 Space deals, and then stands. `H` `S` `D` `P` `R` are hit, stand, double, split
-and surrender; `N` declines insurance. A blackjack session is a hundred hands
-an hour and reaching for a mouse between every one of them is what makes it
-feel like work.
+and surrender; `N` declines insurance, `I` takes it, `E` takes even money. A
+blackjack session is a hundred hands an hour and reaching for a mouse between
+every one of them is what makes it feel like work.
 
 Click an empty circle to sit down, a seated one to add a chip. Three seats,
 each with its own bankroll and its own statistics.
@@ -119,11 +122,22 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 118 tests, under a second
+pnpm test            # the fast suite — 127 tests, under a second
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets
 ```
+
+One thing worth knowing about the measurement suite before adding to it.
+Blackjack's per-hand standard deviation is about 1.15 units, so the difference
+between two 300,000-round runs carries a three-sigma band of 0.89% — wider than
+double-after-split, late surrender, no-hole-card and a soft-17 dealer put
+together. Resolving a 0.14% rule effect to a third of itself would take fifty
+million rounds an arm. So the per-rule rows are printed as diagnostics, and
+what is *asserted* for each rule is a frequency: how often the bot doubles,
+splits or surrenders with it on versus off. Those converge in seconds, and they
+are the only test shape that catches a rule wired to nothing — which is exactly
+how re-split aces was found to be doing nothing.
 
 `handoff.json` carries the architecture, the decisions worth knowing before
 changing anything, and what is still open. Read it before touching the engine.

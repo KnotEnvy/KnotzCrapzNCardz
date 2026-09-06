@@ -4,8 +4,11 @@
 #   docker compose logs -f           watch it
 #   docker compose down              stop it
 #
-# The game then answers on http://localhost:8080, and on http://<this
-# machine's LAN IP>:8080 from any phone or laptop on the same network.
+# The game then answers on http://localhost:8082, and on http://<this
+# machine's LAN IP>:8082 from any phone or laptop on the same network.
+#
+# 8082 rather than 8080: craps already takes 8080 and Dragon's Shrine takes
+# 8081, so all three tables can run at once from the repository root's file.
 
 services:
   blackjack:

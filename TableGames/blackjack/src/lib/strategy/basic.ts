@@ -30,11 +30,13 @@
  * three near-identical 10x17 grids in one file is how a chart gets edited in
  * one place and not the others.
  *
- * Sources are the standard computed charts (Wizard of Odds / Griffin). The
- * simulation suite is the check: `strategy.sim.test.ts` plays several hundred
- * thousand hands on each preset with these decisions and asserts the resulting
- * house edge lands where the rule model says it should. A wrong cell moves
- * that number.
+ * Sources are the standard computed charts. Two things check them. The unit
+ * suite in `strategy.test.ts` asserts individual cells and the whole
+ * restriction machinery, which is what actually guards a typo — a single wrong
+ * cell moves the house edge by less than the simulation's noise floor. The
+ * measurement suite in `stats.sim.test.ts` then plays hundreds of thousands of
+ * hands per preset with these decisions, which catches a systematically wrong
+ * *set* of cells.
  */
 
 import { handValue, isPair } from '@/lib/engine/hand';
@@ -142,24 +144,49 @@ const PAIRS_H17: Array<[number, number, Code]> = [
 ];
 
 /**
+ * No-hole-card deltas.
+ *
+ * Under ENHC the dealer's second card arrives after the players are finished,
+ * so a natural takes every doubled and split chip on the table. Against the
+ * two upcards that can become one, the extra chips are no longer worth
+ * risking: eleven stops doubling against a ten and an ace, and the two pairs
+ * that are otherwise split unconditionally stop being split against them.
+ *
+ * These five cells are the standard European set. Getting them wrong is
+ * visible in the measurement suite rather than in a unit test — the ENHC
+ * delta row is the check.
+ */
+const ENHC: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
+  ['hard', 11, 10, 'H'],
+  ['hard', 11, 11, 'H'],
+  ['pair', 8, 10, 'H'],
+  ['pair', 8, 11, 'H'],
+  ['pair', 11, 11, 'H'],
+];
+
+/**
  * Single and double deck deltas.
  *
  * Fewer decks means the two cards in your hand remove a larger fraction of the
- * shoe, which shifts about a dozen marginal cells. These are the ones that
- * matter at one deck; at two, the first four still apply and the rest wash
- * out, so they are applied only below three decks.
+ * shoe, which shifts a handful of marginal cells. The first four hold at both
+ * one and two decks; the rest wash out by two and are applied only at one.
  */
-const FEW_DECK: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
-  ['hard', 8, 5, 'D'],
-  ['hard', 8, 6, 'D'],
+const FEW_DECK_ANY: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
   ['hard', 9, 2, 'D'],
   ['hard', 11, 11, 'D'],
   ['soft', 13, 4, 'D'],
-  ['soft', 14, 4, 'D'],
   ['soft', 17, 2, 'D'],
+];
+
+const FEW_DECK_ONE: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
+  ['hard', 8, 5, 'D'],
+  ['hard', 8, 6, 'D'],
+  ['soft', 14, 4, 'D'],
+  ['soft', 18, 11, 'S'],
   ['soft', 19, 6, 'Ds'],
   ['pair', 4, 4, 'Ph'],
   ['pair', 7, 8, 'P'],
+  ['pair', 7, 10, 'S'],
 ];
 
 /* ------------------------------------------------------------------ *
@@ -197,7 +224,17 @@ export interface Chart {
 const chartCache = new Map<string, Chart>();
 
 function chartKey(rules: TableRules): string {
-  return `${rules.decks}|${rules.hitsSoft17}|${rules.das}|${rules.surrender}|${rules.double}|${rules.doubleSoft}`;
+  return [
+    rules.decks,
+    rules.hitsSoft17,
+    rules.das,
+    rules.surrender,
+    rules.double,
+    rules.doubleSoft,
+    // ENHC changes five cells. Leaving it out of the key served a peeking
+    // chart to a no-hole-card table from the cache.
+    rules.holeCard,
+  ].join('|');
 }
 
 export function chartFor(rules: TableRules): Chart {
@@ -209,11 +246,16 @@ export function chartFor(rules: TableRules): Chart {
   let soft = rules.hitsSoft17 ? patch(SOFT, SOFT_H17) : patch(SOFT, []);
   let pairs = rules.hitsSoft17 ? patch(PAIRS, PAIRS_H17) : patch(PAIRS, []);
 
-  if (rules.decks <= 2) {
-    hard = patch(hard, FEW_DECK.filter(([t]) => t === 'hard').map(([, r, u, c]) => [r, u, c]));
-    soft = patch(soft, FEW_DECK.filter(([t]) => t === 'soft').map(([, r, u, c]) => [r, u, c]));
-    pairs = patch(pairs, FEW_DECK.filter(([t]) => t === 'pair').map(([, r, u, c]) => [r, u, c]));
-  }
+  const apply = (deltas: typeof ENHC) => {
+    hard = patch(hard, deltas.filter(([t]) => t === 'hard').map(([, r, u, c]) => [r, u, c]));
+    soft = patch(soft, deltas.filter(([t]) => t === 'soft').map(([, r, u, c]) => [r, u, c]));
+    pairs = patch(pairs, deltas.filter(([t]) => t === 'pair').map(([, r, u, c]) => [r, u, c]));
+  };
+
+  if (rules.decks <= 2) apply(FEW_DECK_ANY);
+  if (rules.decks === 1) apply(FEW_DECK_ONE);
+  // Last, because a no-hole-card table overrides a few-deck double.
+  if (rules.holeCard === 'ENHC') apply(ENHC);
 
   const chart = restrict({ hard, soft, pairs }, rules);
   chartCache.set(key, chart);

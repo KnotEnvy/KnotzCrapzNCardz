@@ -247,8 +247,13 @@ export const RULE_EFFECTS = {
  * percent, well below what the number is displayed to.
  *
  * `stats.sim.test.ts` deals each preset out and asserts the measured edge
- * lands within 0.12% of this. That tolerance is the simulation's own noise at
- * 300k rounds, not slack in the model.
+ * lands within three standard errors of this — about 0.39% at the 800,000
+ * rounds it runs. That is the simulation's own noise, not slack in the model:
+ * blackjack's per-hand standard deviation is about 1.15 units, so pinning an
+ * edge to a tenth of a percent takes tens of millions of hands. The band is
+ * wide enough that variance cannot fail it and narrow enough that a mis-paid
+ * double, a wrong peek or a broken rule cannot pass it — which is how the
+ * dead re-split-aces switch was eventually caught.
  */
 export function estimateHouseEdge(rules: TableRules): number {
   const BASELINE_SIX_DECK = -0.4;

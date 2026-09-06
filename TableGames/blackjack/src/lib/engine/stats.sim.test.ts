@@ -51,6 +51,7 @@ import {
 } from './table';
 import type { TableRules, TableState } from './types';
 import { DEFAULT_BOT, playRound, type BotConfig } from '@/lib/strategy/autoplay';
+import { countShoe } from '@/lib/strategy/counting';
 
 /* ------------------------------------------------------------------ *
  * Harness
@@ -65,6 +66,8 @@ interface Measurement {
   edge: number;
   /** Standard error of that figure, in percent. */
   stderr: number;
+  /** How often the bot took each action, per thousand hands dealt. */
+  per1000: { doubles: number; splits: number; surrenders: number; blackjacks: number };
 }
 
 /**
@@ -113,7 +116,23 @@ function measure(
   const variance = Math.max(0, sumSq / Math.max(1, n) - mean * mean);
   const stderr = (Math.sqrt(variance) / Math.sqrt(Math.max(1, n))) * 100;
 
-  return { rounds, hands, wagered, net, edge, stderr };
+  const seat = table.seats[0];
+  const per = (n: number) => (hands === 0 ? 0 : (n / hands) * 1000);
+
+  return {
+    rounds,
+    hands,
+    wagered,
+    net,
+    edge,
+    stderr,
+    per1000: {
+      doubles: per(seat.stats.doubles),
+      splits: per(seat.stats.splits),
+      surrenders: per(seat.stats.surrenders),
+      blackjacks: per(seat.stats.blackjacks),
+    },
+  };
 }
 
 type Row = {
@@ -338,59 +357,99 @@ describe('house edge by rule set', () => {
  * ------------------------------------------------------------------ */
 
 /**
- * Each of these flips one switch and measures how far the edge moves.
+ * Is each rule actually wired through?
  *
- * Both arms run on the same seed, which is worth stating precisely: it does
- * *not* make the two runs see identical hands, because a rule change alters
- * how many cards come off the shoe and the sequences diverge within a few
- * rounds. It does make them start from the same shoes, which removes the
- * largest single source of difference. The bands below are correspondingly
- * generous — this test is checking a sign and an order of magnitude, and the
- * absolute figures live in the preset test above.
+ * The obvious test — flip one switch and measure how far the edge moves — does
+ * not work, and it is worth being precise about why rather than shipping a
+ * band so wide it would pass a rule that did nothing.
+ *
+ * Blackjack's per-hand standard deviation is about 1.15 units. Over n rounds
+ * the standard error of an edge measurement is 115/sqrt(n) percent, and a
+ * difference between two independent runs carries sqrt(2) times that. At
+ * 300,000 rounds an arm, three standard errors is 0.89% — which swamps double
+ * after split (0.14%), late surrender (0.08%), no-hole-card (0.11%) and even a
+ * dealer hitting soft seventeen (0.22%). Resolving 0.14% to a third of itself
+ * would take roughly fifty million rounds per arm. That is not a tolerance
+ * problem; it is a variance floor, and no assertion at this length can see
+ * past it.
+ *
+ * So the edge deltas are printed as diagnostics and only the one large enough
+ * to resolve — six to five, at 1.39% — is asserted. What *is* asserted for
+ * every rule is a frequency: how often the bot doubles, splits or surrenders.
+ * Those are near-binomial, so their standard errors are a small fraction of
+ * the effect, and they answer the question that actually matters — is this
+ * switch reaching the chart and the felt at all?
+ *
+ * That is not a theoretical distinction. Re-split aces was a dead switch for
+ * this game's entire first draft: the setup screen priced it, the README
+ * advertised it, the edge model credited it, and the code marked both hands
+ * finished before a third ace could ever be split. No edge delta at any
+ * feasible sample size would have caught it. The splits-per-thousand test
+ * below catches it in twenty seconds.
  */
-describe('what each rule is worth', () => {
+describe('every rule is wired through', () => {
   const base = presetById('vegas-strip').rules;
   const N = 300_000;
 
-  function delta(change: Partial<TableRules>, seed: string): number {
+  function pair(change: Partial<TableRules>, seed: string) {
     const a = measure(base, N, seed);
     const b = measure({ ...base, ...change }, N, seed);
-    return a.edge - b.edge; // positive means the change helped the player
+    return { on: b, off: a, delta: a.edge - b.edge };
   }
 
-  it('a dealer who hits soft 17 costs the player', () => {
-    const d = delta({ hitsSoft17: true }, 'rule-h17');
-    RESULTS.push({ name: '  hits soft 17', measured: d, model: -0.22, stderr: 0, rounds: N * 2, kind: 'delta' });
-    expect(d).toBeLessThan(0.05);
-    expect(d).toBeGreaterThan(-0.7);
+  it('re-splitting aces produces more split hands', () => {
+    const { on, off } = pair({ resplitAces: true }, 'rule-rsa');
+    RESULTS.push({ name: '  re-split aces', measured: off.edge - on.edge, model: 0.08, stderr: 0, rounds: N * 2, kind: 'delta' });
+    // About one hand in 240 is a pair of aces, and about one of those in six
+    // draws a third — so the lift is small but far outside the noise on a
+    // count of several thousand splits.
+    expect(on.per1000.splits).toBeGreaterThan(off.per1000.splits);
   }, 900_000);
 
-  it('6:5 blackjack costs the player well over a percent', () => {
-    const d = delta({ blackjackPays: '6:5' }, 'rule-65');
-    RESULTS.push({ name: '  6:5 blackjack', measured: d, model: -1.39, stderr: 0, rounds: N * 2, kind: 'delta' });
-    expect(d).toBeLessThan(-0.9);
-    expect(d).toBeGreaterThan(-1.9);
+  it('double after split produces more doubles', () => {
+    const { on, off } = pair({ das: false }, 'rule-das');
+    RESULTS.push({ name: '  no DAS', measured: off.edge - on.edge, model: -0.14, stderr: 0, rounds: N * 2, kind: 'delta' });
+    // `off` here is the DAS table; turning DAS off must cost doubles, and must
+    // also cost splits, because six of the pair chart's cells only split when
+    // the double is available afterwards.
+    expect(off.per1000.doubles).toBeGreaterThan(on.per1000.doubles);
+    expect(off.per1000.splits).toBeGreaterThan(on.per1000.splits);
   }, 900_000);
 
-  it('no double after split costs the player', () => {
-    const d = delta({ das: false }, 'rule-das');
-    RESULTS.push({ name: '  no DAS', measured: d, model: -0.14, stderr: 0, rounds: N * 2, kind: 'delta' });
-    expect(d).toBeLessThan(0.15);
-    expect(d).toBeGreaterThan(-0.6);
+  it('late surrender is taken, and on a plausible fraction of hands', () => {
+    const { on, off } = pair({ surrender: 'LATE' }, 'rule-ls');
+    RESULTS.push({ name: '  late surrender', measured: off.edge - on.edge, model: 0.08, stderr: 0, rounds: N * 2, kind: 'delta' });
+    expect(off.per1000.surrenders).toBe(0);
+    // Sixteen against nine, ten or an ace plus fifteen against a ten: a few
+    // percent of hands, not a fraction of one and not a quarter of them.
+    expect(on.per1000.surrenders).toBeGreaterThan(20);
+    expect(on.per1000.surrenders).toBeLessThan(120);
   }, 900_000);
 
-  it('late surrender helps the player, and not by much', () => {
-    const d = delta({ surrender: 'LATE' }, 'rule-ls');
-    RESULTS.push({ name: '  late surrender', measured: d, model: 0.08, stderr: 0, rounds: N * 2, kind: 'delta' });
-    expect(d).toBeGreaterThan(-0.2);
-    expect(d).toBeLessThan(0.6);
+  it('no hole card stops the doubles and splits that walk into a natural', () => {
+    const { on, off } = pair({ holeCard: 'ENHC' }, 'rule-enhc');
+    RESULTS.push({ name: '  no hole card', measured: off.edge - on.edge, model: -0.11, stderr: 0, rounds: N * 2, kind: 'delta' });
+    // Eleven no longer doubles against a ten or an ace, and eight-eight no
+    // longer splits against them.
+    expect(on.per1000.doubles).toBeLessThan(off.per1000.doubles);
+    expect(on.per1000.splits).toBeLessThan(off.per1000.splits);
   }, 900_000);
 
-  it('no hole card costs the player, because it takes the doubles too', () => {
-    const d = delta({ holeCard: 'ENHC' }, 'rule-enhc');
-    RESULTS.push({ name: '  no hole card', measured: d, model: -0.11, stderr: 0, rounds: N * 2, kind: 'delta' });
-    expect(d).toBeLessThan(0.15);
-    expect(d).toBeGreaterThan(-0.6);
+  it('a dealer hitting soft 17 changes the chart’s doubling', () => {
+    const { on, off } = pair({ hitsSoft17: true }, 'rule-h17');
+    RESULTS.push({ name: '  hits soft 17', measured: off.edge - on.edge, model: -0.22, stderr: 0, rounds: N * 2, kind: 'delta' });
+    // At H17, eleven doubles against an ace and soft nineteen doubles against
+    // a six, so the doubling rate goes up rather than down.
+    expect(on.per1000.doubles).toBeGreaterThan(off.per1000.doubles);
+  }, 900_000);
+
+  it('six to five costs the player more than a percent — the one delta big enough to measure', () => {
+    const { on, off, delta } = pair({ blackjackPays: '6:5' }, 'rule-65');
+    RESULTS.push({ name: '  6:5 blackjack', measured: delta, model: -1.39, stderr: 0, rounds: N * 2, kind: 'delta' });
+    // Naturals arrive at the same rate either way; only the payout changes.
+    expect(Math.abs(on.per1000.blackjacks - off.per1000.blackjacks)).toBeLessThan(3);
+    expect(delta).toBeLessThan(-0.9);
+    expect(delta).toBeGreaterThan(-1.9);
   }, 900_000);
 });
 
@@ -421,24 +480,81 @@ describe('basic strategy against not bothering', () => {
 
 describe('counting', () => {
   /*
-   * Whether the count is worth anything is a property of the *shoe*, not of
-   * the engine's arithmetic — but it is the one property that proves the shoe
-   * is real. A shuffle that quietly reset between rounds, or a discard tray
-   * that did not reflect the cards dealt, would leave a spread bettor with
-   * exactly the flat bettor's edge. Beating it is the evidence.
+   * Whether counting works is a property of the *shoe*, not of the engine's
+   * arithmetic — but it is the one property that proves the shoe is real. A
+   * shuffle that quietly reset between rounds, or a discard tray that did not
+   * reflect the cards dealt, would leave the count uncorrelated with anything
+   * and a spread bettor with exactly the flat bettor's result.
    *
-   * The bar is the sign, not the size. A 1-12 spread at 80% penetration is
-   * worth a few tenths of a percent, and the variance on a spread bet is
-   * several times the variance on a flat one, so pinning the magnitude here
-   * would need more rounds than the whole rest of this file.
+   * The obvious test — spread against flat, compare the edges — is a coin
+   * flip at any length this suite can afford: a spread bet's variance is
+   * several times a flat one's, so the counted arm alone carries a three-sigma
+   * band wider than the effect. It is printed below as a diagnostic.
+   *
+   * What is asserted instead is the thing the spread is *built on*, measured
+   * where it converges: a flat bettor's result, bucketed by the true count as
+   * the round was dealt. Each bucket is an ordinary mean over tens of
+   * thousands of rounds, and the claim — that a rich shoe pays better than a
+   * poor one — is a difference of several percent rather than a fraction of
+   * one. If the count is meaningless, these buckets are identical.
    */
+  it('a flat bettor does better out of a rich shoe than a poor one', () => {
+    const rules = { ...presetById('vegas-strip').rules, penetration: 0.85 };
+    const rng = createRng('buckets');
+    let table = createTable(rules, rng, { seats: 1, bankroll: dollars(10_000_000) });
+
+    const buckets = { rich: { n: 0, net: 0 }, poor: { n: 0, net: 0 }, flat: { n: 0, net: 0 } };
+    const unit = DEFAULT_BOT.unit;
+
+    for (let i = 0; i < 700_000; i++) {
+      if (table.seats[0].bankroll < dollars(100_000)) {
+        table = { ...table, seats: table.seats.map((s) => ({ ...s, bankroll: dollars(10_000_000) })) };
+      }
+      // The count is read before the deal — the information a player has when
+      // they push their chips out, and nothing they learn afterwards.
+      const tc = countShoe(table.shoe, 'HI_LO', rules.decks).true;
+      const out = playRound(table, DEFAULT_BOT, rng);
+      table = out.table;
+      if (out.wagered === 0) continue;
+
+      const units = (out.net + out.insuranceNet) / unit;
+      const bucket = tc >= 2 ? buckets.rich : tc <= -2 ? buckets.poor : buckets.flat;
+      bucket.n += 1;
+      bucket.net += units;
+    }
+
+    const mean = (b: { n: number; net: number }) => (b.n === 0 ? 0 : (b.net / b.n) * 100);
+    const rich = mean(buckets.rich);
+    const poor = mean(buckets.poor);
+
+    RESULTS.push({ name: 'Rich shoe (TC >= +2)', measured: -rich, model: null, stderr: 0, rounds: buckets.rich.n, kind: 'edge' });
+    RESULTS.push({ name: 'Poor shoe (TC <= -2)', measured: -poor, model: null, stderr: 0, rounds: buckets.poor.n, kind: 'edge' });
+
+    // Both buckets have to be large enough for the means to mean anything.
+    expect(buckets.rich.n).toBeGreaterThan(20_000);
+    expect(buckets.poor.n).toBeGreaterThan(20_000);
+
+    // Half a percent per unit of true count, over a four-point gap between the
+    // bucket centres, is worth about two percent. Asserting one is generous to
+    // the noise and still impossible if the count is uncorrelated.
+    expect(rich - poor).toBeGreaterThan(1.0);
+  }, 900_000);
+
   it('a counted spread beats a flat bet on the same shoes', () => {
     const rules = { ...presetById('vegas-strip').rules, penetration: 0.85 };
     const flat = measure(rules, 500_000, 'count', { ...DEFAULT_BOT, spread: false, deviations: false });
     const counted = measure(rules, 500_000, 'count', { ...DEFAULT_BOT, spread: true, deviations: true });
     RESULTS.push({ name: 'Flat bettor', measured: flat.edge, model: null, stderr: flat.stderr, rounds: flat.rounds, kind: 'edge' });
     RESULTS.push({ name: 'Hi-Lo 1-12 spread', measured: counted.edge, model: null, stderr: counted.stderr, rounds: counted.rounds, kind: 'edge' });
-    expect(counted.edge).toBeLessThan(flat.edge);
+
+    /*
+     * Deliberately not asserted. A 1-12 spread's per-round variance is roughly
+     * six times a flat bet's, so this arm's own three-sigma band is wider than
+     * the couple of tenths of a percent the spread is worth — the comparison
+     * would be a coin flip dressed as a test. The bucketed test above is the
+     * assertion; this row is here to be read.
+     */
+    expect(Number.isFinite(counted.edge)).toBe(true);
   }, 900_000);
 });
 

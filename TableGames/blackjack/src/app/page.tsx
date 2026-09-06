@@ -21,6 +21,8 @@ import { Dialogs } from '@/components/Dialogs';
 import { Hud } from '@/components/hud/Hud';
 import { Surface } from '@/components/table/Surface';
 import { fmt } from '@/lib/engine/money';
+import { handValue } from '@/lib/engine/hand';
+import { cardLabel } from '@/lib/engine/types';
 import { initAudio } from '@/lib/audio';
 import { useGame } from '@/lib/store/useGame';
 import type { SideBetKind } from '@/lib/engine/types';
@@ -71,7 +73,7 @@ export default function Page() {
     <main className="flex h-full flex-col overflow-hidden" onPointerDown={() => initAudio()}>
       <Header />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="table-shell flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 px-2 pt-1">
             <Surface
@@ -85,16 +87,23 @@ export default function Page() {
         </div>
 
         {/* Beside the felt above 1180px, over it below. Same component. */}
+        {/*
+          Beside the felt above 1180px. Below it on a tall narrow window, where
+          the table cannot use the height anyway — see .stats-rail in
+          globals.css. Over it on anything short and narrow, where there is no
+          room for either.
+        */}
         <Hud
           className={cn(
-            'border-l border-white/6 bg-pit-950/80 backdrop-blur',
-            panelOpen ? 'block' : 'hidden',
+            'stats-rail border-l border-white/6 bg-pit-950/80 backdrop-blur',
+            panelOpen ? 'flex' : 'hidden',
             'max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-40 max-xl:shadow-2xl',
           )}
         />
       </div>
 
       <Toasts />
+      <RoundAnnouncer />
       <Dialogs />
     </main>
   );
@@ -190,9 +199,17 @@ function Header() {
  * Toasts
  * ------------------------------------------------------------------ */
 
+/**
+ * The toast stack, and the table's only live region.
+ *
+ * Rendered unconditionally even when empty. A `role="status"` element has to
+ * exist *before* text lands in it for a screen reader to announce the change;
+ * mounting the container along with its first message means the first toast of
+ * a session — very often a refusal explaining why a button did nothing — is
+ * silently missed.
+ */
 function Toasts() {
   const toasts = useGame((s) => s.toasts);
-  if (toasts.length === 0) return null;
 
   return (
     <div
@@ -213,6 +230,60 @@ function Toasts() {
           {t.text}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Announcements
+ * ------------------------------------------------------------------ */
+
+/**
+ * What just happened, for anyone not looking at the felt.
+ *
+ * The table says everything visually — a card flips, a chip rises off a hand,
+ * a total turns red — and none of that reaches a screen reader. This turns the
+ * two moments that matter into sentences: the dealer's hand when it is
+ * finished, and what each seat won or lost.
+ *
+ * It is a separate live region from the toasts because the two interrupt each
+ * other otherwise: a refusal and a settlement arriving together in one polite
+ * region means one of them is dropped.
+ */
+function RoundAnnouncer() {
+  const table = useGame((s) => s.table);
+  const settlements = useGame((s) => s.settlements);
+
+  const message = React.useMemo(() => {
+    if (settlements.length === 0) return '';
+    const dealer = table.dealer.cards.map(cardLabel).join(', ');
+    const total = handValue(table.dealer.cards);
+    const head =
+      table.dealer.outcome === 'BLACKJACK'
+        ? 'Dealer has blackjack.'
+        : total.busted
+          ? `Dealer busts with ${dealer}.`
+          : `Dealer has ${total.total} — ${dealer}.`;
+
+    const results = settlements
+      .filter((s) => s.kind === 'MAIN')
+      .map((s) => {
+        const seat = table.seats.find((x) => x.id === s.seat);
+        const who = seat?.name ?? `Seat ${s.seat}`;
+        const money = s.net === 0 ? 'pushes' : s.net > 0 ? `wins ${fmt(s.net)}` : `loses ${fmt(-s.net)}`;
+        return `${who} ${money}.`;
+      });
+
+    const side = settlements
+      .filter((s) => s.kind !== 'MAIN' && s.net > 0)
+      .map((s) => `${s.label} pays ${fmt(s.net)}.`);
+
+    return [head, ...results, ...side].join(' ');
+  }, [settlements, table]);
+
+  return (
+    <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      {message}
     </div>
   );
 }

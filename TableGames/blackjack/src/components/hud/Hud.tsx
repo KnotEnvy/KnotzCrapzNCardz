@@ -41,7 +41,7 @@ export function Hud({ className }: { className?: string }) {
           label="House edge"
           value={`${estimateHouseEdge(table.rules).toFixed(2)}%`}
           tone={estimateHouseEdge(table.rules) > 0.8 ? 'bad' : 'good'}
-          title="For a basic-strategy player, estimated from the rules in play."
+          title="Estimated for a basic-strategy player by summing the published per-rule effects. Accurate to about a tenth of a percent."
         />
         <Stat label="Limits" value={`${fmt(table.rules.minBet)} – ${fmt(table.rules.maxBet)}`} />
         <div className="mt-2 grid grid-cols-2 gap-1.5">
@@ -141,7 +141,7 @@ function SessionPanel() {
       <Stat label="Wagered" value={fmt(agg.wagered + agg.sideWagered)} />
       <Stat
         label="Measured edge"
-        value={agg.handsPlayed >= 25 ? `${measured.toFixed(2)}%` : '—'}
+        value={agg.handsPlayed >= 25 ? `${measured.toFixed(2)}%` : `needs ${25 - agg.handsPlayed} more`}
         tone={measured > 0 ? 'bad' : measured < 0 ? 'good' : undefined}
         title="Your actual loss as a fraction of what you have wagered. It takes thousands of hands to mean anything."
       />

@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete and measured. Everything is green: 118 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite \u2014 dealer distributions against the published tables, five rule sets' house edges, five per-rule deltas, and six side-bet edges (five of them enumerated exactly rather than sampled). The engine went through a real optimisation pass this session and is 66x faster per round than the first working version, which is what made a multi-million-round measurement suite possible at all.",
+  "status": "Feature complete, measured, and through one round of adversarial review. Everything is green: 127 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through a real optimisation pass (66x faster per round) and then a correctness pass: an independent judge graded the build against the craps table next door and found four rule defects, several false claims in the documentation, and a set of statistical tests too wide to fail. All of them are fixed, and the tests that would have caught each one are in the suite.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -32,8 +32,26 @@
       "closeOffers() could land on PLAYER with a null focus when every hand was a natural, hanging the round forever.",
       "settle() had no idempotence guard, so a double-fired phase transition paid the table twice.",
       "The split-to-four limit was reported with the wrong reason because the test fixture ran out of pairs \u2014 the engine was right and the test was wrong, which is worth recording because it looked like the opposite.",
-      "Two zustand selectors (advice(), count()) built a fresh object on every store read, which is an infinite render loop. Found by running the app, not by a test; they are hooks now."
-    ]
+      "Two zustand selectors (advice(), count()) built a fresh object on every store read, which is an infinite render loop. Found by running the app, not by a test; they are hooks now.",
+      "setBet() enforced the side-bet cap in one direction only, so lowering the wager left a side bet above it. Found by hand-tracing."
+    ],
+    "bugsFoundByReview": {
+      "summary": "A judging pass against the craps table's standard found four rule defects that 118 passing tests did not. Each is now fixed with the test that would have caught it \u2014 and the pattern in all four is the same: the tests asserted that a rule *refused* correctly and never that it *worked*.",
+      "defects": [
+        "Re-split aces was a dead switch. split() marked both hands finished the moment their card landed, so a third ace could never be split \u2014 while the setup screen priced the rule at 0.08%, ruleEffects() printed it, the README advertised it, and the liberal preset shipped it on. The only RSA test exercised the refusal branch. No house-edge measurement at any feasible sample size would have caught it; the test that does is splits-per-thousand with the rule on versus off.",
+        "Even money paid the wrong amount at 6:5. It is implemented as insurance for the maximum, which is exactly 1:1 only when the payout is 3:2 \u2014 the identity needs x = 1/2 from the dealer-natural branch and x = p - 1 from the other, and those agree at no other p. On a $10 bet at the single-deck preset it returned $10 or $7 depending on the hole card. The offer is now refused anywhere but 3:2, with insurance still available.",
+        "Even money was accepted against a dealer ten. It never checked the upcard, and early surrender opens the offers phase on a ten.",
+        "Lucky Ladies' 1000:1 line was lost to a split. Settlement recomputed the jackpot from hands[0].cards, which after a split holds one queen and whatever was drawn to it. The upgrade is now recorded on the wager at grade time (SideBetWager.jackpot) while the cards it was graded on are still the hand."
+      ],
+      "alsoFixed": [
+        "The basic-strategy chart had no ENHC variant, and holeCard was missing from the chart cache key \u2014 so a no-hole-card table was served a peeking chart, and whichever was requested first was served to both.",
+        "The single- and double-deck chart deltas were applied as one set at both deck counts, contradicting the comment above them. They are two sets now.",
+        "playRound folded insurance and side-bet results into net while leaving their stakes out of wagered, so the counting comparison measured an edge against the wrong denominator. Per-bet figures now come out of the settlement list, which already says which bet each movement belongs to.",
+        "betRamp existed twice \u2014 once in counting.ts for the HUD and once in autoplay.ts for the bot \u2014 so the panel could advise one bet while the bot placed another.",
+        "The persist merge refunded unresolved side bets but left resolved ones on the felt with their result, so a resumed session displayed a win it had already paid.",
+        "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced."
+      ]
+    }
   },
   "stack": {
     "framework": "Next.js 16.3.2 (App Router, Turbopack), React 19.2",
@@ -48,7 +66,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 118 tests, under a second. Run this constantly.",
+    "test": "pnpm test \u2014 127 tests, under a second. Run this constantly.",
     "testStats": "pnpm run test:stats \u2014 26 tests, about four minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
@@ -79,7 +97,11 @@
     "Chart cell colours and side-bet accents live in a plain :root block, not in @theme. Tailwind 4 only emits a theme variable when a utility referencing it is generated, and these are only ever read through var() in an inline style because the value is chosen at runtime \u2014 declared in @theme they were tree-shaken out and every chart cell rendered with no background.",
     "The felt's three printed arcs are concentric, struck from one centre below the table. Two arcs with independently chosen radii and chords cross, which is exactly what the first version did \u2014 the payout line and the dealer's rule overlapped in the middle of the table.",
     "Side-bet circles are one row of six compact boxes. Two rows do not fit: the felt's arc closes in fast below the betting circles and an outside seat's second row hangs over the rail. This is the constraint that sets the seat spacing.",
-    "No service worker, no analytics, no network calls at runtime. The fonts are self-hosted by the build and the card art is served from the same origin."
+    "No service worker, no analytics, no network calls at runtime. The fonts are self-hosted by the build and the card art is served from the same origin.",
+    "Even money is offered only at 3:2, and that is arithmetic rather than convention. Insuring a natural for x returns 2x on a dealer natural and p - x otherwise; guaranteeing 1 needs x = 1/2 from the first and x = p - 1 from the second, and those agree only at p = 3/2. At 6:5 no stake makes the offer even money, so the table does not make it and says why. Insurance stays available, because it is a different bet.",
+    "A side bet's contingent winnings are recorded on the wager, not recomputed at settlement. Lucky Ladies' top line needs the dealer's hand, which is unknown when the bet is graded; recomputing it later reads a hand a split may have taken apart. SideBetWager.jackpot holds the amount from grade time.",
+    "The rule tests assert frequencies, not edge deltas. Blackjack's per-hand standard deviation is about 1.15 units, so a difference between two 300,000-round arms carries a three-sigma band of 0.89% \u2014 wider than DAS (0.14%), late surrender (0.08%), ENHC (0.11%) or H17 (0.22%) combined. Resolving 0.14% would take fifty million rounds an arm. So those rows are printed as diagnostics and what is asserted is how often the bot doubles, splits or surrenders, which is near-binomial and converges in seconds. That is also the only test shape that catches a rule wired to nothing.",
+    "The counting claim is asserted where it converges. Spread-versus-flat is a coin flip at this length because a 1-12 spread's variance is several times a flat bet's; instead a flat bettor's result is bucketed by the true count at the deal, and the rich bucket must beat the poor one by a point. Same evidence that the shoe is real, an order of magnitude tighter."
   ],
   "gotchas": [
     "deal() takes an Rng because a reshuffle happens there. It is the only action that does.",
@@ -95,7 +117,12 @@
     "Distribution measurements need a live Bust It bet, otherwise about three rounds in a hundred end with the dealer standing pat on a two-card twelve and the numbers are not comparable to a published table.",
     "The paired rule-delta tests share a seed but not a card sequence: a rule change alters how many cards come off the shoe and the two runs diverge within a few rounds. They check a sign and an order of magnitude. The absolute figures are in the preset tests.",
     "public/cards is a committed copy of ../../cardArt. A static export cannot reach outside its own public directory. If the shared deck changes, copy it again.",
-    "next dev writes AGENTS.md and CLAUDE.md into the project root unless agentRules is disabled. They are gitignored."
+    "next dev writes AGENTS.md and CLAUDE.md into the project root unless agentRules is disabled. They are gitignored.",
+    "Split aces stay live when they draw another ace and the table re-splits them. `canHit` still refuses, so the only legal moves are SPLIT and STAND. Marking them done unconditionally is what made resplitAces a no-op for the whole first draft.",
+    "chartFor's cache key must include every rule the chart reads. It omitted holeCard and served a peeking chart to a no-hole-card table.",
+    "Chart cell colours and side-bet accents must stay in a plain :root block. Tailwind 4 only emits an @theme variable when a utility referencing it is generated, and these are read through var() in inline styles.",
+    "Rules in globals.css that target the same single class as a Tailwind utility win, because they come after it in the cascade. The .stats-rail block is scoped :not(.hidden) for exactly this reason \u2014 without it, opening the tall-viewport layout overrode the `hidden` utility and showed a panel the player had closed.",
+    "A `role=\"status\"` element has to exist before text lands in it. Rendering the toast stack only when there is a toast means the first message of a session is never announced."
   ],
   "verification": {
     "automated": [
@@ -150,13 +177,14 @@
     }
   },
   "openItems": [
-    "The felt is height-constrained on a phone in landscape: at 844x390 it scales to about 55% and leaves horizontal letterboxing. Compact chrome under 520px of height claws back about forty pixels. Fixing it properly means a second, shallower felt layout for short viewports rather than scaling the one there is.",
-    "Early surrender uses the ordinary basic-strategy chart. The genuine early-surrender chart has its own cells (surrender hard 5-7 and 12-17 against an ace, among others) and is worth about 0.2% of the rule's 0.63%. The engine implements the rule correctly; only the advice is approximate, and the preset list does not include an early-surrender game.",
-    "The bot takes insurance only when deviations are on and the true count is at or above +3. It never takes even money, which is the same bet \u2014 a counter at +3 holding a natural should.",
+    "Early surrender uses the ordinary basic-strategy chart. The genuine early-surrender chart has its own cells (surrender hard 5-7 and 12-17 against an ace, among others) and is worth about 0.2% of the rule's 0.63%. The engine implements the rule correctly; only the advice is approximate, and no preset ships an early-surrender game.",
+    "The bot takes insurance at a true count of +3 or better but never takes even money, which is the same bet \u2014 a counter holding a natural at +3 should.",
     "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
     "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
+    "The rule model in rules.ts is a sum of published per-rule effects and drifts a little from the measured figures on the presets that stack several player-friendly rules. It is displayed as an estimate and labelled as one; tightening it means fitting it to the simulation rather than to the literature.",
+    "The felt is one fixed 1000x560 geometry that scales. A tall narrow window now puts the stats rail underneath rather than leaving the height empty, and short viewports get compact chrome, but a phone in landscape still letterboxes. A genuinely responsive table means a second, shallower layout rather than a scale factor.",
     "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
-    "The autoplay driver does not vary its bet with the count in the UI even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
+    "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
     "The equity chart caps at 300 rounds of history and has no zoom.",
     "No keyboard shortcut for the dialogs.",
     "Docker image size is unmeasured. The card deck adds about 2 MB over the craps image."

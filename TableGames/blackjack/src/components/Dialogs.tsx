@@ -274,6 +274,11 @@ function SetupBody({ onClose }: { onClose: () => void }) {
               Against a player using the chart. {fmt(dollars(100))} a hand for an hour at eighty hands
               is about {fmt(Math.round(dollars(100) * 80 * (edge / 100)))} expected.
             </p>
+            <p className="mt-1.5 text-[10px] leading-tight text-pit-500">
+              A sum of published per-rule effects, so it is accurate to a tenth of a percent rather
+              than a hundredth — the game&rsquo;s own simulation measures each preset and the two
+              agree to within the simulation&rsquo;s noise. It is a price list, not a guarantee.
+            </p>
 
             <div className="mt-3 space-y-1">
               {effects.map((e) => (
@@ -551,6 +556,8 @@ function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               ['P', 'Split'],
               ['R', 'Surrender'],
               ['N', 'Decline insurance'],
+              ['I', 'Take insurance'],
+              ['E', 'Take even money'],
             ].map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
                 <kbd className="rounded bg-pit-800 px-1.5 py-0.5 font-mono text-[10px] text-pit-200">{k}</kbd>

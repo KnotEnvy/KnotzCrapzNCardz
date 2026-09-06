@@ -694,6 +694,16 @@ export const useGame = create<GameStore>()(
             seat.hands = [];
             seat.insurance = 0;
             seat.insuranceNet = null;
+            seat.tookEvenMoney = false;
+            // A side bet that already paid keeps its result on the felt, which
+            // on a resumed session reads as a win the player is about to be
+            // given again. The stake stays up for a re-bet; the result does not.
+            seat.pendingSideBets = seat.pendingSideBets.map((sb) => ({
+              ...sb,
+              net: null,
+              label: null,
+              jackpot: null,
+            }));
           }
           merged.table = {
             ...t,

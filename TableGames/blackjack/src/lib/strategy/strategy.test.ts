@@ -294,6 +294,53 @@ describe('chart integrity', () => {
     );
     expect(differences.length).toBeGreaterThan(0);
   });
+
+  it('applies the two-deck deltas at two decks and the rest only at one', () => {
+    const base = presetById('vegas-strip').rules;
+    const two = chartFor({ ...base, decks: 2 });
+    const one = chartFor({ ...base, decks: 1 });
+    // Nine against a two doubles from two decks down.
+    expect(two.hard[9][UPCARDS.indexOf(2)]).toBe('D');
+    // Eight against a five is a single-deck cell only.
+    expect(two.hard[8][UPCARDS.indexOf(5)]).toBe('H');
+    expect(one.hard[8][UPCARDS.indexOf(5)]).toBe('D');
+  });
+
+  /*
+   * Under no-hole-card the dealer's second card arrives after the players are
+   * finished, so a natural takes the doubled and split chips too. Against the
+   * two upcards that can become one, those extra chips stop being worth
+   * risking — and the chart has to say so, because the engine will happily
+   * book the double.
+   */
+  it('stops doubling and splitting into a possible natural under ENHC', () => {
+    const peek = chartFor({ ...rules, holeCard: 'PEEK' });
+    const enhc = chartFor({ ...rules, holeCard: 'ENHC' });
+
+    expect(peek.hard[11][UPCARDS.indexOf(10)]).toBe('D');
+    expect(enhc.hard[11][UPCARDS.indexOf(10)]).toBe('H');
+
+    expect(peek.pairs[8][UPCARDS.indexOf(10)]).toBe('P');
+    expect(enhc.pairs[8][UPCARDS.indexOf(10)]).toBe('H');
+    expect(enhc.pairs[8][UPCARDS.indexOf(11)]).toBe('H');
+    expect(enhc.pairs[11][UPCARDS.indexOf(11)]).toBe('H');
+
+    // Against everything else the two charts agree — the rule only bites
+    // where the dealer can turn a natural.
+    for (const up of [2, 3, 4, 5, 6, 7, 8, 9]) {
+      const i = UPCARDS.indexOf(up);
+      expect(enhc.pairs[8][i], `8,8 v ${up}`).toBe(peek.pairs[8][i]);
+      expect(enhc.hard[11][i], `11 v ${up}`).toBe(peek.hard[11][i]);
+    }
+  });
+
+  it('caches a peeking chart apart from a no-hole-card one', () => {
+    // The cache key omitted holeCard, so whichever was asked for first was
+    // served to both.
+    const enhc = chartFor({ ...rules, holeCard: 'ENHC' });
+    const peek = chartFor({ ...rules, holeCard: 'PEEK' });
+    expect(enhc.hard[11][UPCARDS.indexOf(10)]).not.toBe(peek.hard[11][UPCARDS.indexOf(10)]);
+  });
 });
 
 /* ------------------------------------------------------------------ *

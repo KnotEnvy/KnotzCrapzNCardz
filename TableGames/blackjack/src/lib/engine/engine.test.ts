@@ -407,6 +407,62 @@ describe('splitting', () => {
     expect(legalActions(t).SPLIT.allowed).toBe(false);
   });
 
+  /*
+   * Re-split aces is a rule that is easy to implement as a no-op: split aces
+   * take one card each and stop, so if the hand is marked finished the moment
+   * that card lands, a third ace can never be split and the switch does
+   * nothing at all. It did exactly that here, while the setup screen credited
+   * it with 0.08% and the README advertised it.
+   */
+  it('re-splits aces when the table allows it', () => {
+    let t = bet(
+      withCards([[14, S], [6, H], [14, D], [5, C], [14, H], [9, C], [8, S], [8, D]], {
+        resplitAces: true,
+        oneCardOnSplitAces: true,
+        resplitTo: 3,
+      }),
+    );
+    t = must(deal(t, rng()));
+    t = must(split(t));
+    // The first hand drew another ace, so it is still live — and the only
+    // thing it may do is split again.
+    const legal = legalActions(t);
+    expect(legal.SPLIT.allowed).toBe(true);
+    expect(legal.HIT.allowed).toBe(false);
+    t = must(split(t));
+    expect(t.seats[0].hands).toHaveLength(3);
+    // Each of the three now holds one ace and one card, and none may draw.
+    for (const hand of t.seats[0].hands) expect(hand.cards).toHaveLength(2);
+  });
+
+  it('does not re-split aces when the table does not allow it', () => {
+    let t = bet(
+      withCards([[14, S], [6, H], [14, D], [5, C], [14, H], [9, C]], {
+        resplitAces: false,
+        oneCardOnSplitAces: true,
+      }),
+    );
+    t = must(deal(t, rng()));
+    t = must(split(t));
+    expect(t.seats[0].hands.every((h) => h.done)).toBe(true);
+    expect(t.phase).toBe('DEALER');
+  });
+
+  it('stops re-splitting aces at the table limit', () => {
+    let t = bet(
+      withCards([[14, S], [6, H], [14, D], [5, C], [14, H], [14, C], [14, S], [9, H]], {
+        resplitAces: true,
+        oneCardOnSplitAces: true,
+        resplitTo: 1,
+      }),
+    );
+    t = must(deal(t, rng()));
+    t = must(split(t));
+    // Two hands is the limit here, so both stop even though both drew aces.
+    expect(t.seats[0].hands).toHaveLength(2);
+    expect(t.seats[0].hands.every((h) => h.done)).toBe(true);
+  });
+
   it('refuses to double after a split when the table says no', () => {
     let t = bet(withCards([[8, S], [6, H], [8, D], [5, C], [3, H], [2, C]], { das: false }));
     t = must(deal(t, rng()));
@@ -501,6 +557,34 @@ describe('insurance', () => {
     t = dealerPlayOut(t);
     const { table: settled } = settle(t);
     expect(settled.seats[0].insuranceNet).toBe(-dollars(5));
+  });
+
+  /*
+   * Even money is arithmetic, not convention. Insuring a natural for x returns
+   * 2x when the dealer has one (the hand pushes) and p - x when they do not,
+   * where p is the blackjack payout. Guaranteeing exactly 1 needs x = 1/2 from
+   * the first and x = p - 1 from the second, and those agree only at 3:2. At
+   * six to five the offer cannot be made honestly, so it is not made — this
+   * used to accept it and quietly pay $7 on a $10 bet half the time.
+   */
+  it('refuses even money at a 6:5 table', () => {
+    let t = bet(withCards([[14, S], [14, H], [13, D], [5, C]], { blackjackPays: '6:5' }), dollars(10));
+    t = must(deal(t, rng()));
+    const res = takeEvenMoney(t, 'A');
+    expect(res).toMatchObject({ ok: false });
+    expect(res.ok ? '' : res.reason).toContain('3:2');
+    // Insurance is a different bet and is still available.
+    expect(takeInsurance(t, 'A', dollars(5))).toMatchObject({ ok: true });
+  });
+
+  it('refuses even money against anything but an ace', () => {
+    // Early surrender opens the offers on a ten, which is the one way to
+    // reach this phase without a dealer ace showing.
+    let t = bet(withCards([[14, S], [13, H], [13, D], [5, C]], { surrender: 'EARLY' }), dollars(10));
+    t = must(deal(t, rng()));
+    expect(t.phase).toBe('INSURANCE');
+    expect(takeEvenMoney(t, 'A')).toMatchObject({ ok: false });
+    expect(takeInsurance(t, 'A', dollars(5))).toMatchObject({ ok: false });
   });
 
   it('caps at half the wager', () => {
@@ -756,6 +840,45 @@ describe('side bets', () => {
     // Stake out for both bets, then $250 of winnings and the $10 stake back.
     expect(t.seats[0].pendingSideBets[0].net).toBe(dollars(250));
     expect(t.seats[0].bankroll).toBe(start - dollars(20) + dollars(260));
+  });
+
+  /*
+   * Lucky Ladies' top line needs the dealer's natural, which is not known when
+   * the rest of the bet is graded — so the difference is recorded at grade
+   * time and paid at settlement. Recomputing it from the hand instead loses
+   * the jackpot to a split, because by then the second queen is on another
+   * hand and the first has drawn to it.
+   */
+  it('pays the Lucky Ladies jackpot even when the pair was split', () => {
+    let t = withCards(
+      // ENHC deals player, dealer, player and stops; the two split cards come
+      // next, and the dealer's second card is the sixth off the shoe.
+      [[12, H], [14, S], [12, H], [9, S], [9, D], [13, C]],
+      {
+        holeCard: 'ENHC',
+        insurance: false,
+        sideBets: { ...defaultRules().sideBets, LUCKY_LADIES: true },
+      },
+    );
+    t = bet(t, dollars(10));
+    const withSide = setSideBet(t, 'A', 'LUCKY_LADIES', dollars(10));
+    if (!withSide.ok) throw new Error(withSide.reason);
+    t = must(deal(withSide.table, rng()));
+
+    // Two queens of hearts: the 200:1 line is paid now, the difference to
+    // 1000:1 is recorded against the dealer's hand.
+    expect(t.seats[0].pendingSideBets[0].net).toBe(dollars(2000));
+    expect(t.seats[0].pendingSideBets[0].jackpot).toBe(dollars(8000));
+
+    t = must(split(t));
+    t = must(stand(t));
+    t = must(stand(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+
+    // The dealer's ace pairs with the king under ENHC: a natural.
+    expect(settled.dealer.outcome).toBe('BLACKJACK');
+    expect(settled.seats[0].pendingSideBets[0].net).toBe(dollars(10_000));
   });
 
   it('caps a side bet at the main wager', () => {

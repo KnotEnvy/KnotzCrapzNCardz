@@ -29,7 +29,14 @@ import type { RoundRecord, SeatStats } from '@/lib/engine/types';
 export function OutcomeBars({ stats }: { stats: SeatStats }) {
   const decided = stats.wins + stats.losses + stats.pushes;
   if (decided === 0) {
-    return <p className="text-[10px] text-pit-500">No hands yet.</p>;
+    // `handsPlayed` counts hands dealt; this bar counts hands settled. Saying
+    // "no hands yet" next to a hands-played counter reading 3 is a
+    // contradiction the player has to resolve themselves.
+    return (
+      <p className="text-[10px] text-pit-500">
+        {stats.handsPlayed > 0 ? 'Nothing settled yet — the round is still live.' : 'No hands yet.'}
+      </p>
+    );
   }
 
   const segments = [

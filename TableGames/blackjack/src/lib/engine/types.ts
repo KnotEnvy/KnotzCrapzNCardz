@@ -210,14 +210,7 @@ export type Action = 'HIT' | 'STAND' | 'DOUBLE' | 'SPLIT' | 'SURRENDER';
 export const ACTIONS: readonly Action[] = ['HIT', 'STAND', 'DOUBLE', 'SPLIT', 'SURRENDER'];
 
 /** How a hand stopped playing. `null` while it is still live. */
-export type HandOutcome =
-  | 'BLACKJACK'
-  | 'WIN'
-  | 'PUSH'
-  | 'LOSE'
-  | 'BUST'
-  | 'SURRENDER'
-  | 'INSURANCE_ONLY';
+export type HandOutcome = 'BLACKJACK' | 'WIN' | 'PUSH' | 'LOSE' | 'BUST' | 'SURRENDER';
 
 export interface Hand {
   id: string;
@@ -254,6 +247,21 @@ export interface SideBetWager {
   net: number | null;
   /** The winning combination's name, for the log and the felt. */
   label: string | null;
+  /**
+   * Cents this bet still stands to win if the dealer turns a natural.
+   *
+   * Only Lucky Ladies uses it, and only for its top line: two queens of hearts
+   * pays 200:1 on its own and 1000:1 against a dealer blackjack, and at the
+   * moment the bet is graded the dealer's hand is face down (or, under ENHC,
+   * not dealt). The difference is recorded here and paid at settlement.
+   *
+   * It is recorded rather than recomputed because by settlement the cards it
+   * was graded on may no longer be in the hand — a split moves the second
+   * queen to a new hand, and re-reading `hands[0]` then finds a queen and
+   * whatever was drawn to it. That is exactly the bug this field exists to
+   * make impossible.
+   */
+  jackpot: number | null;
 }
 
 export interface Seat {

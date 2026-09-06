@@ -315,7 +315,7 @@ export function setSideBet(
     produce(table, (d) => {
       const s = d.seats.find((x) => x.id === seatId)!;
       s.pendingSideBets = s.pendingSideBets.filter((sb) => sb.kind !== kind);
-      if (amount > 0) s.pendingSideBets.push({ kind, amount, net: null, label: null });
+      if (amount > 0) s.pendingSideBets.push({ kind, amount, net: null, label: null, jackpot: null });
     }),
   );
 }
@@ -354,7 +354,7 @@ export function rebet(table: TableState, previous: Map<SeatId, { main: number; s
       for (const sb of prev.side) {
         if (!d.rules.sideBets[sb.kind]) continue;
         if (spent + sb.amount > s.bankroll) continue;
-        s.pendingSideBets.push({ kind: sb.kind, amount: sb.amount, net: null, label: null });
+        s.pendingSideBets.push({ kind: sb.kind, amount: sb.amount, net: null, label: null, jackpot: null });
         spent += sb.amount;
       }
       placed = true;
@@ -503,12 +503,15 @@ export function deal(table: TableState, rng: Rng): ActionResult {
 
       const result = gradeSideBet(sb.kind, cards, dealerCards[0], bonus.get(seat.id), sb.amount);
       // Bust It is a bet on the dealer's finished hand; it stays live.
-      if (result === null) return { ...sb, net: null, label: null };
+      if (result === null) return { ...sb, net: null, label: null, jackpot: null };
 
       const settled = result.net > 0 ? result.net : -sb.amount;
       if (result.net > 0) bankroll += result.net + sb.amount; // winnings plus the stake
       net += settled;
-      return { ...sb, net: settled, label: result.label };
+      // Recorded now, while the cards it was graded on are still the hand.
+      const jackpot =
+        sb.kind === 'LUCKY_LADIES' ? luckyLadiesJackpotUpgrade(cards, sb.amount) || null : null;
+      return { ...sb, net: settled, label: result.label, jackpot };
     });
 
     return {
@@ -662,10 +665,27 @@ export function takeInsurance(table: TableState, seatId: SeatId, amount: number)
  */
 export function takeEvenMoney(table: TableState, seatId: SeatId): ActionResult {
   if (table.phase !== 'INSURANCE') return refuse('The offer is not open.');
+  if (!table.rules.insurance) return refuse('This table does not offer insurance.');
+  if (!isAce(table.dealer.cards[0])) return refuse('Even money needs a dealer ace.');
+
+  /*
+   * Even money exists only at three to two, and that is arithmetic rather
+   * than convention. Insuring a natural for `x` returns `2x` on a dealer
+   * natural (the hand pushes) and `p - x` otherwise, where `p` is the
+   * blackjack payout. Guaranteeing exactly 1 requires x = 1/2 from the first
+   * and x = p - 1 from the second, and those agree only when p = 3/2.
+   *
+   * At six to five there is no stake that makes the offer even money, so the
+   * table does not make it. Insurance itself is still available: it is a
+   * different bet and a player with a natural may take it like anyone else.
+   */
+  if (table.rules.blackjackPays !== '3:2') {
+    return refuse('Even money only works at 3:2. Insurance is still open.');
+  }
+
   const seat = seatOf(table, seatId);
   const hand = seat.hands[0];
   if (!hand || !isBlackjack(hand.cards)) return refuse('Even money needs a blackjack.');
-  if (table.rules.blackjackPays === '1:1') return refuse('This table already pays even money.');
   if (seat.insurance > 0) return refuse('Insurance is already down.');
   const cap = maxInsurance(hand.bet);
   if (cap > seat.bankroll) return refuse('Not enough bankroll to cover it.');
@@ -839,22 +859,41 @@ export function split(table: TableState): ActionResult {
   const next = updateSeat(table, focus.seat, (seat) => {
     const hand = seat.hands[focus.hand];
     const splittingAces = isAce(hand.cards[0]);
-    const oneCardOnly = splittingAces && table.rules.oneCardOnSplitAces;
+
+    /*
+     * Split aces take one card each and stop — unless that card is another
+     * ace and the table re-splits them, in which case the hand stays live for
+     * exactly one more decision. `canHit` still refuses it, so the only thing
+     * a player can do with a live pair of split aces is split it again or
+     * stand on the soft twelve.
+     *
+     * Getting this wrong makes `resplitAces` a switch that does nothing: the
+     * hand was marked finished the moment it was dealt, so a third ace could
+     * never be split, while the setup screen still credited the rule with
+     * 0.08% and the README still advertised it.
+     */
+    const stops = (cards: readonly Card[]): boolean => {
+      if (handValue(cards).total === 21) return true;
+      if (!splittingAces || !table.rules.oneCardOnSplitAces) return false;
+      const another = isAce(cards[1]);
+      const room = seat.hands.length + 1 <= table.rules.resplitTo;
+      return !(another && table.rules.resplitAces && room);
+    };
 
     // The pair comes apart: the first card stays, the second starts the new
     // hand, and each takes one card as the dealer would deal them.
+    const leftCards = [hand.cards[0], first.card];
+    const rightCards = [hand.cards[1], second.card];
+
     const left: Hand = {
       ...hand,
-      cards: [hand.cards[0], first.card],
+      cards: leftCards,
       splitDepth: hand.splitDepth + 1,
       fromSplitAces: splittingAces,
-      done: oneCardOnly || handValue([hand.cards[0], first.card]).total === 21,
+      done: stops(leftCards),
     };
-    const right = newHand(hand.baseBet, hand.splitDepth + 1, splittingAces, [
-      hand.cards[1],
-      second.card,
-    ]);
-    right.done = oneCardOnly || handValue(right.cards).total === 21;
+    const right = newHand(hand.baseBet, hand.splitDepth + 1, splittingAces, rightCards);
+    right.done = stops(rightCards);
 
     const hands = seat.hands.slice();
     hands.splice(focus.hand, 1, left, right);
@@ -1115,7 +1154,7 @@ export function nextRound(table: TableState): ActionResult {
         tookEvenMoney: false,
         pendingBet: affordable || seat.pendingBet <= seat.bankroll ? seat.pendingBet : 0,
         pendingSideBets: affordable
-          ? seat.pendingSideBets.map((sb) => ({ ...sb, net: null, label: null }))
+          ? seat.pendingSideBets.map((sb) => ({ ...sb, net: null, label: null, jackpot: null }))
           : [],
       };
     }),

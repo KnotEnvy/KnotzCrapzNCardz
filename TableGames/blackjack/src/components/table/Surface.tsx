@@ -223,7 +223,7 @@ function SeatArea({
         ) : null}
       </button>
 
-      {/* Insurance, on its own line inside the arc. */}
+      {/* Insurance, beside the circle so it never sits under the cards. */}
       {seat.insurance > 0 ? (
         <div
           className="absolute -translate-x-full -translate-y-1/2 rounded-full border border-white/20 bg-black/50 px-2 py-0.5 text-[10px] whitespace-nowrap text-pit-100"
@@ -256,6 +256,7 @@ function SeatArea({
           {sideKinds.map((kind) => {
             const wager = seat.pendingSideBets.find((sb) => sb.kind === kind);
             const spec = SIDE_BET_SPECS[kind];
+            const settled = wager?.net ?? null;
             return (
               <button
                 key={kind}
@@ -265,19 +266,30 @@ function SeatArea({
                 title={`${spec.name} — ${spec.blurb} House edge ${spec.edge}%.`}
                 aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}`}
                 className={cn(
-                  'flex h-[30px] w-[33px] flex-col items-center justify-center gap-px rounded border text-[7px] leading-none tracking-wide transition-colors',
+                  'sidebet-box relative flex h-[30px] w-[33px] flex-col items-center justify-center gap-px rounded border text-[7px] leading-none tracking-wide transition-colors',
                   wager
                     ? 'border-white/40 bg-black/50 text-white'
                     : 'border-white/12 bg-black/25 text-white/35',
                   betting && 'hover:border-white/50',
-                  wager?.net !== null && wager?.net !== undefined && wager.net > 0 && 'border-win/70 bg-win/15 text-win',
-                  wager?.net !== null && wager?.net !== undefined && wager.net < 0 && 'opacity-45',
+                  settled !== null && settled > 0 && 'border-win/70 bg-win/15 text-win',
+                  settled !== null && settled < 0 && 'opacity-45',
                 )}
                 style={{ borderTopColor: wager ? spec.accent : undefined }}
               >
                 <span style={{ fontFamily: 'var(--font-display)' }}>{spec.short}</span>
                 {wager ? (
                   <span className="font-mono text-[8px]">{Math.round(wager.amount / 100)}</span>
+                ) : null}
+                {/*
+                  A side bet that paid used to show only a green border. On a
+                  hand where the main bet lost and Lucky Ladies hit for two
+                  thousand dollars, the felt said nothing about the two
+                  thousand dollars.
+                */}
+                {settled !== null && settled > 0 ? (
+                  <span className="settle-chip pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 rounded-full bg-win/20 px-1.5 py-px font-mono text-[10px] font-semibold whitespace-nowrap text-win">
+                    {fmtSigned(settled)}
+                  </span>
                 ) : null}
               </button>
             );

@@ -37,6 +37,7 @@ import type { Action, SeatId, TableState } from '@/lib/engine/types';
 import { rankValue } from '@/lib/engine/types';
 import { advise, codeFor, upcardValue, type Advice } from './basic';
 import {
+  betRamp,
   countShoe,
   deviationFor,
   insuranceIsGood,
@@ -145,29 +146,53 @@ export function betFor(table: TableState, seatId: SeatId, config: BotConfig): nu
   const seat = seatOf(table, seatId);
   let amount = config.unit;
   if (config.spread) {
+    // The same ramp the counting panel shows. It used to be a second copy
+    // here, which meant the HUD could advise one bet while the bot placed
+    // another.
     const count = countShoe(table.shoe, config.system, table.rules.decks);
-    amount = config.unit * betRampUnits(count.true);
+    amount = config.unit * betRamp(count.true);
   }
   amount = Math.min(amount, table.rules.maxBet, seat.bankroll);
   if (amount < table.rules.minBet) return Math.min(table.rules.minBet, seat.bankroll);
   return amount;
 }
 
-function betRampUnits(trueCount: number): number {
-  if (trueCount < 1) return 1;
-  if (trueCount < 2) return 2;
-  if (trueCount < 3) return 4;
-  if (trueCount < 4) return 6;
-  if (trueCount < 5) return 8;
-  return 12;
+/** Nothing was dealt — every seat was broke or below the minimum. */
+function noRound(table: TableState): RoundOutcome {
+  return {
+    table,
+    net: 0,
+    wagered: 0,
+    insuranceNet: 0,
+    insuranceWagered: 0,
+    sideNet: 0,
+    sideWagered: 0,
+    handsPlayed: 0,
+  };
 }
 
 export interface RoundOutcome {
   table: TableState;
-  /** Signed cents across the whole table for this round. */
+  /**
+   * Signed cents on the main wagers only — the numerator of a house-edge
+   * measurement, and matched to `wagered` below.
+   *
+   * Insurance and side bets are reported separately rather than folded in.
+   * They are different bets at different edges, and adding their result to the
+   * numerator while leaving their stake out of the denominator is how a
+   * measured "house edge" quietly becomes a number about nothing. That was the
+   * shape of a real defect here: the counting comparison put the deviating
+   * bot's insurance wins into `net` and its insurance stake nowhere.
+   */
   net: number;
-  /** Main-bet cents wagered, the denominator of a house-edge measurement. */
+  /** Main-bet cents wagered, including doubles and split stakes. */
   wagered: number;
+  /** Signed cents on insurance, and what was staked on it. */
+  insuranceNet: number;
+  insuranceWagered: number;
+  /** Signed cents on side bets, and what was staked on them. */
+  sideNet: number;
+  sideWagered: number;
   handsPlayed: number;
 }
 
@@ -195,13 +220,12 @@ export function playRound(
     if (res.ok) t = res.table;
   }
 
-  const wageredBefore = totalWagered(t);
   const dealt = deal(t, rng);
-  if (!dealt.ok) return { table: t, net: 0, wagered: 0, handsPlayed: 0 };
+  if (!dealt.ok) return noRound(t);
   t = dealt.table;
 
-  const netBefore = totalNet(t);
   const handsBefore = totalHands(t);
+  const insuranceWagered = t.seats.reduce((n, seat) => n + seat.insurance, 0);
 
   if (t.phase === 'INSURANCE') {
     if (config.basic && config.deviations) {
@@ -249,27 +273,41 @@ export function playRound(
   if (t.phase === 'DEALER') t = dealerPlayOut(t);
 
   const trueCount = countShoe(t.shoe, config.system, t.rules.decks).true;
+  /*
+   * The per-bet figures come out of the settlement rather than out of a
+   * before-and-after on the seat's ledger. The ledger sums every kind of bet
+   * into one number, and separating them again afterwards is guesswork; the
+   * settlement list already says which bet each movement belongs to.
+   */
   const settled = settle(t, trueCount);
+  const sum = (kind: 'MAIN' | 'INSURANCE' | 'SIDE') =>
+    settled.settlements.filter((x) => x.kind === kind).reduce((n, x) => n + x.net, 0);
+
+  const wagered = t.seats.reduce(
+    (n, seat) => n + seat.hands.reduce((m, h) => m + h.bet, 0),
+    0,
+  );
+  const sideWagered = t.seats.reduce(
+    (n, seat) => n + seat.pendingSideBets.reduce((m, sb) => m + sb.amount, 0),
+    0,
+  );
+
   t = settled.table;
 
   const outcome: RoundOutcome = {
     table: t,
-    net: totalNet(t) - netBefore,
-    wagered: totalWagered(t) - wageredBefore,
+    net: sum('MAIN'),
+    wagered,
+    insuranceNet: sum('INSURANCE'),
+    insuranceWagered,
+    sideNet: sum('SIDE'),
+    sideWagered,
     handsPlayed: totalHands(t) - handsBefore,
   };
 
   const cleared = nextRound(t);
   if (cleared.ok) outcome.table = cleared.table;
   return outcome;
-}
-
-function totalNet(t: TableState): number {
-  return t.seats.reduce((n, s) => n + s.stats.net, 0);
-}
-
-function totalWagered(t: TableState): number {
-  return t.seats.reduce((n, s) => n + s.stats.wagered, 0);
 }
 
 function totalHands(t: TableState): number {
