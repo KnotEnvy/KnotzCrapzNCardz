@@ -206,7 +206,7 @@
     ],
     "lastRun": {
       "when": "2026-09-06, after five rounds of review",
-      "note": "What the suite printed on its last full run (29 tests, 7m44s), against the corrected model and the corrected denominator. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
+      "note": "What the suite printed on its last full run (29 tests, about 7m35s), against the corrected model and the corrected denominator. Re-run unchanged after round six: the counting rework is the identity for Hi-Lo, which is what the measuring bot counts in, and no preset ships early surrender — so every row reproduced to the digit, which is the cheapest evidence there is that the rework changed only what it meant to. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
