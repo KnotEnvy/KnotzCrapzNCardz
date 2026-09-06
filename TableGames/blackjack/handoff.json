@@ -178,51 +178,51 @@
       "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
-      "when": "2026-09-06, after both rounds of review",
-      "note": "What the suite printed on its last full run (28 tests, 6m32s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
+      "when": "2026-09-06, after three rounds of review",
+      "note": "What the suite printed on its last full run (29 tests, 6m41s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them. The figures moved from the previous record for a reason worth knowing: the shoe now draws a seed for its own next shuffle, which shifts every seeded stream, so every measurement here is a different sample of the same distributions.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
         "RoyalMatch": 6.666,
-        "BustIt": 6.92,
         "SuperSevens": 11.4,
-        "LuckyLadies": 17.625
+        "LuckyLadies": 17.625,
+        "BustIt": "6.9 +/- 0.3, measured rather than enumerated"
       },
       "frequencies": {
-        "dealerBustS17": 28.147,
-        "dealerBustH17": 28.519,
-        "playerNatural": 4.781
+        "dealerBustS17": 28.129,
+        "dealerBustH17": 28.529,
+        "playerNatural": 4.768
       },
       "houseEdgeMeasuredVsModel": {
         "SingleDeck": [
-          1.849,
+          1.667,
           1.85
         ],
         "VegasStrip": [
-          0.375,
+          0.539,
           0.4
         ],
         "AtlanticCity": [
-          0.207,
+          0.332,
           0.35
         ],
         "European": [
-          0.632,
+          0.383,
           0.73
         ],
         "LiberalShoe": [
-          0.172,
+          0.027,
           0.05
         ],
         "MimicTheDealer": [
-          5.635,
+          5.95,
           null
         ]
       },
-      "modelNote": "The corrected model now tracks the measurements: exact to a thousandth on single deck, within 0.025 on Vegas Strip, and inside 0.15 everywhere. Before the double-counted DAS term was removed it read 0.26% for Vegas Strip and -0.09% for Liberal Shoe \u2014 a player advantage.",
-      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.331% for the player at a true count of +2 or better against -2.166% at -2 or worse. That gap is the assertion. Spread-versus-flat is printed but not asserted; the spread arm's own three-sigma band is 1.75%.",
-      "resplitAces": "+0.058% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
-      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing. Atlantic City is the loosest preset at 0.14 points under the model; the published figure for that game is nearer the model's, so the suspect is the measurement (most likely the six-deck chart being used at eight decks) rather than the model."
+      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.505% for the player at a true count of +2 or better against -2.721% at -2 or worse. That gap is the assertion.",
+      "resplitAces": "+0.052% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
+      "watchThis": "European measured 0.347 points from the model against a 0.373 tolerance \u2014 the closest any preset has come to failing. On the previous seed it was 0.098 off, so the swing is about two standard errors and inside what this length can resolve. But if it fails on a future seed, suspect the ENHC chart deltas (five cells, in basic.ts) before suspecting the noise.",
+      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing."
     }
   },
   "openItems": [
