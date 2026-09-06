@@ -27,7 +27,7 @@
  *     {@link reshuffleKeeping}.
  */
 
-import { createRng, seedFrom, type Rng } from './rng';
+import { createRng, randomSeed, seedFrom, type Rng } from './rng';
 import type { Card, ShoeState } from './types';
 import { RANKS, SUITS } from './types';
 
@@ -112,7 +112,16 @@ export function reshuffleKeeping(
   penetration: number,
   inPlay: readonly Card[],
 ): ShoeState {
-  const fresh = createShoe(decks, penetration, createRng(shoe.seed), shoe.shuffleId + 1);
+  /*
+   * `seed` is required on ShoeState, so a shoe without one cannot come from
+   * this code — it can only come from localStorage written by a build that
+   * predates the field. `createRng(undefined)` then dies on `seed.length`,
+   * out of a React event handler, which is precisely the crash the mid-round
+   * reshuffle exists to prevent. The store's persist `version` is the real
+   * guard; this is the belt to it, because a type that says "required" is
+   * only a promise about code, not about data that outlived it.
+   */
+  const fresh = createShoe(decks, penetration, createRng(shoe.seed ?? randomSeed()), shoe.shuffleId + 1);
   const held = new Set(inPlay.map((c) => c.id));
   const cards = fresh.cards.filter((c) => !held.has(c.id));
 

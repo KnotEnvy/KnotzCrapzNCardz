@@ -287,15 +287,22 @@ function SetupBody({ onClose }: { onClose: () => void }) {
             </div>
             <Meter value={Math.min(1, edge / 2.5)} tone={edge < 0.5 ? 'win' : edge < 1 ? 'brass' : 'lose'} />
             <p className="mt-2 text-[10px] leading-tight text-pit-400">
-              Against a player using the chart. {fmt(dollars(100))} a hand for an hour at eighty hands
-              is about {fmt(Math.round(dollars(100) * 80 * (edge / 100)))} expected.
+              {/*
+                Signed in words rather than by a minus. The figure used to read
+                "is about $32.00 expected" for a thirty-two dollar *loss*, and
+                "about -$78.40" for a seventy-eight dollar *gain* — backwards,
+                on the one panel whose entire premise is honest pricing.
+              */}
+              Against a player using the chart. {fmt(dollars(100))} a hand for an hour at eighty hands{' '}
+              {edge >= 0 ? 'costs about' : 'gains you about'}{' '}
+              {fmt(Math.abs(Math.round(dollars(100) * 80 * (edge / 100))))}.
             </p>
             <p className="mt-1.5 text-[10px] leading-tight text-pit-500">
               Six decks, dealer standing on all seventeens, 3:2, double any two, double after split,
               split to four — that game is 0.40%, and everything listed below is what this table
               gives back or takes on top of it. Accurate to a tenth of a percent rather than a
-              hundredth; the game&rsquo;s own simulation measures every preset and agrees to within
-              0.15. A price list, not a guarantee.
+              hundredth; the game&rsquo;s own simulation measures every preset and agrees with it
+              inside the noise those measurements carry. A price list, not a guarantee.
             </p>
 
             <div className="mt-3 space-y-1">

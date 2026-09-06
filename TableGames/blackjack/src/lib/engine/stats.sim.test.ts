@@ -40,6 +40,7 @@ import { settle } from './resolve';
 import { RULE_PRESETS, estimateHouseEdge, presetById } from './rules';
 import { isCompleteShoe } from './shoe';
 import {
+  cardsInPlay,
   closeOffers,
   createTable,
   deal,
@@ -339,6 +340,10 @@ describe('the shoe, over a long session', () => {
     const rules = presetById('single-deck').rules;
     let table = createTable(rules, rng, { seats: 3, bankroll: dollars(10_000_000) });
     let duplicates = 0;
+    let stillToCome = 0;
+    let overdealt = 0;
+    let reshuffles = 0;
+    let lastShuffle = table.shoe.shuffleId;
 
     for (let i = 0; i < 120_000; i++) {
       if (table.seats.some((s) => s.bankroll < dollars(1000))) {
@@ -346,19 +351,36 @@ describe('the shoe, over a long session', () => {
       }
       table = playRound(table, DEFAULT_BOT, rng, ['A', 'B', 'C']).table;
 
-      const seen = new Set<number>();
-      for (const seat of table.seats) {
-        for (const hand of seat.hands) {
-          for (const card of hand.cards) {
-            if (seen.has(card.id)) duplicates++;
-            seen.add(card.id);
-          }
-        }
+      /*
+       * Everything the reshuffle promises, asserted — the earlier version of
+       * this test checked only for duplicates among the players' hands, which
+       * is the one part that was never in doubt. What the fix actually claims
+       * is that no card is in two places at once *anywhere*: the dealer's hand
+       * and the Super Sevens bonus card count, and no card on the felt may
+       * also still be waiting in the shoe.
+       */
+      const inPlay = cardsInPlay(table);
+      const ids = new Set<number>();
+      for (const card of inPlay) {
+        if (ids.has(card.id)) duplicates++;
+        ids.add(card.id);
+      }
+      for (let j = table.shoe.pos; j < table.shoe.size; j++) {
+        if (ids.has(table.shoe.cards[j].id)) stillToCome++;
+      }
+      if (table.shoe.pos > table.shoe.size) overdealt++;
+      if (table.shoe.shuffleId !== lastShuffle) {
+        lastShuffle = table.shoe.shuffleId;
+        reshuffles++;
       }
     }
 
     expect(duplicates).toBe(0);
+    expect(stillToCome).toBe(0);
+    expect(overdealt).toBe(0);
     expect(table.round).toBe(120_000);
+    // And the path being tested was actually taken.
+    expect(reshuffles).toBeGreaterThan(1000);
   }, 600_000);
 });
 

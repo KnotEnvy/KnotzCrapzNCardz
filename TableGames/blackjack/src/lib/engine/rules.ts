@@ -111,7 +111,9 @@ export const RULE_PRESETS: readonly RulePreset[] = [
       blackjackPays: '3:2',
       double: 'ANY2',
       das: true,
-      resplitTo: 2,
+      // Four hands, like the real boardwalk game. The eight decks are what
+      // this preset costs the player, not a tighter split limit.
+      resplitTo: 3,
       surrender: 'LATE',
       holeCard: 'PEEK',
       sideBets: { ...NO_SIDE_BETS, PERFECT_PAIRS: true, TWENTY_ONE_PLUS_THREE: true, LUCKY_LADIES: true },

@@ -29,6 +29,7 @@ import type { SideBetKind } from '@/lib/engine/types';
 
 export default function Page() {
   useKeyboard();
+  useEscapeClosesDrawer();
 
   const table = useGame((s) => s.table);
   const settlements = useGame((s) => s.settlements);
@@ -162,6 +163,13 @@ function Header() {
 
       <div className="flex-1" />
 
+      {/*
+        The controls wrap rather than run off the edge. At 430 CSS pixels and
+        below they used to sit past the viewport with no horizontal scroll to
+        reach them — Stats, the reset and the speed toggle were simply gone,
+        so a player on a phone could not open the statistics rail or start a
+        new session at all.
+      */}
       <Button
         size="sm"
         variant={autoplay ? 'primary' : 'ghost'}
@@ -255,6 +263,30 @@ function Toasts() {
       ))}
     </div>
   );
+}
+
+/**
+ * Escape closes the statistics drawer.
+ *
+ * Below 1280px the rail is a drawer over the table, and a drawer that covers
+ * what you are using needs every ordinary way out: a tap on the scrim, the
+ * button that opened it, and this. Above that width it is part of the layout
+ * rather than over it, so Escape leaves it alone — closing a panel nobody
+ * asked to close would be its own surprise.
+ */
+function useEscapeClosesDrawer(): void {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const { prefs, dialog } = useGame.getState();
+      // A modal on top of the drawer owns Escape first.
+      if (dialog !== null || !prefs.panelOpen) return;
+      if (window.innerWidth >= 1280) return;
+      useGame.getState().setPref('panelOpen', false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 }
 
 /* ------------------------------------------------------------------ *

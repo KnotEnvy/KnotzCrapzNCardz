@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete, measured, and through two rounds of adversarial review. Everything is green: 147 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash. All are fixed, each with the test that would have caught it.",
+  "status": "Feature complete, measured, and through four rounds of adversarial review. Everything is green: 147 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash when the shoe ran dry mid-round; round four found a persisted shape that no longer loaded, a counter that lost the felt across a mid-round reshuffle, and three tests and documents that claimed more than they checked. All are fixed, each with the test that would have caught it.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -160,11 +160,12 @@
   ],
   "verification": {
     "automated": [
-      "144 unit tests covering hand mathematics, the peek, splits to four hands, split and re-split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, abandoning a round, the whole strategy chart cell by cell, the advisor's legality, and the four counting systems.",
+      "147 unit tests covering hand mathematics, the peek, splits to four hands, split and re-split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, abandoning a round, the whole strategy chart cell by cell, the advisor's legality, and the four counting systems.",
       "Bankroll conservation across a split with two doubles: whatever the round did, the bankroll at the end equals the bankroll at the start plus the sum of the signed results. It is the one assertion that catches a stake taken and not returned, or returned twice, anywhere in the money path.",
       "Dealer finishing distribution asserted against the published six-deck S17 table to within 0.5 points on each total and 0.4 on the bust rate.",
       "Player natural frequency asserted to within 0.12 points of the exact 4.749%.",
       "Five rule sets' house edges asserted within three standard errors of the rule model.",
+      "The edge model swept across all 25,920 tables the setup screen can build — every combination of the eleven live controls — asserting that the itemisation sums to the headline and that the extremes stay where they should: about one percent to the player at the most generous, about three and a half to the house at a carnival table paying even money on a natural.",
       "Six side-bet edges: five enumerated exactly and asserted to 0.06 points, one measured.",
       "Shoe completeness asserted after every reshuffle across twenty thousand rounds.",
       "A counted 1-12 spread asserted to beat a flat bet on the same shoes \u2014 which is the evidence that the shoe is a real shoe and the discard tray really reflects it."
@@ -191,7 +192,7 @@
         "RoyalMatch": 6.666,
         "SuperSevens": 11.4,
         "LuckyLadies": 17.625,
-        "BustIt": "6.9 +/- 0.3, measured rather than enumerated"
+        "BustIt": "6.92, measured rather than enumerated; the test computes its own three-sigma band per run"
       },
       "frequencies": {
         "dealerBustS17": 28.129,
@@ -236,7 +237,7 @@
     "The bot takes insurance at a true count of +3 or better but never takes even money, which is the same bet \u2014 a counter holding a natural at +3 should.",
     "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
     "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
-    "The rule model now agrees with the simulation to within 0.15 points on every preset (and to a thousandth on single deck), but Atlantic City is the loose one: the model says 0.35% against a measured 0.207%. The published figure for that game is nearer 0.36%, so the suspect is the measurement rather than the model \u2014 most likely that the chart is the six-deck one at eight decks, or that late surrender is being taken slightly too often. Inside the 3\u03c3 band either way.",
+    "The rule model is inside 0.22 points of the simulation on every preset on a single 800,000-round run, and inside 0.093 against the mean of two. The loosest is European at 0.217 against a 0.373 three-sigma tolerance. Atlantic City, which was the outlier at 0.143 while the soft-double restriction was being double-charged, now measures 0.332 against a model of 0.35. Nothing here is outside its band; the item is kept as the place to look first if a preset starts drifting again.",
     "The shallow felt drops the insurance line and the dealer's rule from the print, because there is no depth for them. Both are still in the HUD and the help dialog, but a player on a phone reads them off a panel rather than off the felt.",
     "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
     "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",

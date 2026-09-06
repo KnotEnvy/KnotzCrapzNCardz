@@ -1150,28 +1150,34 @@ describe('rule sets', () => {
   it('stays sane across every table the setup screen can build', () => {
     const base = defaultRules();
     let worstForHouse = Infinity;
+    let worstForPlayer = -Infinity;
     let count = 0;
 
     for (const decks of [1, 2, 4, 6, 8]) {
       for (const hitsSoft17 of [false, true]) {
-        for (const blackjackPays of ['3:2', '6:5'] as const) {
+        for (const blackjackPays of ['3:2', '6:5', '1:1'] as const) {
           for (const double of ['ANY2', '9-11', '10-11'] as const) {
-            for (const das of [false, true]) {
-              for (const resplitAces of [false, true]) {
-                for (const oneCardOnSplitAces of [false, true]) {
-                  for (const surrender of ['NONE', 'LATE', 'EARLY'] as const) {
-                    for (const holeCard of ['PEEK', 'ENHC'] as const) {
-                      const rules = {
-                        ...base,
-                        decks, hitsSoft17, blackjackPays, double, das,
-                        resplitAces, oneCardOnSplitAces, surrender, holeCard,
-                      };
-                      const edge = estimateHouseEdge(rules);
-                      const sum = ruleEffects(rules).reduce((n, e) => n + e.delta, 0);
-                      expect(0.4 - sum).toBeCloseTo(edge, 9);
-                      expect(Number.isFinite(edge)).toBe(true);
-                      worstForHouse = Math.min(worstForHouse, edge);
-                      count++;
+            for (const doubleSoft of [false, true]) {
+              for (const das of [false, true]) {
+                for (const resplitTo of [1, 2, 3]) {
+                  for (const resplitAces of [false, true]) {
+                    for (const oneCardOnSplitAces of [false, true]) {
+                      for (const surrender of ['NONE', 'LATE', 'EARLY'] as const) {
+                        for (const holeCard of ['PEEK', 'ENHC'] as const) {
+                          const rules = {
+                            ...base,
+                            decks, hitsSoft17, blackjackPays, double, doubleSoft, das,
+                            resplitTo, resplitAces, oneCardOnSplitAces, surrender, holeCard,
+                          };
+                          const edge = estimateHouseEdge(rules);
+                          const sum = ruleEffects(rules).reduce((n, e) => n + e.delta, 0);
+                          expect(0.4 - sum).toBeCloseTo(edge, 9);
+                          expect(Number.isFinite(edge)).toBe(true);
+                          worstForHouse = Math.min(worstForHouse, edge);
+                          worstForPlayer = Math.max(worstForPlayer, edge);
+                          count++;
+                        }
+                      }
                     }
                   }
                 }
@@ -1182,12 +1188,20 @@ describe('rule sets', () => {
       }
     }
 
-    expect(count).toBe(2880);
+    // Eleven live controls: 5 * 2 * 3 * 3 * 2 * 2 * 3 * 2 * 2 * 3 * 2. Every
+    // one of them is a switch on the setup screen, so every one of them is a
+    // table somebody can sit down at.
+    expect(count).toBe(25_920);
     // The most generous table buildable is a single deck that re-splits and
     // hits aces with early surrender: about one percent to the player. Any
     // further than that and a term has gone wrong.
     expect(worstForHouse).toBeGreaterThan(-1.5);
     expect(worstForHouse).toBeLessThan(0);
+    // And the meanest is eight decks paying even money on a natural with
+    // nothing else to soften it. That is a real table shape — a carnival
+    // game — and the model should price it, not clamp it.
+    expect(worstForPlayer).toBeGreaterThan(2.5);
+    expect(worstForPlayer).toBeLessThan(4);
   });
 
   it('itemises exactly what it charges for', () => {

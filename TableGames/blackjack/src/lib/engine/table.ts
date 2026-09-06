@@ -107,7 +107,7 @@ function withShoe(table: TableState, shoe: ShoeState): TableState {
  * the dealer's own hand, every player hand, and any side-bet bonus card lying
  * beside a circle.
  */
-function cardsInPlay(table: TableState): Card[] {
+export function cardsInPlay(table: TableState): Card[] {
   const out: Card[] = [...table.dealer.cards];
   for (const seat of table.seats) {
     for (const hand of seat.hands) out.push(...hand.cards);

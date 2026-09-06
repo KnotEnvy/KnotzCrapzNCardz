@@ -494,7 +494,14 @@ body {
   display: none;
 }
 
-@media (orientation: portrait) and (max-height: 560px) {
+/*
+ * `max-width`, not `max-height`. It was written as max-height, which is the
+ * one dimension a phone held upright has plenty of — so the hint fired at no
+ * shipping handset (320x568, 375x667, 390x844 and 430x932 all missed it) and
+ * every one of them fell through to a layout nobody designed. The comment
+ * above described behaviour that did not exist.
+ */
+@media (orientation: portrait) and (max-width: 560px) {
   .rotate-hint {
     position: fixed;
     inset: 0;

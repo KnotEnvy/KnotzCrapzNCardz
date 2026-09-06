@@ -666,7 +666,15 @@ export const useGame = create<GameStore>()(
     {
       name: 'knotz-blackjack',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      /*
+       * Bumped when ShoeState gained a required `seed`. A shoe persisted by
+       * version 1 comes back without one, and the first mid-round reshuffle
+       * then calls `createRng(undefined)` and throws — the crash the reshuffle
+       * was added to fix, resurrected for anyone upgrading rather than
+       * arriving fresh. Any change that adds a required field to persisted
+       * state has to come with a bump here.
+       */
+      version: 2,
       /**
        * What survives a reload.
        *

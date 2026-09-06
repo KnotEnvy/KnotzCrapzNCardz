@@ -57,13 +57,13 @@ published for fifty years:
 
 | | measured | published |
 | --- | --- | --- |
-| Dealer busts, six decks, S17 | 28.15% | 28.32% |
-| Dealer busts, H17 | 28.52% | 28.54% |
-| Player is dealt a natural | 4.78% | 4.749% |
-| Vegas Strip house edge | 0.46% | 0.40% (model) |
-| Mimicking the dealer instead | 5.64% | 5.5% |
-| Flat bettor's hands at a true count of +2 or better | **+1.33% to the player** | |
-| the same hands at −2 or worse | −2.17% | |
+| Dealer busts, six decks, S17 | 28.13% | 28.32% |
+| Dealer busts, H17 | 28.53% | 28.54% |
+| Player is dealt a natural | 4.77% | 4.749% |
+| Vegas Strip house edge | 0.54% | 0.40% (model) |
+| Mimicking the dealer instead | 5.95% | 5.5% |
+| Flat bettor's hands at a true count of +2 or better | **+1.51% to the player** | |
+| the same hands at −2 or worse | −2.72% | |
 
 That last pair is the whole case for counting, and it is measured from the
 player's own results rather than asserted: the same flat bet, the same chart,
@@ -76,7 +76,7 @@ correct dealer look half a point wrong.
 
 The last two lines are the argument: playing the chart costs you about a third
 of a percent, and copying the dealer costs you five and a half. Every figure
-above comes out of `pnpm run test:stats`, which runs 28 measurements in about
+above comes out of `pnpm run test:stats`, which runs 29 measurements in about
 six minutes and prints the table.
 
 The side bets are not measured — they are **enumerated**. Five of the six are
@@ -85,15 +85,17 @@ ordered pair and triple, weights each by its exact probability, and sums the
 payout. Those five edges carry no sampling error at all. Bust It is the
 exception: it is a bet on a hand the dealer plays out, so it has to be dealt,
 and its 400:1 tail gives it six times the main game's variance — half a million
-rounds place it to within about a percent and no tighter, so it is quoted with
-the uncertainty it has.
+rounds place it to within about a percent and no tighter. The 6.92% below is
+pooled over two million; the test computes its own three-sigma band from the
+run rather than asserting a tolerance that only holds on the seeds it was
+written against.
 
 | Side bet | House edge, six decks |
 | --- | --- |
 | 21 + 3 | 4.62% |
 | Perfect Pairs | 6.11% |
 | Royal Match | 6.67% |
-| Bust It | 6.9% ± 0.3 |
+| Bust It | 6.92%, measured |
 | Super Sevens | 11.40% |
 | Lucky Ladies | 17.63% |
 

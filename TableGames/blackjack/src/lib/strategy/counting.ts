@@ -12,6 +12,7 @@
  * and is deliberately not wired to any of this.
  */
 
+import { cardsInPlay } from '@/lib/engine/table';
 import type { Card, ShoeState, TableState } from '@/lib/engine/types';
 import { rankValue } from '@/lib/engine/types';
 
@@ -180,19 +181,41 @@ export function countShoe(
   system: CountSystem,
   decks: number,
   hidden: readonly Card[] = [],
+  inPlay: readonly Card[] = [],
 ): CountState {
   const spec = COUNT_SYSTEMS[system];
   const tags = spec.tags;
+  const tag = (rank: number) => tags[rank >= 10 && rank <= 13 ? 10 : rank === 14 ? 11 : rank] ?? 0;
+  const isHidden = (card: Card) => hidden.length > 0 && hidden.some((h) => h.id === card.id);
+
   let running = initialCount(system, decks);
   let aces = 0;
   let seen = 0;
+  const counted = new Set<number>();
 
   for (let i = 0; i < shoe.pos; i++) {
     const card = shoe.cards[i];
-    if (hidden.length > 0 && hidden.some((h) => h.id === card.id)) continue;
-    const rank = card.rank;
-    running += tags[rank >= 10 && rank <= 13 ? 10 : rank === 14 ? 11 : rank] ?? 0;
-    if (rank === 14) aces++;
+    if (isHidden(card)) continue;
+    running += tag(card.rank);
+    if (card.rank === 14) aces++;
+    seen++;
+    if (inPlay.length > 0) counted.add(card.id);
+  }
+
+  /*
+   * Cards on the felt that are not in the discard tray.
+   *
+   * Normally there are none — a card in a hand was dealt from this shoe and so
+   * sits behind the pointer. But a mid-round reshuffle gathers the discards
+   * and leaves the hands where they are, which resets the tray to empty while
+   * four or five cards are still face up on the table. A player would still be
+   * counting those; without this the trainer's running count dropped them, and
+   * the insurance decision read the emptied count for the rest of the round.
+   */
+  for (const card of inPlay) {
+    if (counted.has(card.id) || isHidden(card)) continue;
+    running += tag(card.rank);
+    if (card.rank === 14) aces++;
     seen++;
   }
 
@@ -223,7 +246,7 @@ export function countShoe(
 export function countTable(table: TableState, system: CountSystem): CountState {
   const hidden =
     table.dealer.holeDown && table.dealer.cards.length > 1 ? [table.dealer.cards[1]] : EMPTY;
-  return countShoe(table.shoe, system, table.rules.decks, hidden);
+  return countShoe(table.shoe, system, table.rules.decks, hidden, cardsInPlay(table));
 }
 
 /** One shared empty list, so the common case allocates nothing. */
