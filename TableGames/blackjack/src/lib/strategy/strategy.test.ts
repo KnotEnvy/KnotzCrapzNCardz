@@ -18,7 +18,9 @@ import {
   countCards,
   countTable,
   deviationFor,
+  countShoe,
   edgeAt,
+  hiLoEquivalent,
   initialCount,
   insuranceIsGood,
   tagOf,
@@ -28,8 +30,8 @@ import { createShoe } from '@/lib/engine/shoe';
 import { createRng } from '@/lib/engine/rng';
 import { createTable, deal, setBet, setSideBet } from '@/lib/engine/table';
 import { dollars } from '@/lib/engine/money';
-import { DEFAULT_BOT, playRound } from '@/lib/strategy/autoplay';
-import type { Card, Rank, Suit, TableRules } from '@/lib/engine/types';
+import { betFor, decide, DEFAULT_BOT, playRound } from '@/lib/strategy/autoplay';
+import type { Action, Card, Rank, Suit, TableRules } from '@/lib/engine/types';
 
 const S = 'spades' as const;
 const H = 'hearts' as const;
@@ -347,6 +349,81 @@ describe('chart integrity', () => {
     expect(differences(rules, { ...rules, decks: 1 })).toHaveLength(12);
   });
 
+  /*
+   * Early surrender is a different rule, priced at 0.63% against late
+   * surrender's 0.08%, and until round six it got the same chart. It buys out
+   * of the dealer's natural as well as the dealer's good hand, so it is far
+   * more aggressive against exactly the two upcards that can become one — and
+   * unchanged everywhere else, because nothing else changes when the peek
+   * moves.
+   */
+  /*
+   * The invariant this file's own comment states — "the advisor must never
+   * name an action the buttons reject" — held for every case anyone had
+   * thought of and not for the one the trainer actually hits. During the
+   * offers phase at an early-surrender table the engine allows exactly one
+   * action, SURRENDER, and every fallback in `adviseFrom` ended at STAND. So
+   * the hint bar named a move the buttons refused, and the trainer then
+   * graded a correct early surrender as a mistake.
+   *
+   * Asserted over every chart code against every legality map the table can
+   * produce, rather than over the cases someone remembered.
+   */
+  it('never names an action the table would refuse, whatever is legal', () => {
+    const codes: Code[] = ['H', 'S', 'D', 'Ds', 'P', 'Ph', 'Pd', 'R', 'Rs', 'Rp'];
+    const actions: Action[] = ['HIT', 'STAND', 'DOUBLE', 'SPLIT', 'SURRENDER'];
+
+    // Every non-empty subset of the five actions, which is what the engine's
+    // legality map is: 31 of them, including the offers phase's lone SURRENDER.
+    for (let mask = 1; mask < 32; mask++) {
+      const legal = Object.fromEntries(
+        actions.map((a, i) => [a, { allowed: (mask & (1 << i)) !== 0 }]),
+      ) as Record<Action, { allowed: boolean }>;
+
+      for (const code of codes) {
+        const advice = adviseFrom(code, legal, [card(8), card(8)], 10, rules);
+        expect(
+          legal[advice.action].allowed,
+          `code ${code} named ${advice.action} with only ${actions.filter((a) => legal[a].allowed).join('/')} legal`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('advises early surrender differently from late surrender', () => {
+    const late = chartFor({ ...rules, surrender: 'LATE' });
+    const early = chartFor({ ...rules, surrender: 'EARLY' });
+
+    const at = (c: ReturnType<typeof chartFor>, total: number, up: number) =>
+      c.hard[total][UPCARDS.indexOf(up)];
+
+    // Hard twelve against an ace: a late-surrender table hits it, an
+    // early-surrender one folds it before the dealer looks. (Sixteen against
+    // an ace is already a late surrender, so it is not the cell that tells
+    // the two charts apart.)
+    expect(at(late, 12, 11)).toBe('H');
+    expect(at(early, 12, 11)).toBe('R');
+    // And hard fourteen against a ten, which late surrender plays out.
+    expect(at(late, 14, 10)).toBe('H');
+    expect(at(early, 14, 10)).toBe('R');
+    // And a five, which cannot bust and still is not worth playing into a
+    // hand that may already be a natural.
+    expect(at(late, 5, 11)).toBe('H');
+    expect(at(early, 5, 11)).toBe('R');
+
+    // The two charts have to differ *only* against a ten and an ace: the peek
+    // moving changes nothing about a dealer six.
+    for (const total of Object.keys(early.hard).map(Number)) {
+      for (const up of UPCARDS) {
+        if (up === 10 || up === 11) continue;
+        expect(at(early, total, up), `hard ${total} v ${up}`).toBe(at(late, total, up));
+      }
+    }
+    for (const row of Object.keys(early.soft).map(Number)) {
+      expect(early.soft[row]).toEqual(late.soft[row]);
+    }
+  });
+
   it('collapses surrender cells at a table that does not offer it', () => {
     const withLS = chartFor({ ...rules, surrender: 'LATE' });
     const without = chartFor({ ...rules, surrender: 'NONE' });
@@ -628,5 +705,93 @@ describe('counting', () => {
   it('flips twelve against a three only above plus two', () => {
     expect(deviationFor(12, 3, 1)).toBeNull();
     expect(deviationFor(12, 3, 2)?.action).toBe('STAND');
+  });
+
+  /*
+   * Composing the two facts this file used to assert separately.
+   *
+   * It asserted that Knock-Out's initial running count is -20 at six decks,
+   * and it asserted that `betRamp(0)` is one unit, and it never once put the
+   * first number into the second. So nothing noticed that every consumer of
+   * the count — the ramp, the edge estimate, the Illustrious 18, the
+   * insurance decision — reads a number indexed in *Hi-Lo* true counts and
+   * was being handed whatever the selected system produced. An untouched
+   * six-deck shoe under Knock-Out reported a 10.4% player disadvantage and
+   * fired every at-or-below deviation permanently.
+   *
+   * The rule that has to hold is the one a player would state: a shoe nobody
+   * has dealt from is a neutral shoe, whichever system you are keeping.
+   */
+  describe('every system agrees about a shoe nobody has played', () => {
+    for (const system of COUNT_ORDER) {
+      it(`${COUNT_SYSTEMS[system].name} starts neutral`, () => {
+        for (const decks of [1, 2, 6, 8]) {
+          const shoe = createShoe(decks, 0.75, createRng(`neutral-${system}-${decks}`), 1);
+          const count = countShoe(shoe, system, decks);
+
+          expect(count.running, `${system} at ${decks} decks`).toBe(initialCount(system, decks));
+          // The one number every published index is quoted in.
+          expect(count.hiLo, `${system} at ${decks} decks`).toBeCloseTo(0, 6);
+          expect(betRamp(count.hiLo)).toBe(1);
+          expect(insuranceIsGood(count.hiLo)).toBe(false);
+          expect(edgeAt(count.hiLo, 0.4)).toBeCloseTo(-0.4, 6);
+          // And no index play is live at a shoe that has not been dealt from.
+          expect(deviationFor(13, 2, count.hiLo)).toBeNull();
+          expect(deviationFor(12, 3, count.hiLo)).toBeNull();
+        }
+      });
+    }
+  });
+
+  /*
+   * And the same thing again through the consumers rather than through the
+   * conversion, because the defect lived in the consumers. A bot on an
+   * untouched shoe must bet one unit and take no index play, whichever system
+   * its counting is set to — if any of them starts reading the raw count
+   * again, this is what fails.
+   */
+  it('plays the chart off a fresh shoe whichever system the bot counts in', () => {
+    for (const system of COUNT_ORDER) {
+      let t = createTable(defaultRules(), createRng(`bot-${system}`), { seats: 1 });
+      // Seven, six against a deuce: hard thirteen, which the chart stands and
+      // the Illustrious 18 hits *at or below* a true count of -1. Under the
+      // raw Knock-Out count of -20 that index play fires on an untouched
+      // shoe; under the Hi-Lo equivalent of zero it does not.
+      const stacked: Card[] = ([[7, S], [2, H], [6, S], [10, H]] as Array<[Rank, Suit]>).map(
+        ([r, su], i) => ({ rank: r, suit: su, id: 900_000 + i }),
+      );
+      t = { ...t, shoe: { ...t.shoe, cards: [...stacked, ...t.shoe.cards], pos: 0, size: t.shoe.size + 4 } };
+      const withBet = setBet(t, 'A', dollars(10));
+      if (!withBet.ok) throw new Error(withBet.reason);
+      const dealt = deal(withBet.table, createRng(`bot-${system}`));
+      if (!dealt.ok) throw new Error(dealt.reason);
+      t = dealt.table;
+
+      const bot = { ...DEFAULT_BOT, system, spread: true, deviations: true };
+      expect(betFor(t, 'A', bot), `${system} bets off the top`).toBe(bot.unit);
+      const choice = decide(t, bot);
+      expect(choice?.action, `${system} plays 13 v 2 off the top`).toBe('STAND');
+      expect(choice?.deviation, `${system} calls no index play off the top`).toBeUndefined();
+    }
+  });
+
+  /*
+   * And the conversion is not a no-op dressed up as one: each system reaches
+   * the same Hi-Lo equivalent from a different running count, which is the
+   * whole point of having one.
+   */
+  it('converts each system to the Hi-Lo count its indices are written in', () => {
+    // Knock-Out's pivot is +4 for every shoe size, and at the pivot its own
+    // claim — that you never need to divide — is exactly true.
+    expect(hiLoEquivalent(4, 1, 'KO')).toBeCloseTo(4, 6);
+    expect(hiLoEquivalent(4, 3, 'KO')).toBeCloseTo(4, 6);
+    expect(hiLoEquivalent(-20, 6, 'KO')).toBeCloseTo(0, 6);
+
+    // A balanced level-one count is already the number the indices use.
+    expect(hiLoEquivalent(6, 3, 'HI_LO')).toBeCloseTo(2, 6);
+
+    // Level-two tags run to ±2, so their true counts run to about double.
+    expect(hiLoEquivalent(12, 3, 'OMEGA_II')).toBeCloseTo(2, 6);
+    expect(hiLoEquivalent(12, 3, 'HI_OPT_II')).toBeCloseTo(2, 6);
   });
 });

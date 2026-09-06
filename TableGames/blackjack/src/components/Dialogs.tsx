@@ -18,7 +18,7 @@ import {
   ruleEffects,
   rulesShorthand,
 } from '@/lib/engine/rules';
-import { SIDE_BET_ORDER, SIDE_BET_SPECS, ratioLabel } from '@/lib/engine/sidebets';
+import { SIDE_BET_ORDER, SIDE_BET_SPECS, ratioLabel, sideBetEdge, sideBetEdgeIsExact } from '@/lib/engine/sidebets';
 import { CODE_LABEL, CODE_TONE, UPCARDS, chartFor, upcardLabel, type Code } from '@/lib/strategy/basic';
 import { DEVIATIONS } from '@/lib/strategy/counting';
 import { useGame } from '@/lib/store/useGame';
@@ -260,7 +260,15 @@ function SetupBody({ onClose }: { onClose: () => void }) {
                   checked={draft.sideBets[kind]}
                   onChange={(v) => set('sideBets', { ...draft.sideBets, [kind]: v })}
                   label={spec.name}
-                  hint={`${spec.blurb} House edge ${spec.edge}%.`}
+                  /*
+                    Priced for the shoe the draft is building, not for six
+                    decks. The deck selector is a few rows above this one, and
+                    a one-deck table makes Perfect Pairs impossible — 47%
+                    rather than 6.11%.
+                  */
+                  hint={`${spec.blurb} House edge ${sideBetEdge(kind, draft.decks).toFixed(2)}%${
+                    sideBetEdgeIsExact(kind) ? '' : ' (measured at six decks)'
+                  } at ${draft.decks} deck${draft.decks === 1 ? '' : 's'}.`}
                 />
               );
             })}
@@ -490,11 +498,19 @@ function DeviationTable() {
 
 function SideBetsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const rules = useGame((s) => s.table.rules);
-  // Read off the specs rather than written into the prose, so a repriced
-  // paytable cannot leave the paragraph above it claiming something else.
-  const byEdge = SIDE_BET_ORDER.map((k) => SIDE_BET_SPECS[k]).sort((a, b) => a.edge - b.edge);
-  const best = byEdge[0];
-  const worst = byEdge[byEdge.length - 1];
+  /*
+   * Priced for this table's shoe, not for six decks. Read off the enumeration
+   * rather than written into the prose, so a repriced paytable — or a deck
+   * count changed two dialogs away — cannot leave the paragraph above it
+   * claiming something else.
+   */
+  const priced = SIDE_BET_ORDER.map((k) => ({
+    kind: k,
+    spec: SIDE_BET_SPECS[k],
+    edge: sideBetEdge(k, rules.decks),
+  })).sort((a, b) => a.edge - b.edge);
+  const best = priced[0];
+  const worst = priced[priced.length - 1];
 
   return (
     <Modal
@@ -506,17 +522,22 @@ function SideBetsDialog({ open, onClose }: { open: boolean; onClose: () => void 
     >
       <p className="mb-3 text-[11px] leading-relaxed text-pit-400">
         The main game on this table runs at {estimateHouseEdge(rules).toFixed(2)}% against you. The
-        friendliest bet on this page costs {best.edge}%, and the most tempting one costs{' '}
-        {worst.edge}%. They are here
+        friendliest bet on this page costs {best.edge.toFixed(2)}%, and the most tempting one costs{' '}
+        {worst.edge.toFixed(2)}%. They are here
         because a real table has them, and the numbers are here because a real table does not print
-        them — every figure below is computed for that paytable at six decks, not copied from a
-        chart describing somebody else&rsquo;s.
+        them — every figure below is enumerated for that paytable at {rules.decks} deck
+        {rules.decks === 1 ? '' : 's'}, not copied from a chart describing somebody else&rsquo;s.
+        Deck count matters more than it sounds: a perfect pair needs a second copy of an identical
+        card, so Perfect Pairs is 6.11% at six decks and impossible at one. Bust It is the
+        exception — it is a bet on a hand the dealer plays out, so its figure is measured at six
+        decks rather than enumerated.
       </p>
 
       <div className="grid gap-2 sm:grid-cols-2">
         {SIDE_BET_ORDER.map((kind) => {
           const spec = SIDE_BET_SPECS[kind];
           const on = rules.sideBets[kind];
+          const edge = sideBetEdge(kind, rules.decks);
           return (
             <Panel
               key={kind}
@@ -524,10 +545,14 @@ function SideBetsDialog({ open, onClose }: { open: boolean; onClose: () => void 
               title={spec.name}
               right={
                 <span
-                  className={cn('font-mono text-[10px]', spec.edge > 10 ? 'text-lose' : 'text-brass-300')}
-                  title="House edge on a six-deck shoe"
+                  className={cn('font-mono text-[10px]', edge > 10 ? 'text-lose' : 'text-brass-300')}
+                  title={
+                    sideBetEdgeIsExact(kind)
+                      ? `House edge, enumerated exactly for ${rules.decks} deck${rules.decks === 1 ? '' : 's'}`
+                      : 'House edge, measured at six decks — this bet has no closed form'
+                  }
                 >
-                  {spec.edge}%
+                  {edge.toFixed(2)}%{sideBetEdgeIsExact(kind) ? '' : '*'}
                 </span>
               }
             >

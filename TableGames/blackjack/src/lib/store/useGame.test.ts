@@ -194,14 +194,53 @@ describe('the store', () => {
     expect(writes, 'but only one write, at the end of it').toBe(1);
   });
 
+  /*
+   * Round four found a persisted shape that no longer loaded, because a
+   * required field was added without a version bump. Round six added another
+   * required field — `SeatStats.staked` — so this is the test that says the
+   * lesson took: an old save has to come forward rather than crash or print
+   * NaN where the measured edge goes.
+   */
+  it('brings a version-2 save forward rather than loading it broken', async () => {
+    const v2 = JSON.parse(JSON.stringify(useGame.getState().table)) as {
+      seats: Array<{ stats: Record<string, number | undefined> }>;
+    };
+    for (const seat of v2.seats) {
+      seat.stats.wagered = 12_345;
+      delete seat.stats.staked;
+    }
+    localStorage.setItem(
+      'knotz-blackjack',
+      JSON.stringify({ state: { table: v2, prefs: useGame.getState().prefs, bot: useGame.getState().bot }, version: 2 }),
+    );
+
+    await useGame.persist.rehydrate();
+
+    for (const seat of state().table.seats) {
+      expect(Number.isFinite(seat.stats.staked), 'staked is a number after the migration').toBe(true);
+      expect(seat.stats.staked).toBe(12_345);
+    }
+  });
+
   it('persists the table and the preferences, and nothing about the moment', () => {
+    /*
+     * Produces its own write rather than reading whatever an earlier test
+     * happened to leave behind. It used to depend on the case above it and
+     * threw `Cannot read properties of null` when run alone — a test that
+     * only passes in file order is a test that will mislead whoever next runs
+     * it with `-t`.
+     */
+    reset();
+    state().setSeatOccupied('A', true);
+    vi.advanceTimersByTime(1000);
+
     // `partialize` keeps the table, the preferences and the bot, and drops
     // everything about a moment that has passed by the time the page is back.
     const persisted = JSON.parse(localStorage.getItem('knotz-blackjack')!) as {
       state: Record<string, unknown>;
       version: number;
     };
-    expect(persisted.version).toBe(2);
+    expect(persisted.version).toBe(3);
     expect(Object.keys(persisted.state).sort()).toEqual(['bot', 'prefs', 'table']);
   });
 });

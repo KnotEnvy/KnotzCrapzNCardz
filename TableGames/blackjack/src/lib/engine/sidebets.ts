@@ -43,6 +43,7 @@
 
 import { winnings } from './money';
 import type { Card, SideBetKind } from './types';
+import { RANKS, SUITS } from './types';
 import { isRed, rankValue } from './types';
 
 /* ------------------------------------------------------------------ *
@@ -357,6 +358,132 @@ export function resolveSuperSevens(
     return pay(spec, a.suit === b.suit ? 2 : 3, amount);
   }
   return pay(spec, 4, amount);
+}
+
+/* ------------------------------------------------------------------ *
+ * What a side bet costs at *this* table
+ * ------------------------------------------------------------------ */
+
+/**
+ * The house edge of a side bet, enumerated exactly for a given shoe size.
+ *
+ * `SIDE_BET_SPECS[kind].edge` is the six-deck figure, and for five rounds of
+ * review it was the only figure — printed on the felt's chip tooltip and in
+ * the rules editor with no qualifier, inches from the deck selector. That is
+ * not a rounding error. Perfect Pairs needs a second copy of an identical
+ * card, so at **one deck it is impossible**: the bet pays only its 12:1 and
+ * 6:1 lines and the edge is 47.06%, not the 6.11% the felt printed. A game
+ * whose stated argument is "the honest way to offer a bad bet is to offer it
+ * with the number attached" was attaching a number eight times too kind.
+ *
+ * So the number is computed for the table in front of the player. Five of the
+ * six are decided by two or three cards off the top of a fresh shoe, which
+ * makes them a finite sum rather than something to estimate: walk every
+ * ordered pair or triple of distinct cards, weight each by its exact
+ * probability, add up the payout. `sidebets.sim.test.ts` asserts this against
+ * the published six-deck figures, so the same code that prints on the felt is
+ * the code the suite checks.
+ *
+ * Bust It is the exception and always has been: it is a bet on a hand the
+ * dealer plays out, so it has no closed form here. Its figure is measured at
+ * six decks and returned unchanged — {@link sideBetEdgeIsExact} says which is
+ * which, so the UI can qualify it rather than overstate it.
+ */
+const EDGE_CACHE = new Map<string, number>();
+
+/** A large round stake, so integer flooring in the payouts cannot bias the sum. */
+const ENUM_STAKE = 100_000;
+
+/** True when this kind's edge is enumerated rather than measured. */
+export function sideBetEdgeIsExact(kind: SideBetKind): boolean {
+  return kind !== 'BUST_IT';
+}
+
+export function sideBetEdge(kind: SideBetKind, decks: number): number {
+  if (!sideBetEdgeIsExact(kind)) return SIDE_BET_SPECS[kind].edge;
+  const key = `${kind}:${decks}`;
+  const hit = EDGE_CACHE.get(key);
+  if (hit !== undefined) return hit;
+  const edge = (1 - expectedReturn(kind, decks)) * 100;
+  EDGE_CACHE.set(key, edge);
+  return edge;
+}
+
+/** The 52 distinct cards. Each appears `decks` times in a fresh shoe. */
+const DISTINCT: Card[] = (() => {
+  const out: Card[] = [];
+  for (const suit of SUITS) for (const rank of RANKS) out.push({ rank, suit, id: 0 });
+  return out;
+})();
+
+/** A winning side bet returns its stake as well as its winnings. */
+function withStake(net: number): number {
+  return net + (net > 0 ? ENUM_STAKE : 0);
+}
+
+function expectedReturn(kind: SideBetKind, decks: number): number {
+  const size = 52 * decks;
+  const same = (a: Card, b: Card) => a.rank === b.rank && a.suit === b.suit;
+
+  /*
+   * The 1000:1 Lucky Ladies line needs a dealer natural as well as the
+   * player's two queens of hearts. The two are very nearly independent — the
+   * player's cards remove no ace and one of the shoe's queens — so the
+   * jackpot term is the 200:1 line's probability times the dealer's natural
+   * rate. The whole term is worth about a twentieth of a percent, well below
+   * the precision this figure is quoted to, and it is the one number here
+   * that is not exact.
+   */
+  const dealerNatural = (2 * (4 * decks) * (16 * decks)) / ((size - 2) * (size - 3));
+
+  const pairPayout = (a: Card, b: Card): number => {
+    switch (kind) {
+      case 'PERFECT_PAIRS':
+        return withStake(resolvePerfectPairs([a, b], ENUM_STAKE).net);
+      case 'ROYAL_MATCH':
+        return withStake(resolveRoyalMatch([a, b], ENUM_STAKE).net);
+      case 'LUCKY_LADIES': {
+        const plain = resolveLuckyLadies([a, b], ENUM_STAKE, false).net;
+        const jackpot = resolveLuckyLadies([a, b], ENUM_STAKE, true).net;
+        return plain + (jackpot - plain) * dealerNatural + (plain > 0 ? ENUM_STAKE : 0);
+      }
+      default:
+        return 0;
+    }
+  };
+
+  const triplePayout = (a: Card, b: Card, c: Card): number => {
+    if (kind === 'TWENTY_ONE_PLUS_THREE') {
+      return withStake(resolveTwentyOnePlusThree([a, b], c, ENUM_STAKE).net);
+    }
+    // Super Sevens: the third card only exists when the first two are sevens.
+    const bonus = a.rank === 7 && b.rank === 7 ? c : undefined;
+    return withStake(resolveSuperSevens([a, b], bonus, ENUM_STAKE).net);
+  };
+
+  const needsThree = kind === 'TWENTY_ONE_PLUS_THREE' || kind === 'SUPER_SEVENS';
+  let expected = 0;
+
+  for (const a of DISTINCT) {
+    const pa = decks / size;
+    for (const b of DISTINCT) {
+      const leftB = decks - (same(a, b) ? 1 : 0);
+      if (leftB <= 0) continue;
+      const pb = leftB / (size - 1);
+      if (!needsThree) {
+        expected += pa * pb * pairPayout(a, b);
+        continue;
+      }
+      for (const c of DISTINCT) {
+        const leftC = decks - (same(a, c) ? 1 : 0) - (same(b, c) ? 1 : 0);
+        if (leftC <= 0) continue;
+        const pc = leftC / (size - 2);
+        expected += pa * pb * pc * triplePayout(a, b, c);
+      }
+    }
+  }
+
+  return expected / ENUM_STAKE;
 }
 
 /* ------------------------------------------------------------------ *

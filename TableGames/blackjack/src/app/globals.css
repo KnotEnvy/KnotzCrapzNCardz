@@ -332,11 +332,19 @@ body {
  * element's own rounding, so the seat circles and chip buttons get a round
  * ring for free — setting a radius would instead reshape the control itself
  * the moment it took focus.
+ *
+ * The selector list is wrapped in `:where()` so it costs no specificity and a
+ * component can override it; the *declarations* are not, because the dark
+ * halo is a `box-shadow` and half the buttons on this felt carry a Tailwind
+ * `shadow-*` utility that would win the cascade and silently delete it. The
+ * outline survived that; the contrast under it did not. `!important` on the
+ * shadow alone is the smallest thing that keeps the ring readable on a bright
+ * brass button without pinning anything else.
  */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--color-brass-300);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55);
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55) !important;
 }
 
 @keyframes rise-fade {

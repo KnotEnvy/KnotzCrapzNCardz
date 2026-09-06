@@ -25,9 +25,12 @@ attached.
 
 **Every move.** Hit, stand, double (on any two cards or restricted to 9-11 or
 10-11, with or without soft totals), split to four hands, re-split aces, hit
-split aces, late surrender, early surrender. Each button knows why it is
-unavailable and says so rather than sitting there dead — and each rule is
-tested for doing something, not only for refusing correctly. Re-split aces
+split aces, late surrender, early surrender. Every refused button prints the
+reason underneath it rather than sitting there dead — printed rather than
+hovered, because a tooltip on a disabled button reaches nobody at all: not a
+keyboard, not a phone, not a screen reader. It was a tooltip for five rounds
+of review. Each rule is also tested for doing something, not only for
+refusing correctly. Re-split aces
 spent this game's first draft as a switch that priced itself at 0.08% and did
 nothing at all.
 
@@ -97,12 +100,14 @@ correct dealer look half a point wrong in the other direction.
 The last two lines are the argument: playing the chart costs you about a third
 of a percent, and copying the dealer costs you five and a half. Every figure
 above comes out of `pnpm run test:stats`, which runs 29 measurements in about
-six minutes and prints the table.
+seven and a half minutes and prints the table.
 
-The side bets are not measured — they are **enumerated**. Five of the six are
-decided by two or three cards off the top of the shoe, so the suite walks every
-ordered pair and triple, weights each by its exact probability, and sums the
-payout. Those five edges carry no sampling error at all. Bust It is the
+The side bets are not measured — they are **enumerated**, and enumerated by
+the game itself rather than by the test. Five of the six are decided by two or
+three cards off the top of the shoe, so `sidebets.ts` walks every ordered pair
+and triple, weights each by its exact probability, and sums the payout. Those
+five edges carry no sampling error at all, and the same code that prints the
+number on the chip is the code the suite checks. Bust It is the
 exception: it is a bet on a hand the dealer plays out, so it has to be dealt,
 and its 400:1 tail gives it six times the main game's variance — half a million
 rounds place it to within about a percent and no tighter. The 6.92% below is
@@ -110,14 +115,24 @@ pooled over two million; the test computes its own three-sigma band from the
 run rather than asserting a tolerance that only holds on the seeds it was
 written against.
 
-| Side bet | House edge, six decks |
-| --- | --- |
-| 21 + 3 | 4.62% |
-| Perfect Pairs | 6.11% |
-| Royal Match | 6.67% |
-| Bust It | 6.92%, measured |
-| Super Sevens | 11.40% |
-| Lucky Ladies | 17.63% |
+| Side bet | Six decks | One deck |
+| --- | --- | --- |
+| 21 + 3 | 4.62% | 18.21% |
+| Perfect Pairs | 6.11% | 47.06% |
+| Royal Match | 6.67% | 10.86% |
+| Bust It | 6.92%, measured | — |
+| Super Sevens | 11.40% | 39.82% |
+| Lucky Ladies | 17.63% | 36.05% |
+
+The second column is not padding. These edges move enormously with shoe size,
+and the game prints the figure for **the table in front of you** — on the
+chip, in the rules editor and in the paytable dialog — rather than the
+six-deck one at every deck count, which is what it did until round six of
+review. A perfect pair needs a second copy of an identical card, so at one
+deck the bet cannot win its top line at all: 47.06%, against the 6.11% the
+felt was showing a player who had just moved the deck slider. Bust It has no
+second column because it has no closed form — it is a bet on a hand the
+dealer plays out, so it is measured at six decks and labelled as such.
 
 Against a main game that runs between 0.05% and 1.85% across the presets —
 and 0.40% on the default table. That comparison is the argument, and it is why
@@ -171,7 +186,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 147 tests, about a second
+pnpm test            # the fast suite — 168 tests, about a second
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets

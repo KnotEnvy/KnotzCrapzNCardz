@@ -27,6 +27,9 @@ import {
   resolveRoyalMatch,
   resolveSuperSevens,
   resolveTwentyOnePlusThree,
+  sideBetEdge,
+  sideBetEdgeIsExact,
+  SIDE_BET_SPECS,
 } from './sidebets';
 import type { Card, Rank, Suit, TableRules, TableState } from './types';
 import { dollars } from './money';
@@ -133,7 +136,7 @@ describe('dealer drawing', () => {
     expect(dealerShouldHit([card(10), card(7)], h17)).toBe(false);
   });
 
-  it('splits on soft seventeen, which is the entire H17 rule', () => {
+  it('draws to soft seventeen at an H17 table and stands on it at an S17 one', () => {
     expect(dealerShouldHit([card(14), card(6)], s17)).toBe(false);
     expect(dealerShouldHit([card(14), card(6)], h17)).toBe(true);
   });
@@ -771,6 +774,40 @@ describe('no hole card', () => {
  * ------------------------------------------------------------------ */
 
 describe('side bets', () => {
+  /*
+   * The felt prints a side bet's house edge on the chip. Until round six it
+   * printed the *six-deck* edge at every table, and the deck selector is in
+   * the same dialog. Perfect Pairs needs a second copy of an identical card,
+   * so at one deck it is impossible and the bet pays only its 12:1 and 6:1
+   * lines: 47.06% against the 6.11% the felt was showing. On a game whose
+   * argument is that the honest way to offer a bad bet is to print the number
+   * beside it, that is the worst place to be eight times too kind.
+   */
+  it('prices a side bet for the shoe in front of the player', () => {
+    // Six decks reproduces the published figures the sim suite enumerates.
+    expect(sideBetEdge('PERFECT_PAIRS', 6)).toBeCloseTo(6.109, 2);
+    expect(sideBetEdge('ROYAL_MATCH', 6)).toBeCloseTo(6.666, 2);
+    expect(sideBetEdge('TWENTY_ONE_PLUS_THREE', 6)).toBeCloseTo(4.621, 2);
+    expect(sideBetEdge('SUPER_SEVENS', 6)).toBeCloseTo(11.4, 2);
+
+    // A perfect pair is impossible at one deck, and the edge says so.
+    expect(sideBetEdge('PERFECT_PAIRS', 1)).toBeCloseTo(47.059, 2);
+    // And it improves with decks, because a perfect pair gets likelier.
+    expect(sideBetEdge('PERFECT_PAIRS', 8)).toBeLessThan(sideBetEdge('PERFECT_PAIRS', 6));
+
+    // Every other one gets *worse* for the player with fewer decks too, since
+    // the flush and straight-flush lines all need cards a small shoe has
+    // fewer ways to supply.
+    for (const kind of ['ROYAL_MATCH', 'TWENTY_ONE_PLUS_THREE', 'SUPER_SEVENS', 'LUCKY_LADIES'] as const) {
+      expect(sideBetEdge(kind, 1), kind).toBeGreaterThan(sideBetEdge(kind, 6));
+    }
+
+    // Bust It has no closed form — it is a bet on a hand the dealer plays out
+    // — so it returns its measured six-deck figure and says so.
+    expect(sideBetEdgeIsExact('BUST_IT')).toBe(false);
+    expect(sideBetEdge('BUST_IT', 1)).toBe(SIDE_BET_SPECS.BUST_IT.edge);
+  });
+
   const amt = dollars(10);
 
   it('Perfect Pairs grades all three tiers', () => {

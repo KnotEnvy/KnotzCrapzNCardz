@@ -136,7 +136,14 @@ function SessionPanel() {
    * subtracted here.
    */
   const mainNet = agg.net - agg.sideNet - agg.insuranceNet;
-  const measured = agg.wagered > 0 ? (-mainNet / agg.wagered) * 100 : 0;
+  /*
+   * Against the *initial* wager, which is what the house edge shown beside it
+   * means and what every published figure means. Dividing by `agg.wagered` —
+   * the total action, about 1.133 times the stake under basic strategy —
+   * printed a measured 0.298% two rows under a model saying 0.40%, and the
+   * comparison between those two numbers is the reason the panel exists.
+   */
+  const measured = agg.staked > 0 ? (-mainNet / agg.staked) * 100 : 0;
 
   return (
     <Panel title="Session">
@@ -198,6 +205,7 @@ function aggregate(all: readonly SeatStats[]): SeatStats {
       doubles: a.doubles + s.doubles,
       splits: a.splits + s.splits,
       wagered: a.wagered + s.wagered,
+      staked: a.staked + s.staked,
       sideWagered: a.sideWagered + s.sideWagered,
       sideNet: a.sideNet + s.sideNet,
       insuranceNet: a.insuranceNet + s.insuranceNet,
@@ -208,7 +216,7 @@ function aggregate(all: readonly SeatStats[]): SeatStats {
     }),
     {
       handsPlayed: 0, wins: 0, losses: 0, pushes: 0, blackjacks: 0, busts: 0,
-      surrenders: 0, doubles: 0, splits: 0, wagered: 0, sideWagered: 0,
+      surrenders: 0, doubles: 0, splits: 0, wagered: 0, staked: 0, sideWagered: 0,
       sideNet: 0, insuranceNet: 0, net: 0, peakBankroll: 0,
       decisions: 0, correctDecisions: 0,
     },
@@ -225,7 +233,7 @@ function CountPanel() {
   const setPref = useGame((s) => s.setPref);
   const count = useCount();
   const spec = COUNT_SYSTEMS[system];
-  const edge = edgeAt(count.true, estimateHouseEdge(table.rules));
+  const edge = edgeAt(count.hiLo, estimateHouseEdge(table.rules));
 
   return (
     <Panel
@@ -268,15 +276,35 @@ function CountPanel() {
             <div className="text-[9px] tracking-wider text-pit-500 uppercase">true</div>
           </div>
         ) : null}
+        {/*
+          The number every published index is quoted in. Shown whenever the
+          selected system is not Hi-Lo, because the edge, the ramp and the
+          deviations below are all read off it — and showing them against a
+          count in another system's units is how an untouched Knock-Out shoe
+          came to be labelled a 10% player disadvantage.
+        */}
+        {spec.id !== 'HI_LO' ? (
+          <div className="text-center">
+            <div
+              className={cn(
+                'font-mono text-2xl tabular-nums',
+                count.hiLo >= 2 ? 'text-win' : count.hiLo <= -2 ? 'text-lose' : 'text-pit-100',
+              )}
+            >
+              {fmtCount(count.hiLo)}
+            </div>
+            <div className="text-[9px] tracking-wider text-pit-500 uppercase">Hi-Lo equiv.</div>
+          </div>
+        ) : null}
       </div>
 
       <Stat
         label="Your edge"
         value={`${edge > 0 ? '+' : ''}${edge.toFixed(2)}%`}
         tone={edge > 0 ? 'good' : 'bad'}
-        title="The game's edge, moved by half a percent per unit of true count."
+        title="The game's edge, moved by half a percent per unit of Hi-Lo true count."
       />
-      <Stat label="Suggested bet" value={`${betRamp(count.true)} unit${betRamp(count.true) === 1 ? '' : 's'}`} />
+      <Stat label="Suggested bet" value={`${betRamp(count.hiLo)} unit${betRamp(count.hiLo) === 1 ? '' : 's'}`} />
       {spec.sideCountAces ? (
         <Stat label="Aces seen" value={count.acesSeen} title="This system is ace-neutral; the side count is yours to keep." />
       ) : null}

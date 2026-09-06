@@ -204,6 +204,47 @@ const FEW_DECK_ONE: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = 
   ['pair', 7, 10, 'S'],
 ];
 
+/**
+ * Early surrender.
+ *
+ * A different rule from late surrender and a different chart, and until round
+ * six this file had only one of them: `restrict` collapsed surrender cells
+ * when the rule was `NONE` and otherwise left the late-surrender chart alone,
+ * so an early-surrender table — which `rules.ts` prices at 0.63%, eight times
+ * what late surrender is worth — was advised as if it were a late-surrender
+ * one.
+ *
+ * Early surrender is folded *before* the dealer checks for a natural, so it
+ * buys out of the dealer's blackjack as well as the dealer's good hand. That
+ * makes it far more aggressive against the two upcards that can become one,
+ * and only against those two: everything else on the chart is unchanged,
+ * because nothing else changes when the peek moves.
+ *
+ * These are the hard-total cells of the standard Atlantic City 1978 set,
+ * which is the table early surrender is written for. The pair cells of that
+ * set (3,3 and 7,7 and 8,8 against an ace, 7,7 and 8,8 against a ten) are
+ * deliberately **not** here — they are the part of the published chart I am
+ * least able to check, and a chart that grades a player has no business
+ * carrying a cell nobody has verified. `openItems` says so. What is here is
+ * the bulk of the rule and it is unambiguous.
+ */
+const EARLY_SURRENDER: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
+  // Against an ace: the stiffs, and the three totals that cannot make a hand.
+  ['hard', 5, 11, 'R'],
+  ['hard', 6, 11, 'R'],
+  ['hard', 7, 11, 'R'],
+  ['hard', 12, 11, 'R'],
+  ['hard', 13, 11, 'R'],
+  ['hard', 14, 11, 'R'],
+  ['hard', 15, 11, 'R'],
+  ['hard', 16, 11, 'R'],
+  ['hard', 17, 11, 'R'],
+  // Against a ten: the three the late chart already surrenders one of.
+  ['hard', 14, 10, 'R'],
+  ['hard', 15, 10, 'R'],
+  ['hard', 16, 10, 'R'],
+];
+
 /* ------------------------------------------------------------------ *
  * Reading the chart
  * ------------------------------------------------------------------ */
@@ -267,6 +308,7 @@ export function chartFor(rules: TableRules): Chart {
     pairs = patch(pairs, deltas.filter(([t]) => t === 'pair').map(([, r, u, c]) => [r, u, c]));
   };
 
+  if (rules.surrender === 'EARLY') apply(EARLY_SURRENDER);
   if (rules.decks <= 2) apply(FEW_DECK_ANY);
   if (rules.decks === 1) apply(FEW_DECK_ONE);
   // Last, because a no-hole-card table overrides a few-deck double.
@@ -401,23 +443,39 @@ export function adviseFrom(
    * Hitting is the usual fallback, and it is not always available: a split ace
    * at a table that gives them one card each cannot hit, so a `P` cell that
    * cannot be split there would otherwise recommend a move the dealer would
-   * refuse. Standing is what is left, and the engine's own legality map is
-   * what decides — the advisor must never name an action the buttons reject.
+   * refuse. Standing is what is left — except when standing is refused too.
+   *
+   * That last case is not hypothetical, and it broke the invariant this
+   * function's whole comment is about. The trainer grades during the offers
+   * phase as well as during play, and at an early-surrender table the offers
+   * phase allows exactly one action: SURRENDER. Every fallback here ended at
+   * STAND, so the advisor named a move the buttons rejected and then marked a
+   * correct early surrender as a mistake. So the last resort is not a
+   * hard-coded action at all — it is whatever the table will actually book.
    */
-  const orStand = (): Advice => (legal.HIT.allowed ? give('HIT', true) : give('STAND', true));
+  const anyLegal = (): Advice => {
+    const order: Action[] = ['STAND', 'HIT', 'SURRENDER', 'DOUBLE', 'SPLIT'];
+    for (const action of order) if (legal[action]?.allowed) return give(action, true);
+    // Nothing is legal, which means it is not this hand's turn. Standing is
+    // the harmless answer and the caller has bigger problems.
+    return give('STAND', true);
+  };
+
+  const orStand = (): Advice =>
+    legal.HIT.allowed ? give('HIT', true) : legal.STAND.allowed ? give('STAND', true) : anyLegal();
 
   switch (code) {
     case 'H':
       // Even the plain hit checks. The chart never gives `H` for a hand that
       // cannot hit, but "never names an action the table would refuse" is a
       // property worth holding unconditionally rather than by argument.
-      return legal.HIT.allowed ? give('HIT', false) : give('STAND', true);
+      return legal.HIT.allowed ? give('HIT', false) : orStand();
     case 'S':
-      return give('STAND', false);
+      return legal.STAND.allowed ? give('STAND', false) : anyLegal();
     case 'D':
       return legal.DOUBLE.allowed ? give('DOUBLE', false) : orStand();
     case 'Ds':
-      return legal.DOUBLE.allowed ? give('DOUBLE', false) : give('STAND', true);
+      return legal.DOUBLE.allowed ? give('DOUBLE', false) : legal.STAND.allowed ? give('STAND', true) : anyLegal();
     case 'P':
       return legal.SPLIT.allowed ? give('SPLIT', false) : orStand();
     case 'Ph':
@@ -428,7 +486,11 @@ export function adviseFrom(
     case 'R':
       return legal.SURRENDER.allowed ? give('SURRENDER', false) : orStand();
     case 'Rs':
-      return legal.SURRENDER.allowed ? give('SURRENDER', false) : give('STAND', true);
+      return legal.SURRENDER.allowed
+        ? give('SURRENDER', false)
+        : legal.STAND.allowed
+          ? give('STAND', true)
+          : anyLegal();
     case 'Rp':
       if (legal.SURRENDER.allowed) return give('SURRENDER', false);
       return legal.SPLIT.allowed ? give('SPLIT', true) : orStand();

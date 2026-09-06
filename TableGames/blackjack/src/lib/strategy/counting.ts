@@ -101,6 +101,23 @@ export interface CountState {
    * count and report the running count here unchanged.
    */
   true: number;
+  /**
+   * The same shoe expressed as a Hi-Lo true count.
+   *
+   * Everything downstream of the count — the betting ramp, the edge estimate,
+   * the Illustrious 18 and the insurance decision — is indexed in Hi-Lo true
+   * counts, because that is what those numbers are published in. Feeding them
+   * another system's count is not a smaller error than feeding them nothing:
+   * Knock-Out's running count starts at `-4 * (decks - 1)`, so an untouched
+   * six-deck shoe handed straight to `edgeAt` reported a **-10.4% player
+   * edge** and fired every at-or-below deviation permanently, for the whole
+   * shoe, on a game that had not dealt a card.
+   *
+   * So the conversion happens once, here, and the consumers take this field.
+   * See `hiLoEquivalent` for what each system's conversion is and how good it
+   * is — it is an approximation, and a documented one.
+   */
+  hiLo: number;
   /** Decks estimated remaining, to the quarter — as a player would eyeball it. */
   decksLeft: number;
   /** Aces seen, for the side-counting systems. */
@@ -120,6 +137,51 @@ export interface CountState {
  */
 export function initialCount(system: CountSystem, decks: number): number {
   return COUNT_SYSTEMS[system].balanced ? 0 : -4 * (decks - 1);
+}
+
+/**
+ * This system's count, expressed as a Hi-Lo true count.
+ *
+ * Published index numbers — the Illustrious 18, insurance at +3, every betting
+ * ramp in print — are Hi-Lo true counts. A count kept in another system has to
+ * be converted before those numbers mean anything, and this is the conversion.
+ *
+ * **Balanced level-one (Hi-Lo).** Nothing to do.
+ *
+ * **Balanced level-two (Omega II, Hi-Opt II).** Their tags run to ±2, so their
+ * true counts run to roughly twice Hi-Lo's for the same shoe, and their
+ * published indices are correspondingly larger. Dividing by the level is the
+ * standard rough conversion. It is rough: the systems differ in more than
+ * scale — both are ace-neutral, which costs them betting correlation and is
+ * why they carry a side count of aces — but the scale is the part that
+ * matters here, and getting it wrong fires a deviation at half the advantage
+ * it is supposed to need.
+ *
+ * **Unbalanced (Knock-Out).** KO's tags are Hi-Lo's plus one for the seven, and
+ * its running count starts at `-4 * (decks - 1)` so that the whole shoe sums to
+ * `+4` — the pivot. Expanding a shoe with `r` decks left:
+ *
+ *   KO_running  =  -4(D-1) + HiLo_running + (sevens seen)
+ *   E[sevens seen] = 4(D - r)
+ *   ⇒ HiLo_running ≈ KO_running - 4 + 4r
+ *   ⇒ HiLo true   ≈ (KO_running - 4) / r + 4
+ *
+ * which is zero on an untouched shoe of any size, and which reduces to the
+ * pivot exactly when the KO count is at the pivot — the one point where KO's
+ * own claim (that you never need to divide) is exactly true. Away from the
+ * pivot the two systems genuinely disagree, and this expresses the average
+ * disagreement rather than pretending there is none.
+ */
+export function hiLoEquivalent(running: number, decksLeft: number, system: CountSystem): number {
+  const spec = COUNT_SYSTEMS[system];
+  const r = Math.max(0.25, decksLeft);
+  if (!spec.balanced) {
+    // KO is the only unbalanced system here; `+4` is its pivot, which is +4
+    // for every shoe size because the tags sum to +4 per deck against an
+    // initial count of -4(decks - 1).
+    return (running - 4) / r + 4;
+  }
+  return running / r / spec.level;
 }
 
 /**
@@ -154,6 +216,7 @@ export function countCards(
   return {
     running,
     true: trueCount,
+    hiLo: hiLoEquivalent(running, decksLeft, system),
     decksLeft,
     acesSeen: aces,
     aceSurplus: acesExpected - aces,
@@ -225,6 +288,7 @@ export function countShoe(
   return {
     running,
     true: spec.balanced ? running / decksLeft : running,
+    hiLo: hiLoEquivalent(running, decksLeft, system),
     decksLeft,
     acesSeen: aces,
     aceSurplus: acesExpected - aces,

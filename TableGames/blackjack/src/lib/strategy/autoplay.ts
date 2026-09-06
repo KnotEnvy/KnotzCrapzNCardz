@@ -100,7 +100,7 @@ export function decide(table: TableState, config: BotConfig): (Advice & { deviat
   const count = countTable(table, config.system);
   const v = handValue(hand.cards);
   const tens = isPair(hand.cards) && rankValue(hand.cards[0].rank) === 10;
-  const dev = deviationFor(v.total, upcardValue(upcard), count.true, tens);
+  const dev = deviationFor(v.total, upcardValue(upcard), count.hiLo, tens);
   if (!dev) return base;
 
   const action = dev.action === 'INSURE' ? base.action : (dev.action as Action);
@@ -111,7 +111,7 @@ export function decide(table: TableState, config: BotConfig): (Advice & { deviat
     ...base,
     action,
     fellBack: false,
-    why: `Index play: at a true count of ${count.true.toFixed(1)}, ${dev.hand} becomes ${action.toLowerCase()}.`,
+    why: `Index play: at a true count of ${count.hiLo.toFixed(1)}, ${dev.hand} becomes ${action.toLowerCase()}.`,
     deviation: dev.hand,
   };
 }
@@ -150,7 +150,7 @@ export function betFor(table: TableState, seatId: SeatId, config: BotConfig): nu
     // here, which meant the HUD could advise one bet while the bot placed
     // another.
     const count = countTable(table, config.system);
-    amount = config.unit * betRamp(count.true);
+    amount = config.unit * betRamp(count.hiLo);
   }
   amount = Math.min(amount, table.rules.maxBet, seat.bankroll);
   if (amount < table.rules.minBet) return Math.min(table.rules.minBet, seat.bankroll);
@@ -261,7 +261,7 @@ export function playRound(
   if (t.phase === 'INSURANCE') {
     if (config.basic && config.deviations) {
       const count = countTable(t, config.system);
-      if (insuranceIsGood(count.true)) {
+      if (insuranceIsGood(count.hiLo)) {
         for (const id of seats) {
           const seat = seatOf(t, id);
           if (seat.hands.length === 0) continue;

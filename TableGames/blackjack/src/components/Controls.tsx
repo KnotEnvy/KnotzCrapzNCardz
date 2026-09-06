@@ -107,6 +107,7 @@ function InsuranceBar() {
   const takeEvenMoney = useGame((s) => s.takeEvenMoney);
   const decline = useGame((s) => s.declineInsurance);
   const counting = useGame((s) => s.prefs.counting);
+  const countSystem = useGame((s) => s.prefs.countSystem);
   const count = useCount();
   const rules = table.rules;
 
@@ -122,10 +123,18 @@ function InsuranceBar() {
         </span>
         {!earlyOnly ? (
           counting ? (
-            <span className={cn('font-mono', insuranceIsGood(count.true) ? 'text-win' : 'text-lose')}>
-              true {count.true >= 0 ? '+' : ''}
-              {count.true.toFixed(1)} —{' '}
-              {insuranceIsGood(count.true) ? 'take it' : 'a 7.4% bad bet at this count'}
+            /*
+              The threshold this verdict uses — insurance at +3 — is published
+              in Hi-Lo true counts, so the number shown beside it has to be the
+              Hi-Lo equivalent rather than whatever the selected system's own
+              count happens to be. A Knock-Out player was being shown a running
+              count of -20 on an untouched shoe under a verdict computed from
+              the same figure.
+            */
+            <span className={cn('font-mono', insuranceIsGood(count.hiLo) ? 'text-win' : 'text-lose')}>
+              {countSystem === 'HI_LO' ? 'true' : 'Hi-Lo equiv.'} {count.hiLo >= 0 ? '+' : ''}
+              {count.hiLo.toFixed(1)} —{' '}
+              {insuranceIsGood(count.hiLo) ? 'take it' : 'a 7.4% bad bet at this count'}
             </span>
           ) : (
             <span className="text-pit-400">It loses 7.4% of what you put up. Almost always decline.</span>
@@ -223,6 +232,19 @@ function ActionBar() {
   const busy = useGame((s) => s.busy);
 
   const legal = React.useMemo(() => legalActions(table), [table]);
+
+  /*
+   * Which visible buttons are refused, and why. Split and surrender are not
+   * rendered at all when they are dead, so they are not listed either — a
+   * reason for a button that is not on screen is noise.
+   */
+  const refusals = React.useMemo(
+    () =>
+      ACTION_ORDER.filter(
+        (a) => !legal[a].allowed && legal[a].reason && a !== 'SPLIT' && a !== 'SURRENDER',
+      ).map((a) => ({ action: a, reason: legal[a].reason! })),
+    [legal],
+  );
   const seat = table.focus ? seatOf(table, table.focus.seat) : null;
   const hand = seat && table.focus ? seat.hands[table.focus.hand] : null;
 
@@ -254,6 +276,7 @@ function ActionBar() {
               variant={action === 'HIT' || action === 'STAND' ? 'primary' : 'secondary'}
               disabled={!state.allowed || busy}
               title={state.reason}
+              aria-describedby={!state.allowed && state.reason ? `why-${action}` : undefined}
               onClick={() => act(action)}
               className={cn('min-w-[5.5rem]', recommended && 'ring-2 ring-brass-300 ring-offset-2 ring-offset-pit-950')}
             >
@@ -263,6 +286,29 @@ function ActionBar() {
           );
         })}
       </div>
+
+      {/*
+        The reasons, in the open.
+
+        They used to live only in `title=` on a button carrying
+        `disabled:pointer-events-none`, which is a tooltip that can never fire:
+        no hover, no tab stop, nothing for a screen reader to reach. So the
+        README's "each button knows why it is unavailable and says so rather
+        than sitting there dead" was true of the data and false of the felt.
+        Printing them is duller than a tooltip and it is the only version that
+        reaches a keyboard, a phone and a screen reader alike. The `title` and
+        `aria-describedby` above stay, so a mouse still gets the hover and an
+        assistive reader still gets the association.
+      */}
+      {refusals.length > 0 && !busy ? (
+        <p className="max-w-xl text-center text-[10px] leading-tight text-pit-500">
+          {refusals.map(({ action, reason }) => (
+            <span key={action} id={`why-${action}`} className="mr-2 inline-block">
+              <span className="text-pit-400">{ACTION_LABEL[action]}:</span> {reason}
+            </span>
+          ))}
+        </p>
+      ) : null}
 
       {hand ? (
         <p className="text-[10px] text-pit-500">
@@ -319,8 +365,31 @@ export function useKeyboard(): void {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      /*
+       * Stand down for anything the browser is already going to activate.
+       *
+       * This exempted only form fields, so Enter and Space — the two keys
+       * every button on the page is activated with — were swallowed by the
+       * game and `preventDefault()`ed before the focused control ever saw
+       * them. Focus "Paytables" and press Enter and a round was dealt instead
+       * of the dialog opening; focus "Stats" during a hand and press Space
+       * and the hand stood. That made the entire header keyboard-inoperable,
+       * on a game whose whole argument for shortcuts is that reaching for a
+       * mouse a hundred times an hour is what makes it feel like work.
+       *
+       * The single-letter shortcuts are unaffected: a focused button does
+       * nothing with H or S, so those still reach the table.
+       */
+      const key = e.key.toLowerCase();
       const target = e.target as HTMLElement | null;
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (
+        target &&
+        (key === ' ' || key === 'enter') &&
+        target.closest('button, a, [role="switch"], [tabindex]')
+      ) {
+        return;
+      }
 
       const { table, dialog } = useGame.getState();
       /*
@@ -330,7 +399,6 @@ export function useKeyboard(): void {
        * decide what to do would double down by pressing D on it.
        */
       if (dialog) return;
-      const key = e.key.toLowerCase();
 
       if (table.phase === 'BETTING') {
         if (key === ' ' || key === 'enter') {

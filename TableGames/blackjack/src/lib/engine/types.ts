@@ -311,8 +311,25 @@ export interface SeatStats {
   surrenders: number;
   doubles: number;
   splits: number;
-  /** Total main-bet cents wagered, the denominator of the measured edge. */
+  /**
+   * Total main-bet cents put at risk, doubles and split stakes included.
+   *
+   * The total action. Not the denominator of a house edge — see `staked`.
+   */
   wagered: number;
+  /**
+   * The cents that went into the circles before the cards came out.
+   *
+   * This is what a house edge is quoted against, here and everywhere else:
+   * expected loss per unit of the *initial* wager. Basic strategy doubles and
+   * splits enough to make `wagered` about 1.133 times this, so dividing by
+   * the wrong one reports an edge roughly 12% low in relative terms. The
+   * measurement suite was corrected in round five; the stats panel, which is
+   * where a player actually reads the number, was still dividing by the
+   * action until round six caught it printing 0.298% two rows under a model
+   * that said 0.40%.
+   */
+  staked: number;
   /** Total side-bet cents wagered, kept separate — its edge is a different animal. */
   sideWagered: number;
   /**

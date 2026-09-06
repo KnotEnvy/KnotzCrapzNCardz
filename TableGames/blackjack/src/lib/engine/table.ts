@@ -196,6 +196,7 @@ function emptyStats(bankroll: number): SeatStats {
     doubles: 0,
     splits: 0,
     wagered: 0,
+    staked: 0,
     sideWagered: 0,
     sideNet: 0,
     insuranceNet: 0,
@@ -383,7 +384,15 @@ export function rebet(table: TableState, previous: Map<SeatId, { main: number; s
     for (const s of d.seats) {
       const prev = previous.get(s.id);
       if (!prev || !s.occupied || prev.main === 0) continue;
+      /*
+       * The same three gates `setBet` applies, because this is the other way
+       * chips reach a circle. It checked the bankroll and the maximum and not
+       * the minimum, so a table minimum raised between rounds let last
+       * round's smaller wager straight back in — and `deal` books whatever it
+       * finds in the circle.
+       */
       if (prev.main > s.bankroll || prev.main > d.rules.maxBet) continue;
+      if (prev.main < d.rules.minBet) continue;
       s.pendingBet = prev.main;
       s.pendingSideBets = [];
       let spent = prev.main;
@@ -611,6 +620,9 @@ export function deal(table: TableState, rng: Rng): ActionResult {
       stats: {
         ...seat.stats,
         wagered: seat.stats.wagered + seat.pendingBet,
+        // The only place `staked` moves: doubles and splits add to the
+        // action, never to what was staked before a card was seen.
+        staked: seat.stats.staked + seat.pendingBet,
         handsPlayed: seat.stats.handsPlayed + 1,
         sideWagered,
         sideNet,

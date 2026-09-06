@@ -25,7 +25,7 @@ import { Shoe } from './Shoe';
 import { displayTotal, handValue, isBlackjack } from '@/lib/engine/hand';
 import { fmt, fmtSigned } from '@/lib/engine/money';
 import { SIDE_BET_SPECS } from '@/lib/engine/sidebets';
-import { enabledSideBets } from '@/lib/engine/sidebets';
+import { enabledSideBets, sideBetEdge, sideBetEdgeIsExact } from '@/lib/engine/sidebets';
 import type { Hand, Seat, Settlement, SideBetKind, TableState } from '@/lib/engine/types';
 
 /* ------------------------------------------------------------------ *
@@ -303,7 +303,9 @@ function SeatArea({
                 type="button"
                 onClick={() => onSideClick(kind)}
                 disabled={!betting}
-                title={`${spec.name} — ${spec.blurb} House edge ${spec.edge}%.`}
+                title={`${spec.name} — ${spec.blurb} House edge ${sideBetEdge(kind, table.rules.decks).toFixed(2)}%${
+                  sideBetEdgeIsExact(kind) ? '' : ' (measured at six decks)'
+                } at this shoe size.`}
                 aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}`}
                 className={cn(
                   'sidebet-box relative flex flex-col items-center justify-center gap-px rounded-md border leading-none font-medium tracking-wide transition-colors',

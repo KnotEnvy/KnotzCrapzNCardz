@@ -572,7 +572,7 @@ export const useGame = create<GameStore>()(
               const up = after.dealer.cards[0];
               const insurable = after.rules.insurance && up && isAce(up);
               const count = countTable(after, get().prefs.countSystem);
-              if (insurable && get().bot.deviations && insuranceIsGood(count.true)) {
+              if (insurable && get().bot.deviations && insuranceIsGood(count.hiLo)) {
                 for (const s of after.seats) {
                   if (s.hands.length > 0) get().takeInsurance(s.id, Math.floor(s.hands[0].bet / 2));
                 }
@@ -803,14 +803,52 @@ export const useGame = create<GameStore>()(
       name: 'knotz-blackjack',
       storage: createJSONStorage(debouncedLocalStorage),
       /*
-       * Bumped when ShoeState gained a required `seed`. A shoe persisted by
-       * version 1 comes back without one, and the first mid-round reshuffle
-       * then calls `createRng(undefined)` and throws — the crash the reshuffle
-       * was added to fix, resurrected for anyone upgrading rather than
-       * arriving fresh. Any change that adds a required field to persisted
-       * state has to come with a bump here.
+       * Every version here is a required field that arrived after somebody
+       * had already saved a game, and each one is a crash or a wrong number
+       * for whoever upgraded rather than arriving fresh.
+       *
+       *   2  `ShoeState.seed`. A version-1 shoe comes back without one and
+       *      the first mid-round reshuffle calls `createRng(undefined)` and
+       *      throws — the crash the reshuffle was added to fix, resurrected.
+       *   3  `SeatStats.staked`. A version-2 seat comes back without it and
+       *      the stats panel divides by `undefined`, printing NaN% where the
+       *      measured edge goes.
+       *
+       * Any change that adds a required field to persisted state has to come
+       * with a bump here *and* a case in `migrate`.
        */
-      version: 2,
+      version: 3,
+      /**
+       * Bring an older save forward.
+       *
+       * Deliberately additive and deliberately dull: fill in what is missing
+       * and touch nothing else. A migration that recomputes is a migration
+       * that can disagree with the engine.
+       */
+      migrate: (persisted, from) => {
+        const state = persisted as Partial<GameStore>;
+        if (from < 3 && state.table) {
+          state.table = {
+            ...state.table,
+            seats: state.table.seats.map((seat) => ({
+              ...seat,
+              stats: {
+                ...seat.stats,
+                /*
+                 * The best available answer, and an honest one: before this
+                 * field existed the only record of what was staked is the
+                 * total action, which is the same number until the first
+                 * double or split and never more than about 13% above it.
+                 * The alternative is zeroing a session's history to make a
+                 * new field tidy.
+                 */
+                staked: seat.stats.staked ?? seat.stats.wagered ?? 0,
+              },
+            })),
+          };
+        }
+        return state as GameStore;
+      },
       /**
        * What survives a reload.
        *
