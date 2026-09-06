@@ -15,11 +15,11 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from './rng';
 import { createShoe, isCompleteShoe, shuffle } from './shoe';
-import { createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, resetHandIds } from './table';
+import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, resetHandIds } from './table';
 import { settle, settleHand } from './resolve';
 import { dealerShouldHit, handValue, isBlackjack, isPair, displayTotal } from './hand';
 import { fmt, winnings } from './money';
-import { RULE_PRESETS, defaultRules, estimateHouseEdge, presetById, rulesShorthand } from './rules';
+import { RULE_PRESETS, defaultRules, estimateHouseEdge, presetById, ruleEffects, rulesShorthand } from './rules';
 import {
   resolveBustIt,
   resolveLuckyLadies,
@@ -1024,6 +1024,92 @@ describe('between rounds', () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * The trainer's tally
+ * ------------------------------------------------------------------ */
+
+describe('recording decisions', () => {
+  /*
+   * The trainer keeps a rolling list of recent plays in the store, which is
+   * right for a feed of mistakes and thrown away on reload. This is the
+   * lifetime tally, and it sits on the seat because it belongs to the player.
+   * Both fields were declared, documented and summed by the panel for the
+   * whole of this game's first draft, and incremented nowhere.
+   */
+  it('counts decisions and the ones that matched the chart', () => {
+    let t = withCards([]);
+    expect(t.seats[0].stats.decisions).toBe(0);
+    t = recordDecision(t, 'A', true);
+    t = recordDecision(t, 'A', false);
+    t = recordDecision(t, 'A', true);
+    expect(t.seats[0].stats).toMatchObject({ decisions: 3, correctDecisions: 2 });
+    // And it does not leak into the seat next door.
+    expect(t.seats[1].stats.decisions).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Abandoning a round
+ * ------------------------------------------------------------------ */
+
+describe('abandoning a round in flight', () => {
+  /*
+   * A reload mid-round cannot be resumed honestly, so the chips at risk go
+   * back. The trap is the settlement hold: the felt keeps a finished round on
+   * screen for a couple of seconds with `hand.bet` and `seat.insurance` still
+   * populated, even though every stake has already been returned. Refunding
+   * them again turned a reload during that window into free money — a $10 hand
+   * with $5 of winning insurance came back fifteen dollars richer.
+   */
+  it('returns everything at risk when the round was never settled', () => {
+    let t = bet(withCards([[9, S], [6, H], [7, D], [5, C]]), dollars(10));
+    const start = t.seats[0].bankroll;
+    t = must(deal(t, rng()));
+    expect(t.seats[0].bankroll).toBe(start - dollars(10));
+    expect(abandonRound(t).seats[0].bankroll).toBe(start);
+    expect(abandonRound(t).phase).toBe('BETTING');
+  });
+
+  it('returns nothing extra once the round has been paid', () => {
+    let t = bet(withCards([[9, S], [14, H], [7, D], [13, C]]), dollars(10));
+    const start = t.seats[0].bankroll;
+    t = must(deal(t, rng()));
+    t = must(takeInsurance(t, 'A', dollars(5)));
+    t = must(closeOffers(t));
+    t = dealerPlayOut(t);
+    const settled = settle(t).table;
+
+    // Insurance paid exactly what the hand lost, so the seat is level.
+    expect(settled.seats[0].bankroll).toBe(start);
+    expect(settled.settled).toBe(true);
+    expect(abandonRound(settled).seats[0].bankroll).toBe(start);
+  });
+
+  it('keeps an unresolved side bet’s stake but not a paid one’s', () => {
+    let t = withCards([[8, S], [10, H], [8, S], [9, C]], {
+      sideBets: { ...defaultRules().sideBets, PERFECT_PAIRS: true, BUST_IT: true },
+    });
+    t = bet(t, dollars(10));
+    for (const kind of ['PERFECT_PAIRS', 'BUST_IT'] as const) {
+      const res = setSideBet(t, 'A', kind, dollars(10));
+      if (!res.ok) throw new Error(res.reason);
+      t = res.table;
+    }
+    const start = t.seats[0].bankroll;
+    t = must(deal(t, rng()));
+    // Perfect Pairs already paid; Bust It is still live on the dealer's hand.
+    const after = abandonRound(t);
+    const paid = dollars(250); // a perfect pair at 25:1
+    expect(after.seats[0].bankroll).toBe(start + paid);
+    expect(after.seats[0].pendingSideBets.every((sb) => sb.net === null)).toBe(true);
+  });
+
+  it('leaves a table that was already between rounds alone', () => {
+    const t = withCards([]);
+    expect(abandonRound(t)).toBe(t);
+  });
+});
+
+/* ------------------------------------------------------------------ *
  * Rules
  * ------------------------------------------------------------------ */
 
@@ -1038,12 +1124,43 @@ describe('rule sets', () => {
     }
   });
 
-  it('estimates an edge in the range these games actually run at', () => {
+  /*
+   * Every game on the list is a game the house wins. The model used to credit
+   * double-after-split on top of a baseline that already contained it, which
+   * made every figure 0.14 points too generous and printed a 0.09% *player*
+   * advantage on the Liberal Shoe preset — in a game whose whole premise is
+   * pricing rules honestly.
+   */
+  it('never claims the player has the edge', () => {
     for (const preset of RULE_PRESETS) {
       const edge = estimateHouseEdge(preset.rules);
-      expect(edge).toBeGreaterThan(-0.1);
+      expect(edge, `${preset.name} shows ${edge.toFixed(2)}%`).toBeGreaterThan(0);
       expect(edge).toBeLessThan(2.5);
     }
+  });
+
+  it('itemises exactly what it charges for', () => {
+    // The breakdown beside the headline has to add up to it, or the screen is
+    // arguing with itself. It did: the list credited "+0.22 dealer stands on
+    // all 17s" against a baseline that already stood on all seventeens.
+    for (const preset of RULE_PRESETS) {
+      const sum = ruleEffects(preset.rules).reduce((n, e) => n + e.delta, 0);
+      expect(0.4 - sum).toBeCloseTo(estimateHouseEdge(preset.rules), 9);
+    }
+  });
+
+  it('says nothing about a rule the reference game already has', () => {
+    // Six decks, S17, 3:2, double any two, DAS, split to four: the baseline
+    // itself, so there is nothing to itemise.
+    const baseline = presetById('vegas-strip').rules;
+    expect(ruleEffects(baseline)).toHaveLength(0);
+    expect(estimateHouseEdge(baseline)).toBeCloseTo(0.4, 9);
+  });
+
+  it('prices a rule as a penalty when it is missing, not a bonus when present', () => {
+    const base = presetById('vegas-strip').rules;
+    const noDas = estimateHouseEdge({ ...base, das: false });
+    expect(noDas - estimateHouseEdge(base)).toBeCloseTo(0.14, 6);
   });
 
   it('prices 6:5 as the disaster it is', () => {

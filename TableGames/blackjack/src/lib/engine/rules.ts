@@ -138,7 +138,7 @@ export const RULE_PRESETS: readonly RulePreset[] = [
     id: 'liberal',
     name: 'Liberal Shoe',
     where: 'The game they used to spread',
-    note: 'Everything the player wants at once, for comparison. Under 0.3%.',
+    note: 'Everything the player wants at once, for comparison. The best game here.',
     rules: {
       ...COMMON,
       decks: 2,
@@ -238,47 +238,39 @@ export const RULE_EFFECTS = {
 } as const;
 
 /**
- * The house edge a basic-strategy player faces, in percent.
+ * The reference game the baseline describes.
  *
- * A sum of independent deltas over a six-deck baseline of 0.40%, which is how
- * the figures are published and how they are used. They are not perfectly
- * independent — the value of double-after-split depends slightly on how deep
- * you may resplit — but the interaction terms are under a hundredth of a
- * percent, well below what the number is displayed to.
+ * Six decks, dealer stands on all seventeens, blackjack pays three to two,
+ * double on any two cards including soft totals, double after split allowed,
+ * split to four hands, no re-split of aces, one card to split aces, no
+ * surrender, dealer peeks. That game runs at 0.40% against a basic-strategy
+ * player, and it is the number every published per-rule effect is quoted as a
+ * delta from.
  *
- * `stats.sim.test.ts` deals each preset out and asserts the measured edge
- * lands within three standard errors of this — about 0.39% at the 800,000
- * rounds it runs. That is the simulation's own noise, not slack in the model:
- * blackjack's per-hand standard deviation is about 1.15 units, so pinning an
- * edge to a tenth of a percent takes tens of millions of hands. The band is
- * wide enough that variance cannot fail it and narrow enough that a mis-paid
- * double, a wrong peek or a broken rule cannot pass it — which is how the
- * dead re-split-aces switch was eventually caught.
+ * Naming it matters. The baseline used to be a bare constant, and because
+ * nothing said what it included, double-after-split was credited a second time
+ * on top of a figure that already had it — which made every displayed edge
+ * 0.14 points too generous and told a player at the Liberal Shoe table that
+ * they held a 0.09% advantage over the house. A rule that is part of the
+ * baseline is priced as a *penalty when absent*, never as a bonus when
+ * present, and that is the invariant this block exists to keep.
  */
-export function estimateHouseEdge(rules: TableRules): number {
-  const BASELINE_SIX_DECK = -0.4;
-  let edge = BASELINE_SIX_DECK;
-  edge += RULE_EFFECTS.decks[rules.decks] ?? RULE_EFFECTS.decks[8];
-  if (rules.hitsSoft17) edge += RULE_EFFECTS.hitsSoft17;
-  edge += RULE_EFFECTS.blackjackPays[rules.blackjackPays];
-  edge += RULE_EFFECTS.double[rules.double];
-  if (!rules.doubleSoft) edge += RULE_EFFECTS.noDoubleSoft;
-  if (rules.das) edge += RULE_EFFECTS.das;
-  edge += RULE_EFFECTS.resplitTo[Math.min(3, rules.resplitTo)] ?? 0;
-  if (rules.resplitAces) edge += RULE_EFFECTS.resplitAces;
-  if (!rules.oneCardOnSplitAces) edge += RULE_EFFECTS.hitSplitAces;
-  edge += RULE_EFFECTS.surrender[rules.surrender];
-  if (rules.holeCard === 'ENHC') edge += RULE_EFFECTS.enhc;
-  return -edge;
-}
+const BASELINE = {
+  edge: 0.4,
+  decks: 6,
+  hitsSoft17: false,
+  blackjackPays: '3:2' as BlackjackPayout,
+  double: 'ANY2' as DoubleRule,
+  doubleSoft: true,
+  das: true,
+  resplitTo: 3,
+  resplitAces: false,
+  oneCardOnSplitAces: true,
+  surrender: 'NONE' as SurrenderRule,
+  holeCard: 'PEEK' as const,
+} as const;
 
-/**
- * Every rule that is currently on, with what it is worth, sorted by weight.
- *
- * This is the setup screen's whole argument: not "six decks, S17, 3:2" as a
- * string of jargon, but a list in which 6:5 sits at the top costing 1.39% and
- * everything else is a rounding error next to it.
- */
+/** One line of the price list: what a rule is called, and what it is worth. */
 export interface RuleEffect {
   label: string;
   /** Percent of the initial wager. Positive favours the player. */
@@ -286,32 +278,60 @@ export interface RuleEffect {
   good: boolean;
 }
 
+/**
+ * Every way this table differs from the reference game, and what each is worth
+ * to the player in percent.
+ *
+ * One list, used for both the number and the breakdown beside it, so the
+ * itemisation cannot fail to sum to the total it sits next to — which it did
+ * not before: the panel listed "+0.22 dealer stands on all 17s" as a credit
+ * against a baseline that already stood on all seventeens.
+ */
 export function ruleEffects(rules: TableRules): RuleEffect[] {
   const out: RuleEffect[] = [];
   const push = (label: string, delta: number) => {
     if (Math.abs(delta) >= 0.005) out.push({ label, delta, good: delta > 0 });
   };
 
-  push(`${rules.decks} deck${rules.decks === 1 ? '' : 's'}`, RULE_EFFECTS.decks[rules.decks] ?? -0.02);
-  push(`Blackjack pays ${rules.blackjackPays}`, RULE_EFFECTS.blackjackPays[rules.blackjackPays]);
-  if (rules.hitsSoft17) push('Dealer hits soft 17', RULE_EFFECTS.hitsSoft17);
-  else push('Dealer stands on all 17s', 0.22);
-  push(
-    rules.double === 'ANY2' ? 'Double any two cards' : `Double on ${rules.double} only`,
-    RULE_EFFECTS.double[rules.double],
-  );
-  if (!rules.doubleSoft) push('No soft doubling', RULE_EFFECTS.noDoubleSoft);
-  if (rules.das) push('Double after split', RULE_EFFECTS.das);
-  else push('No double after split', -0.14);
-  push(`Split to ${rules.resplitTo + 1} hands`, RULE_EFFECTS.resplitTo[Math.min(3, rules.resplitTo)] ?? 0);
-  if (rules.resplitAces) push('Re-split aces', RULE_EFFECTS.resplitAces);
-  if (!rules.oneCardOnSplitAces) push('Hit split aces', RULE_EFFECTS.hitSplitAces);
-  if (rules.surrender !== 'NONE') {
+  const decks = RULE_EFFECTS.decks[rules.decks] ?? RULE_EFFECTS.decks[8];
+  push(`${rules.decks} deck${rules.decks === 1 ? '' : 's'}`, decks - RULE_EFFECTS.decks[BASELINE.decks]);
+  if (rules.blackjackPays !== BASELINE.blackjackPays) {
+    push(`Blackjack pays ${rules.blackjackPays}`, RULE_EFFECTS.blackjackPays[rules.blackjackPays]);
+  }
+  if (rules.hitsSoft17 !== BASELINE.hitsSoft17) push('Dealer hits soft 17', RULE_EFFECTS.hitsSoft17);
+  if (rules.double !== BASELINE.double) push(`Double on ${rules.double} only`, RULE_EFFECTS.double[rules.double]);
+  if (rules.doubleSoft !== BASELINE.doubleSoft) push('No soft doubling', RULE_EFFECTS.noDoubleSoft);
+  if (rules.das !== BASELINE.das) push('No double after split', -RULE_EFFECTS.das);
+  if (rules.resplitTo !== BASELINE.resplitTo) {
+    push(`Split to ${rules.resplitTo + 1} hands`, RULE_EFFECTS.resplitTo[Math.min(3, rules.resplitTo)] ?? 0);
+  }
+  if (rules.resplitAces !== BASELINE.resplitAces) push('Re-split aces', RULE_EFFECTS.resplitAces);
+  if (rules.oneCardOnSplitAces !== BASELINE.oneCardOnSplitAces) push('Hit split aces', RULE_EFFECTS.hitSplitAces);
+  if (rules.surrender !== BASELINE.surrender) {
     push(`${rules.surrender === 'EARLY' ? 'Early' : 'Late'} surrender`, RULE_EFFECTS.surrender[rules.surrender]);
   }
-  if (rules.holeCard === 'ENHC') push('No hole card', RULE_EFFECTS.enhc);
+  if (rules.holeCard !== BASELINE.holeCard) push('No hole card', RULE_EFFECTS.enhc);
 
   return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+/**
+ * The house edge a basic-strategy player faces, in percent.
+ *
+ * The reference game's 0.40%, less everything {@link ruleEffects} says this
+ * table gives the player back. Deriving both from one list is what guarantees
+ * the breakdown in the setup screen adds up to the headline above it.
+ *
+ * The deltas are not perfectly independent — the value of double-after-split
+ * depends slightly on how deep you may re-split — but the interaction terms
+ * are under a hundredth of a percent, well below what the figure is displayed
+ * to. `stats.sim.test.ts` deals each preset out and asserts the measured edge
+ * lands within three standard errors of this, about 0.39% at the rounds it
+ * runs; blackjack's variance makes a tighter check impossible at any feasible
+ * length, which is why the *sign* is asserted separately.
+ */
+export function estimateHouseEdge(rules: TableRules): number {
+  return BASELINE.edge - ruleEffects(rules).reduce((n, e) => n + e.delta, 0);
 }
 
 /** `6D · S17 · 3:2 · DAS · RSA` — the shorthand a player would read off a felt. */

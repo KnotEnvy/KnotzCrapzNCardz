@@ -24,6 +24,7 @@ import { produce } from './immer';
 import {
   canDouble as mayDouble,
   canHit as mayHit,
+  canSplit,
   canSplit as maySplit,
   canSurrender as maySurrender,
   dealerShouldHit,
@@ -317,7 +318,7 @@ export function setSideBet(
     produce(table, (d) => {
       const s = d.seats.find((x) => x.id === seatId)!;
       s.pendingSideBets = s.pendingSideBets.filter((sb) => sb.kind !== kind);
-      if (amount > 0) s.pendingSideBets.push({ kind, amount, net: null, label: null, jackpot: null });
+      if (amount > 0) s.pendingSideBets.push({ kind, amount, net: null, label: null, jackpot: null, bonus: null });
     }),
   );
 }
@@ -356,7 +357,7 @@ export function rebet(table: TableState, previous: Map<SeatId, { main: number; s
       for (const sb of prev.side) {
         if (!d.rules.sideBets[sb.kind]) continue;
         if (spent + sb.amount > s.bankroll) continue;
-        s.pendingSideBets.push({ kind: sb.kind, amount: sb.amount, net: null, label: null, jackpot: null });
+        s.pendingSideBets.push({ kind: sb.kind, amount: sb.amount, net: null, label: null, jackpot: null, bonus: null });
         spent += sb.amount;
       }
       placed = true;
@@ -397,6 +398,28 @@ export function renameSeat(table: TableState, seatId: SeatId, name: string): Act
       d.seats.find((x) => x.id === seatId)!.name = trimmed || `Seat ${seatId}`;
     }),
   );
+}
+
+/**
+ * Record that a seat made a decision, and whether it matched the chart.
+ *
+ * The trainer's rolling list of graded plays lives in the store and is thrown
+ * away on reload, which is right for a feed of recent mistakes and wrong for
+ * "how well am I playing". This is the lifetime tally, and it lives on the
+ * seat because it belongs to the player rather than to the session.
+ *
+ * It is an engine action rather than a store mutation for the ordinary reason:
+ * the store does not reach into table state on its own.
+ */
+export function recordDecision(table: TableState, seatId: SeatId, correct: boolean): TableState {
+  return updateSeat(table, seatId, (seat) => ({
+    ...seat,
+    stats: {
+      ...seat.stats,
+      decisions: seat.stats.decisions + 1,
+      correctDecisions: seat.stats.correctDecisions + (correct ? 1 : 0),
+    },
+  }));
 }
 
 /** Top a seat back up after it has been busted out. */
@@ -506,7 +529,7 @@ export function deal(table: TableState, rng: Rng): ActionResult {
 
       const result = gradeSideBet(sb.kind, cards, dealerCards[0], bonus.get(seat.id), sb.amount);
       // Bust It is a bet on the dealer's finished hand; it stays live.
-      if (result === null) return { ...sb, net: null, label: null, jackpot: null };
+      if (result === null) return { ...sb, net: null, label: null, jackpot: null, bonus: null };
 
       const settled = result.net > 0 ? result.net : -sb.amount;
       if (result.net > 0) bankroll += result.net + sb.amount; // winnings plus the stake
@@ -515,7 +538,7 @@ export function deal(table: TableState, rng: Rng): ActionResult {
       // Recorded now, while the cards it was graded on are still the hand.
       const jackpot =
         sb.kind === 'LUCKY_LADIES' ? luckyLadiesJackpotUpgrade(cards, sb.amount) || null : null;
-      return { ...sb, net: settled, label: result.label, jackpot };
+      return { ...sb, net: settled, label: result.label, jackpot, bonus: bonus.get(seat.id) ?? null };
     });
 
     return {
@@ -880,9 +903,15 @@ export function split(table: TableState): ActionResult {
     const stops = (cards: readonly Card[]): boolean => {
       if (handValue(cards).total === 21) return true;
       if (!splittingAces || !table.rules.oneCardOnSplitAces) return false;
-      const another = isAce(cards[1]);
-      const room = seat.hands.length + 1 <= table.rules.resplitTo;
-      return !(another && table.rules.resplitAces && room);
+      /*
+       * A split ace that draws another ace stays live only if the table
+       * re-splits them. Whether there is *room* to split is deliberately not
+       * decided here: a later split of a different hand can use the last
+       * available slot, and baking the answer in at this moment left earlier
+       * hands sitting live with no legal move but stand. `sealSplitAces`
+       * answers it whenever the question is actually asked.
+       */
+      return !(isAce(cards[1]) && table.rules.resplitAces);
     };
 
     // The pair comes apart: the first card stays, the second starts the new
@@ -996,7 +1025,8 @@ function nextFocusFrom(table: TableState, from: Focus | null): Focus | null {
  * So this asks two questions in order: is the hand in front of us still
  * playable, and if not, which is the next one that is.
  */
-function settleFocus(table: TableState): TableState {
+function settleFocus(input: TableState): TableState {
+  const table = sealSplitAces(input);
   const current = table.focus;
   if (current) {
     const seat = table.seats.find((s) => s.id === current.seat);
@@ -1040,13 +1070,44 @@ function markNaturals(table: TableState): TableState {
 }
 
 /**
+ * Finish any split-ace hand that has nothing left to decide.
+ *
+ * Split aces take one card each and stop. A table that re-splits them leaves a
+ * pair of aces live for exactly one more decision — but only while there is
+ * room under the hand limit, and another hand's split can take the last slot.
+ * When that happens the hand cannot hit (split aces never can) and cannot
+ * split, so standing is its only move and asking the player to make it is
+ * asking them to click a button with no alternative.
+ *
+ * Run wherever the focus is chosen, so the answer is always current.
+ */
+function sealSplitAces(table: TableState): TableState {
+  if (!table.rules.oneCardOnSplitAces) return table;
+
+  let touched = false;
+  const seats = table.seats.map((seat) => {
+    let seatTouched = false;
+    const hands = seat.hands.map((hand) => {
+      if (hand.done || !hand.fromSplitAces) return hand;
+      if (canSplit(hand, seat.hands.length, table.rules, seat.bankroll).allowed) return hand;
+      seatTouched = true;
+      touched = true;
+      return { ...hand, done: true };
+    });
+    return seatTouched ? { ...seat, hands } : seat;
+  });
+
+  return touched ? { ...table, seats } : table;
+}
+
+/**
  * Open the player phase, or skip straight past it.
  *
  * A table of naturals has nothing to decide, and leaving the phase at PLAYER
  * with a null focus would hang the round waiting for an action nobody can take.
  */
 function openPlayerPhase(table: TableState): TableState {
-  const marked = markNaturals(table);
+  const marked = sealSplitAces(markNaturals(table));
   const focus = firstLiveFocus(marked);
   return { ...marked, focus, phase: focus ? 'PLAYER' : 'DEALER' };
 }
@@ -1159,7 +1220,7 @@ export function nextRound(table: TableState): ActionResult {
         tookEvenMoney: false,
         pendingBet: affordable || seat.pendingBet <= seat.bankroll ? seat.pendingBet : 0,
         pendingSideBets: affordable
-          ? seat.pendingSideBets.map((sb) => ({ ...sb, net: null, label: null, jackpot: null }))
+          ? seat.pendingSideBets.map((sb) => ({ ...sb, net: null, label: null, jackpot: null, bonus: null }))
           : [],
       };
     }),
@@ -1167,6 +1228,58 @@ export function nextRound(table: TableState): ActionResult {
     focus: null,
     phase: 'BETTING',
   });
+}
+
+/**
+ * Abandon a round in flight and clear the felt.
+ *
+ * There is no honest way to resume a half-played round from a reload: the
+ * driver's timers are gone and the money is half committed. So the chips still
+ * at risk go back to the bankrolls and the table returns to betting.
+ *
+ * `settled` decides whether anything is owed. The UI holds a finished round on
+ * the felt for a couple of seconds so the figures can be read, and during that
+ * window `hand.bet` and `seat.insurance` are still populated even though
+ * `settle` has already returned every stake. Refunding them again is free
+ * money, which is exactly what a reload during that window used to produce.
+ *
+ * Lives here rather than in the store because it moves money, and everything
+ * that moves money is testable engine code.
+ */
+export function abandonRound(table: TableState): TableState {
+  if (table.phase === 'BETTING') return table;
+  const owed = !table.settled;
+
+  return {
+    ...table,
+    phase: 'BETTING',
+    focus: null,
+    settled: false,
+    dealer: { cards: [], holeDown: true, outcome: null },
+    seats: table.seats.map((seat) => ({
+      ...seat,
+      bankroll: owed
+        ? seat.bankroll +
+          seat.hands.reduce((n, h) => n + h.bet, 0) +
+          seat.pendingSideBets.reduce((n, sb) => n + (sb.net === null ? sb.amount : 0), 0) +
+          seat.insurance
+        : seat.bankroll,
+      hands: [],
+      insurance: 0,
+      insuranceNet: null,
+      tookEvenMoney: false,
+      // A side bet that already paid keeps its result on the felt, which on a
+      // resumed session reads as a win about to be given again. The stake
+      // stays up for a re-bet; the result does not.
+      pendingSideBets: seat.pendingSideBets.map((sb) => ({
+        ...sb,
+        net: null,
+        label: null,
+        jackpot: null,
+        bonus: null,
+      })),
+    })),
+  };
 }
 
 /** Change the rules mid-session. Forces a fresh shoe, because it is one. */

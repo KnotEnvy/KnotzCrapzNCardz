@@ -44,8 +44,10 @@ one with footnotes.
 
 **A card counter.** Hi-Lo, Knock-Out, Omega II and Hi-Opt II, with the running
 count, the true count, the decks remaining and a betting ramp. It counts the
-discard tray and only the discard tray — the same cards you can see. Nothing
-in it reads the shoe.
+cards that have been turned face up, and nothing else: not the shoe, and not
+the dealer's hole card, which leaves the shoe at the top of the round and is
+not seen until the end of it. (It counted the hole card once. Three separate
+places in this repository claimed otherwise while it did.)
 
 ## What the numbers say
 
@@ -56,7 +58,7 @@ published for fifty years:
 | | measured | published |
 | --- | --- | --- |
 | Dealer busts, six decks, S17 | 28.15% | 28.32% |
-| Dealer busts, H17 | 28.52% | 29.1% |
+| Dealer busts, H17 | 28.52% | 28.54% |
 | Player is dealt a natural | 4.78% | 4.749% |
 | Vegas Strip house edge | 0.38% | 0.26% (model) |
 | Mimicking the dealer instead | 5.64% | 5.5% |
@@ -67,10 +69,15 @@ That last pair is the whole case for counting, and it is measured from the
 player's own results rather than asserted: the same flat bet, the same chart,
 bucketed by what the discard tray was saying when the chips went out.
 
+Both bust figures count every round the dealer plays out, naturals included.
+The 29.1% you will more often see quoted for H17 is conditioned on the dealer
+*not* holding a natural — a different denominator, and citing it here made a
+correct dealer look half a point wrong.
+
 The last two lines are the argument: playing the chart costs you about a third
 of a percent, and copying the dealer costs you five and a half. Every figure
-above comes out of `pnpm run test:stats`, which runs in about four minutes and
-prints the table.
+above comes out of `pnpm run test:stats`, which runs 28 measurements in about
+six minutes and prints the table.
 
 The side bets are not measured — they are **enumerated**. Five of the six are
 decided by two or three cards off the top of the shoe, so the suite walks every
@@ -128,7 +135,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 133 tests, under a second
+pnpm test            # the fast suite — 144 tests, about a second
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets

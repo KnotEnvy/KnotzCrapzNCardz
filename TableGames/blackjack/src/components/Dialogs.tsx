@@ -267,7 +267,7 @@ function SetupBody({ onClose }: { onClose: () => void }) {
               >
                 {edge.toFixed(2)}%
               </div>
-              <div className="text-[10px] tracking-wider text-pit-500 uppercase">house edge</div>
+              <div className="text-[10px] tracking-wider text-pit-500 uppercase">estimated house edge</div>
             </div>
             <Meter value={Math.min(1, edge / 2.5)} tone={edge < 0.5 ? 'win' : edge < 1 ? 'brass' : 'lose'} />
             <p className="mt-2 text-[10px] leading-tight text-pit-400">
@@ -275,12 +275,19 @@ function SetupBody({ onClose }: { onClose: () => void }) {
               is about {fmt(Math.round(dollars(100) * 80 * (edge / 100)))} expected.
             </p>
             <p className="mt-1.5 text-[10px] leading-tight text-pit-500">
-              A sum of published per-rule effects, so it is accurate to a tenth of a percent rather
-              than a hundredth — the game&rsquo;s own simulation measures each preset and the two
-              agree to within the simulation&rsquo;s noise. It is a price list, not a guarantee.
+              Six decks, dealer standing on all seventeens, 3:2, double any two, double after split,
+              split to four — that game is 0.40%, and everything listed below is what this table
+              gives back or takes on top of it. Accurate to a tenth of a percent rather than a
+              hundredth; the game&rsquo;s own simulation measures every preset and agrees to within
+              0.15. A price list, not a guarantee.
             </p>
 
             <div className="mt-3 space-y-1">
+              {effects.length === 0 ? (
+                <p className="text-[10px] text-pit-500">
+                  This is the reference game exactly — nothing to add or subtract.
+                </p>
+              ) : null}
               {effects.map((e) => (
                 <div key={e.label} className="flex items-baseline justify-between gap-2 text-[11px]">
                   <span className="truncate text-pit-300">{e.label}</span>
@@ -475,8 +482,9 @@ function SideBetsDialog({ open, onClose }: { open: boolean; onClose: () => void 
       subtitle="Every paytable this table books, and what each one costs."
     >
       <p className="mb-3 text-[11px] leading-relaxed text-pit-400">
-        The main game runs between a quarter and two percent against you. The friendliest bet on this
-        page costs {best.edge}%, and the most tempting one costs {worst.edge}%. They are here
+        The main game on this table runs at {estimateHouseEdge(rules).toFixed(2)}% against you. The
+        friendliest bet on this page costs {best.edge}%, and the most tempting one costs{' '}
+        {worst.edge}%. They are here
         because a real table has them, and the numbers are here because a real table does not print
         them — every figure below is computed for that paytable at six decks, not copied from a
         chart describing somebody else&rsquo;s.

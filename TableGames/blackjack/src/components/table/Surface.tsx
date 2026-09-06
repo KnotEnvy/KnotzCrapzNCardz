@@ -18,7 +18,7 @@
 
 import * as React from 'react';
 import { cn } from '@/components/ui/primitives';
-import { CardFan } from './Card';
+import { CardFan, PlayingCard } from './Card';
 import { ChipStack } from './Chip';
 import { Felt, DEALER_SPOT, FELT_H, FELT_W, SEAT_SPOTS, SHOE_SPOT, handSpot } from './Felt';
 import { Shoe } from './Shoe';
@@ -171,6 +171,7 @@ function SeatArea({
   const hands = handSpot(index);
   const focused = table.focus?.seat === seat.id;
   const betting = table.phase === 'BETTING';
+  const bonusCard = seat.pendingSideBets.find((sb) => sb.bonus)?.bonus ?? null;
 
   if (!seat.occupied) {
     return (
@@ -201,6 +202,21 @@ function SeatArea({
             compact={seat.hands.length > 2}
           />
         ))}
+        {/*
+          Super Sevens draws a bonus card off the shoe when the first two are
+          both sevens, and it decides 50:1 against 5000:1. It is dealt face up
+          beside the circle at a real table, so it is drawn here — a card that
+          leaves the shoe unseen is one the counting trainer would be counting
+          behind the player's back.
+        */}
+        {bonusCard ? (
+          <div className="flex flex-col items-center gap-1 opacity-90">
+            <PlayingCard card={bonusCard} className="w-[42px]" />
+            <span className="rounded bg-black/50 px-1 text-[8px] tracking-wider text-white/60 uppercase">
+              7·7·7
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* The betting circle. */}
@@ -250,8 +266,8 @@ function SeatArea({
          * outside seat's second row would hang over the rail.
          */
         <div
-          className="absolute flex -translate-x-1/2 gap-[2px]"
-          style={{ left: spot.x, top: spot.y + 46 }}
+          className="absolute flex -translate-x-1/2 gap-[3px]"
+          style={{ left: spot.x, top: spot.y + 44 }}
         >
           {sideKinds.map((kind) => {
             const wager = seat.pendingSideBets.find((sb) => sb.kind === kind);
@@ -266,7 +282,7 @@ function SeatArea({
                 title={`${spec.name} — ${spec.blurb} House edge ${spec.edge}%.`}
                 aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}`}
                 className={cn(
-                  'sidebet-box relative flex h-[30px] w-[33px] flex-col items-center justify-center gap-px rounded border text-[7px] leading-none tracking-wide transition-colors',
+                  'sidebet-box relative flex h-[34px] w-[38px] flex-col items-center justify-center gap-px rounded-md border text-[8px] leading-none font-medium tracking-wide transition-colors',
                   wager
                     ? 'border-white/40 bg-black/50 text-white'
                     : 'border-white/12 bg-black/25 text-white/35',
@@ -278,7 +294,9 @@ function SeatArea({
               >
                 <span style={{ fontFamily: 'var(--font-display)' }}>{spec.short}</span>
                 {wager ? (
-                  <span className="font-mono text-[8px]">{Math.round(wager.amount / 100)}</span>
+                  <span className="font-mono text-[9px] text-white">
+                    {Math.round(wager.amount / 100)}
+                  </span>
                 ) : null}
                 {/*
                   A side bet that paid used to show only a green border. On a
@@ -300,7 +318,7 @@ function SeatArea({
       {/* The nameplate, under everything. */}
       <div
         className="absolute -translate-x-1/2 text-center"
-        style={{ left: spot.x, top: spot.y + (sideKinds.length > 0 ? 82 : 52) }}
+        style={{ left: spot.x, top: spot.y + (sideKinds.length > 0 ? 84 : 52) }}
       >
         <div
           className={cn(

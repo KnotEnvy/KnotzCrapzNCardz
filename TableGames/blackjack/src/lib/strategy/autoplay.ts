@@ -38,7 +38,7 @@ import { rankValue } from '@/lib/engine/types';
 import { advise, codeFor, upcardValue, type Advice } from './basic';
 import {
   betRamp,
-  countShoe,
+  countTable,
   deviationFor,
   insuranceIsGood,
   type CountSystem,
@@ -97,7 +97,7 @@ export function decide(table: TableState, config: BotConfig): (Advice & { deviat
   if (!base) return null;
   if (!config.deviations) return base;
 
-  const count = countShoe(table.shoe, config.system, table.rules.decks);
+  const count = countTable(table, config.system);
   const v = handValue(hand.cards);
   const tens = isPair(hand.cards) && rankValue(hand.cards[0].rank) === 10;
   const dev = deviationFor(v.total, upcardValue(upcard), count.true, tens);
@@ -149,7 +149,7 @@ export function betFor(table: TableState, seatId: SeatId, config: BotConfig): nu
     // The same ramp the counting panel shows. It used to be a second copy
     // here, which meant the HUD could advise one bet while the bot placed
     // another.
-    const count = countShoe(table.shoe, config.system, table.rules.decks);
+    const count = countTable(table, config.system);
     amount = config.unit * betRamp(count.true);
   }
   amount = Math.min(amount, table.rules.maxBet, seat.bankroll);
@@ -233,7 +233,7 @@ export function playRound(
 
   if (t.phase === 'INSURANCE') {
     if (config.basic && config.deviations) {
-      const count = countShoe(t.shoe, config.system, t.rules.decks);
+      const count = countTable(t, config.system);
       if (insuranceIsGood(count.true)) {
         for (const id of seats) {
           const seat = seatOf(t, id);
@@ -280,7 +280,7 @@ export function playRound(
   // taken rather than the zero that stands before the phase opens.
   const insuranceWagered = t.seats.reduce((n, seat) => n + seat.insurance, 0);
 
-  const trueCount = countShoe(t.shoe, config.system, t.rules.decks).true;
+  const trueCount = countTable(t, config.system).true;
   /*
    * The per-bet figures come out of the settlement rather than out of a
    * before-and-after on the seat's ledger. The ledger sums every kind of bet

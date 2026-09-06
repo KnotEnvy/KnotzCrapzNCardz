@@ -382,29 +382,41 @@ export function adviseFrom(
   const why = explain(code, cards, upcard, rules);
   const give = (action: Action, fellBack: boolean): Advice => ({ action, code, fellBack, why });
 
+  /*
+   * Hitting is the usual fallback, and it is not always available: a split ace
+   * at a table that gives them one card each cannot hit, so a `P` cell that
+   * cannot be split there would otherwise recommend a move the dealer would
+   * refuse. Standing is what is left, and the engine's own legality map is
+   * what decides — the advisor must never name an action the buttons reject.
+   */
+  const orStand = (): Advice => (legal.HIT.allowed ? give('HIT', true) : give('STAND', true));
+
   switch (code) {
     case 'H':
-      return give('HIT', false);
+      // Even the plain hit checks. The chart never gives `H` for a hand that
+      // cannot hit, but "never names an action the table would refuse" is a
+      // property worth holding unconditionally rather than by argument.
+      return legal.HIT.allowed ? give('HIT', false) : give('STAND', true);
     case 'S':
       return give('STAND', false);
     case 'D':
-      return legal.DOUBLE.allowed ? give('DOUBLE', false) : give('HIT', true);
+      return legal.DOUBLE.allowed ? give('DOUBLE', false) : orStand();
     case 'Ds':
       return legal.DOUBLE.allowed ? give('DOUBLE', false) : give('STAND', true);
     case 'P':
-      return legal.SPLIT.allowed ? give('SPLIT', false) : give('HIT', true);
+      return legal.SPLIT.allowed ? give('SPLIT', false) : orStand();
     case 'Ph':
-      return rules.das && legal.SPLIT.allowed ? give('SPLIT', false) : give('HIT', true);
+      return rules.das && legal.SPLIT.allowed ? give('SPLIT', false) : orStand();
     case 'Pd':
       if (rules.das && legal.SPLIT.allowed) return give('SPLIT', false);
-      return legal.DOUBLE.allowed ? give('DOUBLE', true) : give('HIT', true);
+      return legal.DOUBLE.allowed ? give('DOUBLE', true) : orStand();
     case 'R':
-      return legal.SURRENDER.allowed ? give('SURRENDER', false) : give('HIT', true);
+      return legal.SURRENDER.allowed ? give('SURRENDER', false) : orStand();
     case 'Rs':
       return legal.SURRENDER.allowed ? give('SURRENDER', false) : give('STAND', true);
     case 'Rp':
       if (legal.SURRENDER.allowed) return give('SURRENDER', false);
-      return legal.SPLIT.allowed ? give('SPLIT', true) : give('HIT', true);
+      return legal.SPLIT.allowed ? give('SPLIT', true) : orStand();
   }
 }
 

@@ -262,6 +262,16 @@ export interface SideBetWager {
    * make impossible.
    */
   jackpot: number | null;
+  /**
+   * The bonus card Super Sevens draws when the first two cards are both
+   * sevens.
+   *
+   * It is a real card off the real shoe and it decides the difference between
+   * 50:1 and 5000:1, so the felt shows it. It is kept here rather than
+   * discarded because a card that leaves the shoe and is never seen is a card
+   * the counting trainer would be counting behind the player's back.
+   */
+  bonus: Card | null;
 }
 
 export interface Seat {

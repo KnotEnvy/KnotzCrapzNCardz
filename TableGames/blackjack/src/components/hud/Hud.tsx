@@ -71,7 +71,7 @@ export function Hud({ className }: { className?: string }) {
           checked={prefs.counting}
           onChange={(v) => setPref('counting', v)}
           label="Show the count"
-          hint="Running and true, from the discard tray only."
+          hint="Running and true, from the cards turned face up."
         />
       </Panel>
     </aside>
@@ -128,7 +128,15 @@ function SessionPanel() {
   const seats = table.seats.filter((s) => s.occupied);
   const agg = React.useMemo(() => aggregate(seats.map((s) => s.stats)), [seats]);
 
-  const measured = agg.wagered > 0 ? (-agg.net / agg.wagered) * 100 : 0;
+  /*
+   * The main game's edge, against the main game's stake. `net` includes side
+   * bets and insurance, and dividing that by the main wager alone is the exact
+   * mistake autoplay.ts warns about — one Lucky Ladies hit makes the figure
+   * arbitrarily wrong, and it is broken out below precisely so it can be
+   * subtracted here.
+   */
+  const mainNet = agg.net - agg.sideNet - agg.insuranceNet;
+  const measured = agg.wagered > 0 ? (-mainNet / agg.wagered) * 100 : 0;
 
   return (
     <Panel title="Session">
@@ -163,7 +171,7 @@ function SessionPanel() {
         label="Measured edge"
         value={agg.handsPlayed >= 25 ? `${measured.toFixed(2)}%` : `needs ${25 - agg.handsPlayed} more`}
         tone={measured > 0 ? 'bad' : measured < 0 ? 'good' : undefined}
-        title="Your actual loss as a fraction of what you have wagered. It takes thousands of hands to mean anything."
+        title="Your loss on the hands themselves, as a fraction of what you wagered on them — side bets and insurance are shown separately below. It takes thousands of hands to mean anything."
       />
 
       <div className="my-2 border-t border-white/6" />
@@ -274,7 +282,8 @@ function CountPanel() {
       ) : null}
 
       <p className="mt-2 text-[10px] leading-tight text-pit-500">
-        Counted from the discard tray only — the same cards you can see. Nothing here reads the shoe.
+        Counted from the cards that have been turned face up — not the shoe, and not the dealer&rsquo;s
+        hole card until they turn it.
       </p>
     </Panel>
   );
@@ -286,12 +295,26 @@ function CountPanel() {
 
 function TrainerPanel() {
   const grades = useGame((s) => s.grades);
+  const seats = useGame((s) => s.table.seats);
   const correct = grades.filter((g) => g.correct).length;
   const pct = grades.length === 0 ? 100 : Math.round((correct / grades.length) * 100);
+
+  // The rolling list above is the last forty plays; the seat's own tally is
+  // every play of the session and survives a reload.
+  const lifetime = seats.reduce(
+    (a, s) => ({ n: a.n + s.stats.decisions, ok: a.ok + s.stats.correctDecisions }),
+    { n: 0, ok: 0 },
+  );
 
   return (
     <Panel title="Trainer" right={<span className="font-mono text-[11px] text-pit-300">{pct}%</span>}>
       <Meter value={pct / 100} tone={pct >= 95 ? 'win' : pct >= 80 ? 'brass' : 'lose'} label="Accuracy" />
+      {lifetime.n > 0 ? (
+        <p className="mt-1.5 text-[10px] text-pit-500">
+          {lifetime.ok} of {lifetime.n} correct this session
+          {grades.length > 0 ? ` · last ${grades.length} shown` : ''}
+        </p>
+      ) : null}
       {grades.length === 0 ? (
         <p className="mt-2 text-[10px] text-pit-500">Every decision gets marked against the chart.</p>
       ) : (

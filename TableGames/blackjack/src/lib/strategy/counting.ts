@@ -12,7 +12,7 @@
  * and is deliberately not wired to any of this.
  */
 
-import type { Card, ShoeState } from '@/lib/engine/types';
+import type { Card, ShoeState, TableState } from '@/lib/engine/types';
 import { rankValue } from '@/lib/engine/types';
 
 export type CountSystem = 'HI_LO' | 'KO' | 'OMEGA_II' | 'HI_OPT_II';
@@ -161,36 +161,73 @@ export function countCards(
 }
 
 /**
- * Count a live shoe's discard tray.
+ * Count what has left the shoe, minus anything still face down.
  *
  * Walks `cards[0..pos)` in place rather than materialising the tray, because
  * this runs once a round through a simulation of several hundred thousand and
- * the copy was the single most expensive thing in it. The window is exactly
- * the discard tray — the same cards a player has seen, and not one past it.
+ * the copy was the single most expensive thing in it.
+ *
+ * `hidden` is the load-bearing argument. Cards leave the shoe before they are
+ * shown: under the American game the dealer's hole card is dealt at the top of
+ * the round and turned over at the end of it, so `pos` includes a card nobody
+ * at the table can see. Counting it makes the trainer a cheat — it was
+ * reporting four cards seen on a hand with three face up, and quietly told the
+ * deviation bot what the dealer was holding. Prefer {@link countTable}, which
+ * works out what is hidden for you.
  */
-export function countShoe(shoe: ShoeState, system: CountSystem, decks: number): CountState {
+export function countShoe(
+  shoe: ShoeState,
+  system: CountSystem,
+  decks: number,
+  hidden: readonly Card[] = [],
+): CountState {
   const spec = COUNT_SYSTEMS[system];
   const tags = spec.tags;
   let running = initialCount(system, decks);
   let aces = 0;
+  let seen = 0;
+
   for (let i = 0; i < shoe.pos; i++) {
-    const rank = shoe.cards[i].rank;
+    const card = shoe.cards[i];
+    if (hidden.length > 0 && hidden.some((h) => h.id === card.id)) continue;
+    const rank = card.rank;
     running += tags[rank >= 10 && rank <= 13 ? 10 : rank === 14 ? 11 : rank] ?? 0;
     if (rank === 14) aces++;
+    seen++;
   }
 
   const remaining = shoe.size - shoe.pos;
   const decksLeft = Math.max(0.25, Math.round((remaining / 52) * 4) / 4);
-  const acesExpected = (shoe.pos / (decks * 52)) * decks * 4;
+  const acesExpected = (seen / (decks * 52)) * decks * 4;
   return {
     running,
     true: spec.balanced ? running / decksLeft : running,
     decksLeft,
     acesSeen: aces,
     aceSurplus: acesExpected - aces,
-    cardsSeen: shoe.pos,
+    cardsSeen: seen,
   };
 }
+
+/**
+ * The count as a player at this table could actually keep it.
+ *
+ * The only card that leaves the shoe without being shown is the dealer's hole
+ * card, and only while it is face down — the Super Sevens bonus card is dealt
+ * face up beside the circle and the felt draws it, so it counts like any other.
+ *
+ * Everything that reads a count during a round goes through here: the panel,
+ * the deviation bot and the insurance decision. Reading `countShoe` off a live
+ * table directly is the bug this function exists to prevent.
+ */
+export function countTable(table: TableState, system: CountSystem): CountState {
+  const hidden =
+    table.dealer.holeDown && table.dealer.cards.length > 1 ? [table.dealer.cards[1]] : EMPTY;
+  return countShoe(table.shoe, system, table.rules.decks, hidden);
+}
+
+/** One shared empty list, so the common case allocates nothing. */
+const EMPTY: readonly Card[] = [];
 
 /* ------------------------------------------------------------------ *
  * What the count is worth

@@ -16,6 +16,7 @@ import {
   COUNT_SYSTEMS,
   betRamp,
   countCards,
+  countTable,
   deviationFor,
   edgeAt,
   initialCount,
@@ -25,7 +26,7 @@ import {
 import { defaultRules, presetById } from '@/lib/engine/rules';
 import { createShoe } from '@/lib/engine/shoe';
 import { createRng } from '@/lib/engine/rng';
-import { createTable } from '@/lib/engine/table';
+import { createTable, deal, setBet, setSideBet } from '@/lib/engine/table';
 import { dollars } from '@/lib/engine/money';
 import { DEFAULT_BOT, playRound } from '@/lib/strategy/autoplay';
 import type { Card, Rank, Suit } from '@/lib/engine/types';
@@ -203,6 +204,26 @@ describe('advice against what is legal', () => {
     const noDas = { ...rules, das: false };
     expect(adviseFrom('Ph', allLegal, [card(2), card(2)], 2, das)).toMatchObject({ action: 'SPLIT' });
     expect(adviseFrom('Ph', allLegal, [card(2), card(2)], 2, noDas)).toMatchObject({ action: 'HIT' });
+  });
+
+  /*
+   * The advisor's fallbacks used to end at HIT, which is not always available:
+   * a split ace at a table that gives them one card each cannot hit, so a `P`
+   * cell that could not be split recommended a move the dealer would refuse.
+   * Every fallback now checks.
+   */
+  it('never names an action the table would refuse', () => {
+    const nothingButStand = {
+      HIT: { allowed: false },
+      STAND: { allowed: true },
+      DOUBLE: { allowed: false },
+      SPLIT: { allowed: false },
+      SURRENDER: { allowed: false },
+    };
+    for (const code of ['H', 'S', 'D', 'Ds', 'P', 'Ph', 'Pd', 'R', 'Rs', 'Rp'] as Code[]) {
+      const advice = adviseFrom(code, nothingButStand, [card(14), card(14)], 6, rules);
+      expect(advice.action, `${code} fell back to an illegal move`).toBe('STAND');
+    }
   });
 
   it('gives every cell a reason a player could act on', () => {
@@ -433,6 +454,67 @@ describe('counting', () => {
     const discard: Card[] = Array.from({ length: 10 }, () => card(5, H));
     expect(countCards(discard, 'HI_LO', 6, 0).decksLeft).toBe(0.25);
     expect(Number.isFinite(countCards(discard, 'HI_LO', 6, 0).true)).toBe(true);
+  });
+
+  /*
+   * The counter's whole claim is that it reads the cards a player can see.
+   * `shoe.pos` is not that: the dealer's hole card leaves the shoe at the top
+   * of the round and is turned over at the end of it, so counting up to the
+   * pointer counted a card nobody could see — and quietly told the deviation
+   * bot what the dealer was holding.
+   */
+  it('does not count the dealer’s hole card while it is face down', () => {
+    let t = createTable(defaultRules(), createRng('hole'), { seats: 1 });
+    const stacked: Card[] = ([[9, S], [9, S], [9, S], [13, S]] as Array<[Rank, Suit]>).map(
+      ([r, su], i) => ({ rank: r, suit: su, id: 800_000 + i }),
+    );
+    t = { ...t, shoe: { ...t.shoe, cards: [...stacked, ...t.shoe.cards], pos: 0, size: t.shoe.size + 4 } };
+    const withBet = setBet(t, 'A', dollars(10));
+    if (!withBet.ok) throw new Error(withBet.reason);
+    const dealt = deal(withBet.table, createRng('hole'));
+    if (!dealt.ok) throw new Error(dealt.reason);
+    t = dealt.table;
+
+    // Four cards have left the shoe; three are face up.
+    expect(t.shoe.pos).toBe(4);
+    expect(t.dealer.holeDown).toBe(true);
+    const hidden = countTable(t, 'HI_LO');
+    expect(hidden.cardsSeen).toBe(3);
+    // Three nines: Hi-Lo tags them zero, so the king under them would show.
+    expect(hidden.running).toBe(0);
+
+    // Turn it over and the king joins the count.
+    const revealed = countTable({ ...t, dealer: { ...t.dealer, holeDown: false } }, 'HI_LO');
+    expect(revealed.cardsSeen).toBe(4);
+    expect(revealed.running).toBe(-1);
+  });
+
+  it('counts a Super Sevens bonus card, because the felt shows it', () => {
+    // The bonus card is dealt face up beside the circle. A card that left the
+    // shoe and is never shown would be one the trainer counts behind the
+    // player's back, which is why it is drawn rather than discarded.
+    let t = createTable(
+      { ...defaultRules(), sideBets: { ...defaultRules().sideBets, SUPER_SEVENS: true } },
+      createRng('sevens'),
+      { seats: 1 },
+    );
+    const stacked: Card[] = ([[7, S], [9, S], [7, H], [8, S], [5, S]] as Array<[Rank, Suit]>).map(
+      ([r, su], i) => ({ rank: r, suit: su, id: 700_000 + i }),
+    );
+    t = { ...t, shoe: { ...t.shoe, cards: [...stacked, ...t.shoe.cards], pos: 0, size: t.shoe.size + 5 } };
+    let res = setBet(t, 'A', dollars(10));
+    if (!res.ok) throw new Error(res.reason);
+    res = setSideBet(res.table, 'A', 'SUPER_SEVENS', dollars(10));
+    if (!res.ok) throw new Error(res.reason);
+    const dealt = deal(res.table, createRng('sevens'));
+    if (!dealt.ok) throw new Error(dealt.reason);
+    t = dealt.table;
+
+    const wager = t.seats[0].pendingSideBets[0];
+    expect(wager.bonus?.rank).toBe(5);
+    // Five cards gone, one of them the dealer's hole card: four are visible.
+    expect(t.shoe.pos).toBe(5);
+    expect(countTable(t, 'HI_LO').cardsSeen).toBe(4);
   });
 
   it('reads only what it is given, so an unseen shoe counts as neutral', () => {

@@ -50,8 +50,10 @@ import {
   double as doubleDown,
   hit as hitHand,
   legalActions,
+  abandonRound,
   nextRound,
   rebet as rebetTable,
+  recordDecision,
   rebuy as rebuySeat,
   renameSeat as renameSeatIn,
   reshuffle as reshuffleShoe,
@@ -78,7 +80,7 @@ import type {
 } from '@/lib/engine/types';
 import { advise, type Advice } from '@/lib/strategy/basic';
 import { decide, DEFAULT_BOT, type BotConfig } from '@/lib/strategy/autoplay';
-import { countShoe, insuranceIsGood, type CountSystem } from '@/lib/strategy/counting';
+import { countTable, insuranceIsGood, type CountSystem } from '@/lib/strategy/counting';
 
 /* ------------------------------------------------------------------ *
  * Pacing
@@ -240,7 +242,7 @@ export interface GameStore {
    * `useCount` hooks below, which memoise on the inputs that actually change.
    */
   advice(): Advice | null;
-  count(): ReturnType<typeof countShoe>;
+  count(): ReturnType<typeof countTable>;
   houseEdge(): number;
 }
 
@@ -308,7 +310,7 @@ export const useGame = create<GameStore>()(
       const finishRound = () => {
         const t = get().table;
         if (t.phase !== 'SETTLE') return;
-        const trueCount = countShoe(t.shoe, get().prefs.countSystem, t.rules.decks).true;
+        const trueCount = countTable(t, get().prefs.countSystem).true;
         const { table, settlements } = settle(t, trueCount);
 
         set({ table, settlements });
@@ -463,7 +465,7 @@ export const useGame = create<GameStore>()(
             // The offers are open; the player decides and the driver waits.
             set({ busy: false });
             if (get().autoplay) {
-              const count = countShoe(after.shoe, get().prefs.countSystem, after.rules.decks);
+              const count = countTable(after, get().prefs.countSystem);
               if (get().bot.deviations && insuranceIsGood(count.true)) {
                 for (const s of after.seats) {
                   if (s.hands.length > 0) get().takeInsurance(s.id, Math.floor(s.hands[0].bet / 2));
@@ -496,7 +498,10 @@ export const useGame = create<GameStore>()(
                 hand: hand.cards.map((c) => `${c.rank}`).join('-'),
                 upcard: `${up.rank}`,
               };
-              set((s) => ({ grades: [grade, ...s.grades].slice(0, 40) }));
+              set((s) => ({
+                grades: [grade, ...s.grades].slice(0, 40),
+                table: recordDecision(s.table, table.focus!.seat, correct),
+              }));
               if (!correct) sound(sndWrong, 0.05);
             }
           }
@@ -650,8 +655,7 @@ export const useGame = create<GameStore>()(
         },
 
         count() {
-          const t = get().table;
-          return countShoe(t.shoe, get().prefs.countSystem, t.rules.decks);
+          return countTable(get().table, get().prefs.countSystem);
         },
 
         houseEdge() {
@@ -676,43 +680,18 @@ export const useGame = create<GameStore>()(
        * re-bet button.
        */
       partialize: (s) => ({ table: s.table, prefs: s.prefs, bot: s.bot }),
-      /**
-       * A persisted table can come back mid-round — the tab was closed while
-       * the cards were out. There is no honest way to resume that (the driver's
-       * timers are gone and the money is half-committed), so the round is
-       * pushed to settlement and cleared, which returns the chips that are
-       * still on hands rather than keeping them.
-       */
+      /** A persisted table can come back mid-round; see `abandonRound`. */
       merge: (persisted, current) => {
         const merged = { ...current, ...(persisted as Partial<GameStore>) };
-        const t = merged.table;
-        if (t && t.phase !== 'BETTING') {
-          for (const seat of t.seats) {
-            for (const hand of seat.hands) seat.bankroll += hand.bet;
-            for (const sb of seat.pendingSideBets) if (sb.net === null) seat.bankroll += sb.amount;
-            seat.bankroll += seat.insurance;
-            seat.hands = [];
-            seat.insurance = 0;
-            seat.insuranceNet = null;
-            seat.tookEvenMoney = false;
-            // A side bet that already paid keeps its result on the felt, which
-            // on a resumed session reads as a win the player is about to be
-            // given again. The stake stays up for a re-bet; the result does not.
-            seat.pendingSideBets = seat.pendingSideBets.map((sb) => ({
-              ...sb,
-              net: null,
-              label: null,
-              jackpot: null,
-            }));
-          }
-          merged.table = {
-            ...t,
-            phase: 'BETTING',
-            focus: null,
-            settled: false,
-            dealer: { cards: [], holeDown: true, outcome: null },
-          };
-        }
+        /*
+         * A round in flight when the tab closed is abandoned rather than
+         * resumed — the driver's timers are gone and the money is half
+         * committed. `abandonRound` is engine code because it moves money, and
+         * it knows the one thing this used to get wrong: a round parked at
+         * SETTLE for the settlement hold has already been paid, so refunding
+         * the stakes still shown on the felt is free money.
+         */
+        if (merged.table) merged.table = abandonRound(merged.table);
         return { ...merged, lastBets: new Map(), toasts: [], grades: [], settlements: [], busy: false, autoplay: false };
       },
     },
@@ -774,11 +753,10 @@ export function useAdvice(): Advice | null {
 }
 
 /** The count, memoised on the shoe and the system rather than rebuilt per render. */
-export function useCount(): ReturnType<typeof countShoe> {
-  const shoe = useGame((s) => s.table.shoe);
-  const decks = useGame((s) => s.table.rules.decks);
+export function useCount(): ReturnType<typeof countTable> {
+  const table = useGame((s) => s.table);
   const system = useGame((s) => s.prefs.countSystem);
-  return useMemo(() => countShoe(shoe, system, decks), [shoe, system, decks]);
+  return useMemo(() => countTable(table, system), [table, system]);
 }
 
 /** Where the shoe is, 0..1. Selected by the penetration meter on its own. */
