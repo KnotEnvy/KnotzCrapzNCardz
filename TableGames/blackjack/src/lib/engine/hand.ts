@@ -185,7 +185,11 @@ export function canSplit(
   if (hand.cards.length !== 2) return no('Splitting is a first-two-cards move.');
   if (!isPair(hand.cards)) return no('Only a pair can be split.');
   if (handsInSeat > rules.resplitTo) {
-    return no(`This table splits to ${rules.resplitTo + 1} hands.`);
+    // "splits to 1 hands" is what this said when `resplitTo` was zero — a
+    // table that books no splits at all. The setup screen cannot build one,
+    // but a persisted or hand-edited rules object can, and a refusal is the
+    // one sentence a player reads when the table says no.
+    return no(rules.resplitTo === 0 ? 'This table does not split.' : `This table splits to ${rules.resplitTo + 1} hands.`);
   }
   if (isAce(hand.cards[0]) && hand.splitDepth > 0 && !rules.resplitAces) {
     return no('This table does not re-split aces.');

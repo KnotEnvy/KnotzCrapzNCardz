@@ -55,10 +55,10 @@ The engine is measured, not asserted. `pnpm run test:stats` deals several
 million rounds and compares what comes out against figures that have been
 published for fifty years:
 
-| | measured | published |
+| | measured | exact |
 | --- | --- | --- |
-| Dealer busts, six decks, S17 | 28.13% | 28.32% |
-| Dealer busts, H17 | 28.53% | 28.54% |
+| Dealer busts, six decks, S17 | 28.13% | 28.192% |
+| Dealer busts, H17 | 28.53% | 28.576% |
 | Player is dealt a natural | 4.77% | 4.749% |
 | Vegas Strip house edge | 0.54% | 0.40% (model) |
 | Mimicking the dealer instead | 5.95% | 5.5% |
@@ -69,10 +69,20 @@ That last pair is the whole case for counting, and it is measured from the
 player's own results rather than asserted: the same flat bet, the same chart,
 bucketed by what the discard tray was saying when the chips went out.
 
+The right-hand column of the first three rows is *exact*, not published. The
+dealer's finishing distribution off a fresh six-deck shoe is a finite sum, so
+the suite enumerates it — every ordered upcard and hole card, weighted by its
+probability, then the draws recursed against the remaining shoe — rather than
+asserting against remembered round numbers. It used to do the latter, and two
+of those numbers were wrong: the twenty by 0.37 points and the bust rate by
+0.19. Nothing failed, because the tolerances were six and eight standard
+errors while the comment beside them claimed three. This table reported a
+correct dealer as low against a figure that was itself the error.
+
 Both bust figures count every round the dealer plays out, naturals included.
 The 29.1% you will more often see quoted for H17 is conditioned on the dealer
 *not* holding a natural — a different denominator, and citing it here made a
-correct dealer look half a point wrong.
+correct dealer look half a point wrong in the other direction.
 
 The last two lines are the argument: playing the chart costs you about a third
 of a percent, and copying the dealer costs you five and a half. Every figure

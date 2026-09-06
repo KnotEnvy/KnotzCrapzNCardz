@@ -29,7 +29,7 @@ import { createRng } from '@/lib/engine/rng';
 import { createTable, deal, setBet, setSideBet } from '@/lib/engine/table';
 import { dollars } from '@/lib/engine/money';
 import { DEFAULT_BOT, playRound } from '@/lib/strategy/autoplay';
-import type { Card, Rank, Suit } from '@/lib/engine/types';
+import type { Card, Rank, Suit, TableRules } from '@/lib/engine/types';
 
 const S = 'spades' as const;
 const H = 'hearts' as const;
@@ -113,6 +113,13 @@ describe('the hard chart', () => {
 
 describe('the soft chart', () => {
   it('doubles soft eighteen against weak and stands against seven and eight', () => {
+    /*
+     * The deuce column is first because it was the one this test used to
+     * skip, and skipping it hid a wrong cell for four rounds: the chart said
+     * double against a two at S17, where the play is to stand. A sweep that
+     * asserts 3, 6, 7, 8, 9, 10 and A and quietly omits 2 is not a sweep.
+     */
+    expect(chart([card(14), card(7)], 2)).toBe('S');
     expect(chart([card(14), card(7)], 3)).toBe('Ds');
     expect(chart([card(14), card(7)], 6)).toBe('Ds');
     expect(chart([card(14), card(7)], 7)).toBe('S');
@@ -129,6 +136,14 @@ describe('the soft chart', () => {
       expect(chart([card(14), card(8)], up)).toBe('S');
       expect(chart([card(14), card(9)], up)).toBe('S');
     }
+  });
+
+  it('doubles soft eighteen against a two only once the dealer hits soft 17', () => {
+    // The whole reason SOFT_H17 has an entry for this cell. While the S17
+    // chart already said 'Ds', the patch changed nothing and the test below
+    // could not have told the two charts apart.
+    expect(chart([card(14), card(7)], 2)).toBe('S');
+    expect(chart([card(14), card(7)], 2, h17)).toBe('Ds');
   });
 
   it('doubles soft nineteen against a six once the dealer hits soft 17', () => {
@@ -267,6 +282,71 @@ describe('chart integrity', () => {
    * is a play the dealer will refuse, printed under a caption claiming the
    * table's restrictions have been applied.
    */
+  /*
+   * Every rule delta has to actually be a delta.
+   *
+   * `SOFT_H17` carried `[18, 2, 'Ds']` while the S17 chart already said 'Ds'
+   * in that cell. The patch was therefore a no-op, the two charts were
+   * identical there, and — since the H17 entry was the correct one — the S17
+   * chart was wrong at the *default* table, on the most common soft hand in
+   * the game. Four rounds of review and forty-odd chart assertions went past
+   * it, because every one of them asked about a cell rather than about the
+   * relationship between two charts.
+   *
+   * This asks about the relationship: turn one rule on, and the cells it
+   * claims to move must move. A dead entry fails here whether or not anyone
+   * thought to assert the cell it lives in.
+   */
+  it('has no rule delta that changes nothing', () => {
+    const cells = (c: ReturnType<typeof chartFor>) =>
+      (['hard', 'soft', 'pairs'] as const).flatMap((k) =>
+        Object.entries(c[k]).flatMap(([row, codes]) =>
+          codes.map((code, i) => [`${k}:${row}:${UPCARDS[i]}`, code] as const),
+        ),
+      );
+
+    const differences = (a: TableRules, b: TableRules) => {
+      const left = new Map(cells(chartFor(a)));
+      const right = new Map(cells(chartFor(b)));
+      const out: string[] = [];
+      for (const [key, code] of left) if (right.get(key) !== code) out.push(key);
+      return out;
+    };
+
+    /*
+     * Hitting soft 17 moves three hard cells, two soft and one pair — but
+     * three of the six are surrender cells, and the default table has no
+     * surrender, so the comparison is made at a table that can actually
+     * book them. A cell suppressed by another rule is not a dead patch;
+     * it is `restrict` doing its job, which the tests below cover.
+     */
+    const surrenderable = { ...rules, surrender: 'LATE' as const };
+    const h17Moves = differences(surrenderable, { ...surrenderable, hitsSoft17: true });
+    expect(h17Moves.sort()).toEqual(
+      [
+        'hard:11:11', 'hard:15:11', 'hard:17:11',
+        'soft:18:2', 'soft:19:6',
+        'pairs:8:11',
+      ].sort(),
+    );
+
+    /*
+     * The five European cells, all of them about not risking a second chip
+     * against an upcard that can still turn into a natural. Compared against
+     * an H17 table, because eleven versus an ace is a hit at six-deck S17
+     * anyway — the ENHC entry for it exists to override the H17 and few-deck
+     * patches, which is why ENHC is applied last.
+     */
+    const h17Base = { ...rules, hitsSoft17: true };
+    expect(differences(h17Base, { ...h17Base, holeCard: 'ENHC' }).sort()).toEqual(
+      ['hard:11:10', 'hard:11:11', 'pairs:8:10', 'pairs:8:11', 'pairs:11:11'].sort(),
+    );
+
+    // And the few-deck sets: four cells at two decks, twelve at one.
+    expect(differences(rules, { ...rules, decks: 2 })).toHaveLength(4);
+    expect(differences(rules, { ...rules, decks: 1 })).toHaveLength(12);
+  });
+
   it('collapses surrender cells at a table that does not offer it', () => {
     const withLS = chartFor({ ...rules, surrender: 'LATE' });
     const without = chartFor({ ...rules, surrender: 'NONE' });

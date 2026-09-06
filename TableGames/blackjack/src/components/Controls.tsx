@@ -149,7 +149,15 @@ function InsuranceBar() {
               }
               return (
                 <React.Fragment key={seat.id}>
-                  {natural && rules.blackjackPays !== '1:1' ? (
+                  {/*
+                    Even money is a 3:2 offer and nothing else — at 6:5 or 1:1
+                    there is no insurance stake that guarantees one unit, so
+                    the engine refuses it. This condition used to read "not
+                    1:1", which put a live button on the shipped Single Deck
+                    preset that answered with a refusal toast, on a felt whose
+                    README promises every button knows why it is unavailable.
+                  */}
+                  {natural && rules.blackjackPays === '3:2' ? (
                     <Button size="sm" variant="secondary" onClick={() => takeEvenMoney(seat.id)}>
                       {seats.length > 1 ? `${seat.name}: ` : ''}Even money
                     </Button>
@@ -314,7 +322,14 @@ export function useKeyboard(): void {
       const target = e.target as HTMLElement | null;
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
 
-      const { table } = useGame.getState();
+      const { table, dialog } = useGame.getState();
+      /*
+       * A dialog owns the keyboard while it is open. Without this, Space
+       * dealt a round and H/S/D/P/R played the hand behind an open Setup,
+       * Chart, Paytables or Help — the player reading the strategy chart to
+       * decide what to do would double down by pressing D on it.
+       */
+      if (dialog) return;
       const key = e.key.toLowerCase();
 
       if (table.phase === 'BETTING') {

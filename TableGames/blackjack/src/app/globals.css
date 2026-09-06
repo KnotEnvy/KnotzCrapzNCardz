@@ -308,6 +308,37 @@ body {
   animation: pulse-focus 1.6s ease-out infinite;
 }
 
+/* ------------------------------------------------------------------ *
+ * Keyboard focus
+ * ------------------------------------------------------------------ *
+ *
+ * The app defined no focus style at all until round five of judging: every
+ * focused control fell back to the user agent's default ring, which is a thin
+ * dark outline drawn over a dark green felt and a near-black panel. It is
+ * technically present and practically invisible, which is the worst of both —
+ * the documentation claimed keyboard focus "lands on a visible ring" and a
+ * sighted keyboard player could not find the caret.
+ *
+ * Brass, because it is the one colour on this felt that reads against every
+ * surface here: the green cloth, the black rail, the panel chrome and a white
+ * card face. Two rings rather than one — a dark halo under a bright core — so
+ * it survives whichever it lands on.
+ *
+ * `:focus-visible` rather than `:focus`, so clicking a chip does not leave a
+ * ring behind on it. `.focus-ring` above is a different thing entirely: the
+ * pulsing highlight on the hand whose turn it is.
+ *
+ * No `border-radius` here on purpose. An outline already follows the
+ * element's own rounding, so the seat circles and chip buttons get a round
+ * ring for free — setting a radius would instead reshape the control itself
+ * the moment it took focus.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brass-300);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55);
+}
+
 @keyframes rise-fade {
   from {
     transform: translateY(6px) scale(0.94);

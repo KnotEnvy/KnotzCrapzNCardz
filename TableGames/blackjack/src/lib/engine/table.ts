@@ -491,6 +491,22 @@ export function deal(table: TableState, rng: Rng): ActionResult {
   if (playing.length === 0) return refuse('No wagers on the felt.');
 
   /*
+   * The last gate before money moves. `setBet` and `setSideBet` both refuse a
+   * wager larger than the bankroll, and `setRules` now reconciles the chips it
+   * disturbs — but this is the function that actually subtracts, and it used
+   * to subtract whatever it found. One door left open anywhere upstream, or
+   * one hand-edited persisted table, and a seat played on money it did not
+   * have. A refusal here costs a sentence; not having it cost a negative
+   * bankroll.
+   */
+  for (const seat of playing) {
+    const side = seat.pendingSideBets.reduce((n, sb) => n + sb.amount, 0);
+    if (seat.pendingBet + side > seat.bankroll) {
+      return refuse(`${seat.name} has ${centsLabel(seat.bankroll)} and ${centsLabel(seat.pendingBet + side)} on the felt.`);
+    }
+  }
+
+  /*
    * Everything that comes off the shoe comes off it here, before the draft
    * opens — see `withShoe`. The order is the real one and it matters for the
    * seeded tests: one card to each seat left to right, one to the dealer, a
@@ -1330,19 +1346,52 @@ export function abandonRound(table: TableState): TableState {
 }
 
 /** Change the rules mid-session. Forces a fresh shoe, because it is one. */
+/**
+ * Change the table's rules, and reconcile the chips already on the felt.
+ *
+ * This is the one door into a wager that does not go through `setBet` or
+ * `setSideBet`, and for four rounds of review it walked past every invariant
+ * those two enforce. Raising the table minimum raised a standing bet to meet
+ * it *without asking whether the seat could pay* — a $50 bankroll with $5 in
+ * the circle, against a new $100 minimum, came out holding a $100 wager, and
+ * `deal` subtracted it and left the bankroll at minus fifty. Lowering the
+ * maximum under a standing side bet left a 17.6% bet several times the size
+ * of the hand it rides on, which is the exact shape `setBet`'s cap exists to
+ * prevent.
+ *
+ * So the clamping here ends with the same three invariants `setBet`
+ * guarantees: a wager is zero or between the minimum and the maximum, the
+ * side bets never exceed it, and the total never exceeds the bankroll. A seat
+ * that cannot afford the new table has its circle cleared rather than
+ * silently over-committed — it is a table it cannot sit at until it rebuys,
+ * and saying so with an empty circle is the honest version.
+ */
 export function setRules(table: TableState, rules: TableRules, rng: Rng): ActionResult {
   if (table.phase !== 'BETTING') return refuse('Wait for the round to finish.');
-  return ok(
-    produce(table, (d) => {
-      d.rules = rules;
-      d.shoe = createShoe(rules.decks, rules.penetration, rng, d.shoe.shuffleId + 1);
-      for (const s of d.seats) {
-        s.pendingSideBets = s.pendingSideBets.filter((sb) => rules.sideBets[sb.kind]);
-        if (s.pendingBet > 0 && s.pendingBet < rules.minBet) s.pendingBet = rules.minBet;
-        if (s.pendingBet > rules.maxBet) s.pendingBet = rules.maxBet;
+  let cleared = false;
+  const next = produce(table, (d) => {
+    d.rules = rules;
+    d.shoe = createShoe(rules.decks, rules.penetration, rng, d.shoe.shuffleId + 1);
+    for (const s of d.seats) {
+      s.pendingSideBets = s.pendingSideBets.filter((sb) => rules.sideBets[sb.kind]);
+      if (s.pendingBet > 0 && s.pendingBet < rules.minBet) s.pendingBet = rules.minBet;
+      if (s.pendingBet > rules.maxBet) s.pendingBet = rules.maxBet;
+
+      // A side bet may never be larger than the hand it rides on.
+      s.pendingSideBets = s.pendingSideBets.map((sb) =>
+        sb.amount > s.pendingBet ? { ...sb, amount: s.pendingBet } : sb,
+      );
+
+      // And the seat has to be able to pay for all of it.
+      const side = s.pendingSideBets.reduce((n, sb) => n + sb.amount, 0);
+      if (s.pendingBet + side > s.bankroll) {
+        s.pendingBet = 0;
+        s.pendingSideBets = [];
+        if (s.occupied) cleared = true;
       }
-    }),
-  );
+    }
+  });
+  return ok(next, cleared ? 'Bets cleared — this table is beyond the bankroll.' : undefined);
 }
 
 /** Put a fresh shoe in, by hand. */

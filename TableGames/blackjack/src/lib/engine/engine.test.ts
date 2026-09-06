@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from './rng';
 import { createShoe, isCompleteShoe, shuffle } from './shoe';
-import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, resetHandIds } from './table';
+import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, resetHandIds, seatOf, setRules } from './table';
 import { settle, settleHand } from './resolve';
 import { canDouble, dealerShouldHit, handValue, isBlackjack, isPair, displayTotal } from './hand';
 import { fmt, winnings } from './money';
@@ -975,6 +975,57 @@ describe('the betting circle', () => {
   it('will not bet more than the bankroll', () => {
     const t = createTable(defaultRules(), rng(), { bankroll: dollars(20) });
     expect(setBet(t, 'A', dollars(25))).toMatchObject({ ok: false });
+  });
+
+  /*
+   * `setRules` is the one door into a wager that does not go through
+   * `setBet`, and it used to walk past every check `setBet` makes. Round five
+   * found the reachable version: the setup dialog exposes the table minimum,
+   * so raising it above a seat's bankroll produced a wager the seat could not
+   * pay, and `deal` subtracted it anyway.
+   */
+  describe('changing the rules under standing chips', () => {
+    const withBankroll = (t: TableState, cents: number): TableState => ({
+      ...t,
+      seats: t.seats.map((s) => (s.id === 'A' ? { ...s, bankroll: cents } : s)),
+    });
+
+    it('clears a circle the bankroll can no longer cover', () => {
+      let t = withCards([]);
+      t = must(setBet(t, 'A', dollars(5)));
+      t = withBankroll(t, dollars(50));
+
+      const res = setRules(t, { ...defaultRules(), minBet: dollars(100) }, rng());
+      expect(res).toMatchObject({ ok: true });
+      const seat = seatOf(must(res), 'A');
+      expect(seat.pendingBet).toBe(0);
+      expect(seat.pendingSideBets).toEqual([]);
+      expect(seat.bankroll).toBe(dollars(50));
+    });
+
+    it('never leaves a side bet larger than the hand it rides on', () => {
+      let t = withCards([], { sideBets: { ...defaultRules().sideBets, LUCKY_LADIES: true } });
+      t = must(setBet(t, 'A', dollars(100)));
+      t = must(setSideBet(t, 'A', 'LUCKY_LADIES', dollars(100)));
+
+      // Dropping the maximum drags the hand down; the 17.6% bet must come
+      // with it rather than ending up several times the size of the 0.5% one.
+      t = must(setRules(t, { ...defaultRules(), sideBets: t.rules.sideBets, maxBet: dollars(25) }, rng()));
+      const seat = seatOf(t, 'A');
+      expect(seat.pendingBet).toBe(dollars(25));
+      for (const sb of seat.pendingSideBets) expect(sb.amount).toBeLessThanOrEqual(seat.pendingBet);
+    });
+
+    it('refuses to deal a wager the seat cannot pay', () => {
+      // The last gate, tested directly: whatever upstream lets through, the
+      // function that subtracts the money will not.
+      let t = withCards([[10, S], [10, H], [10, D], [9, C]]);
+      t = must(setBet(t, 'A', dollars(100)));
+      t = withBankroll(t, dollars(50));
+      const res = deal(t, rng());
+      expect(res).toMatchObject({ ok: false });
+      expect(String((res as { reason: string }).reason)).toMatch(/on the felt/);
+    });
   });
 
   it('is closed once the cards are out', () => {

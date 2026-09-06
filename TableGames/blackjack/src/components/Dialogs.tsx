@@ -602,9 +602,10 @@ function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           <h4 className="mb-1 text-[10px] tracking-[0.18em] text-brass-300 uppercase">The trainer</h4>
           <p>
             Turn on <em>show the correct play</em> to see the chart&rsquo;s answer before you act, or{' '}
-            <em>grade my decisions</em> to be marked afterwards. <em>Show the count</em> adds a Hi-Lo
-            running and true count taken from the discard tray — the same cards you can see, and
-            nothing more.
+            <em>grade my decisions</em> to be marked afterwards. <em>Show the count</em> adds a running and
+            true count in whichever system the counting panel is set to (Hi-Lo, Knock-Out,
+            Omega II or Hi-Opt II), taken from the discard tray — the same cards you can
+            see, and nothing more.
           </p>
         </section>
 

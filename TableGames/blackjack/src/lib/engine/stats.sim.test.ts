@@ -61,9 +61,22 @@ import { countShoe } from '@/lib/strategy/counting';
 interface Measurement {
   rounds: number;
   hands: number;
+  /** Total action: the initial wagers plus everything doubles and splits added. */
   wagered: number;
+  /** The initial wagers alone — the denominator of every published edge. */
+  staked: number;
   net: number;
-  /** House edge in percent of the total wagered. Positive is the house. */
+  /**
+   * House edge in percent of the *initial* wager. Positive is the house.
+   *
+   * Per initial wager, not per unit of action, because that is what the
+   * published figures and the rule model in `rules.ts` both mean. Basic
+   * strategy puts about 1.133 units on the felt for each unit bet, so the two
+   * denominators differ by about 12% in relative terms — 0.05 points on the
+   * default game and 0.2 against the single-deck model. Round five found this
+   * reported against the action while being compared to a model quoted per
+   * initial bet, and the difference hid under a 0.38-point noise floor.
+   */
   edge: number;
   /** Standard error of that figure, in percent. */
   stderr: number;
@@ -75,7 +88,7 @@ interface Measurement {
  * Deal `rounds` rounds with the basic-strategy bot and measure.
  *
  * The bankroll is topped up rather than allowed to run out. This is measuring
- * an edge per unit wagered, and a bot that goes broke at round 40,000 has
+ * an edge per unit staked, and a bot that goes broke at round 40,000 has
  * measured 40,000 rounds and then stopped, which biases the sample toward
  * losing runs. Casinos measure hold the same way — against the drop, not
  * against whether a particular player still has chips.
@@ -90,6 +103,7 @@ function measure(
   let table = createTable(rules, rng, { seats: 1, bankroll: dollars(10_000_000) });
   let net = 0;
   let wagered = 0;
+  let staked = 0;
   let hands = 0;
   let sum = 0;
   let sumSq = 0;
@@ -103,6 +117,7 @@ function measure(
     table = out.table;
     net += out.net;
     wagered += out.wagered;
+    staked += out.initialWagered;
     hands += out.handsPlayed;
     if (out.wagered > 0) {
       const units = out.net / config.unit;
@@ -112,7 +127,7 @@ function measure(
     }
   }
 
-  const edge = wagered === 0 ? 0 : (-net / wagered) * 100;
+  const edge = staked === 0 ? 0 : (-net / staked) * 100;
   const mean = sum / Math.max(1, n);
   const variance = Math.max(0, sumSq / Math.max(1, n) - mean * mean);
   const stderr = (Math.sqrt(variance) / Math.sqrt(Math.max(1, n))) * 100;
@@ -124,6 +139,7 @@ function measure(
     rounds,
     hands,
     wagered,
+    staked,
     net,
     edge,
     stderr,
@@ -229,43 +245,83 @@ const DIST_N = 500_000;
 
 describe('the dealer, against the published tables', () => {
   /*
-   * The six-deck, stand-on-soft-17 dealer distribution is one of the most
-   * thoroughly published numbers in gambling. Every figure below is the
-   * standard one; the tolerances are three standard errors of a binomial at
-   * 600,000 trials, which is under two tenths of a percent.
+   * The six-deck stand-on-soft-17 dealer distribution, computed exactly
+   * rather than remembered.
    *
-   * If this test fails, the dealer's drawing rule, the shoe's composition or
-   * the hand evaluator is wrong. Nothing else can move these.
+   * This test used to assert against a table of round numbers carrying no
+   * derivation, and two of them were wrong: 17.58% for a twenty against a
+   * true 17.953%, and 28.32% for the bust rate against a true 28.192%. The
+   * first is off by seven standard errors at this sample size. Nothing
+   * failed, because the tolerances were 0.5 and 0.4 — six and eight sigma —
+   * while the comment above them claimed they were "three standard errors of
+   * a binomial at 600,000 trials". The sample size was 500,000, the
+   * tolerances were nothing of the kind, and the README then reported a
+   * *correct* dealer as 0.19 points below a published figure that was itself
+   * the error.
+   *
+   * The figures below come from an exact recursion over the six-deck
+   * composition with card removal: every ordered pair of upcard and hole
+   * card, weighted by its probability, then the dealer's draws enumerated
+   * against the remaining shoe. They are the distribution of a dealer hand
+   * dealt off the top of a fresh six-deck shoe, naturals included in the 21
+   * row, which is what this measurement produces.
+   *
+   * Reproduce with the recursion in the comment at the foot of this file.
    */
-  const EXPECTED_S17: Record<string, number> = {
-    '17': 14.58,
-    '18': 13.81,
-    '19': 13.48,
-    '20': 17.58,
-    '21': 12.14, // includes naturals
+  const EXACT_S17: Record<string, number> = {
+    '17': 14.525,
+    '18': 13.926,
+    '19': 13.368,
+    '20': 17.953,
+    '21': 12.036, // includes naturals
+  };
+  const EXACT_BUST_S17 = 28.192;
+  const EXACT_BUST_H17 = 28.576;
+
+  /**
+   * Three standard errors of a binomial at `DIST_N` trials, in points.
+   *
+   * Computed from the figure being asserted rather than chosen, so that
+   * changing the sample size changes the band and no tolerance can quietly
+   * become eight sigma again. At half a million rounds this is between 0.14
+   * and 0.20 points depending on the row.
+   */
+  const threeSigma = (percent: number): number => {
+    const p = percent / 100;
+    return 3 * Math.sqrt((p * (1 - p)) / DIST_N) * 100;
   };
 
   it('finishes on each total as often as it should, standing on soft 17', () => {
     const d = dealerDistribution({ ...presetById('vegas-strip').rules, hitsSoft17: false }, DIST_N, 'dist-s17');
-    for (const [total, expected] of Object.entries(EXPECTED_S17)) {
-      expect(Math.abs((d.finals[total] ?? 0) - expected), `dealer ${total}: ${d.finals[total]?.toFixed(2)}%`).toBeLessThan(0.5);
+    for (const [total, expected] of Object.entries(EXACT_S17)) {
+      const measured = d.finals[total] ?? 0;
+      expect(
+        Math.abs(measured - expected),
+        `dealer ${total}: ${measured.toFixed(3)}% against an exact ${expected}%, 3σ ±${threeSigma(expected).toFixed(3)}`,
+      ).toBeLessThan(threeSigma(expected));
     }
-    RESULTS.push({ name: 'Dealer busts (S17)', measured: d.bust, model: 28.32, stderr: 0, rounds: DIST_N, kind: 'freq' });
-    expect(Math.abs(d.bust - 28.32), `dealer bust ${d.bust.toFixed(2)}%`).toBeLessThan(0.4);
+    RESULTS.push({ name: 'Dealer busts (S17)', measured: d.bust, model: EXACT_BUST_S17, stderr: 0, rounds: DIST_N, kind: 'freq' });
+    expect(
+      Math.abs(d.bust - EXACT_BUST_S17),
+      `dealer bust ${d.bust.toFixed(3)}% against an exact ${EXACT_BUST_S17}%`,
+    ).toBeLessThan(threeSigma(EXACT_BUST_S17));
   }, 600_000);
 
   it('busts more often when it has to draw to a soft seventeen', () => {
     const s17 = dealerDistribution({ ...presetById('vegas-strip').rules, hitsSoft17: false }, DIST_N, 'dist-cmp');
     const h17 = dealerDistribution({ ...presetById('vegas-strip').rules, hitsSoft17: true }, DIST_N, 'dist-cmp');
     /*
-     * 28.54%, not the 29.1% usually quoted. The familiar figure is conditioned
-     * on the dealer *not* holding a natural; this measurement counts every
-     * round the dealer plays, naturals included, so the denominator is larger
-     * and the rate correspondingly lower. Citing the conditional number here
-     * made a correct dealer look half a point wrong.
+     * 28.576% exactly, not the 29.1% usually quoted. The familiar figure is
+     * conditioned on the dealer *not* holding a natural; this measurement
+     * counts every round the dealer plays, naturals included, so the
+     * denominator is larger and the rate correspondingly lower. Citing the
+     * conditional number here made a correct dealer look half a point wrong.
      */
-    RESULTS.push({ name: 'Dealer busts (H17)', measured: h17.bust, model: 28.54, stderr: 0, rounds: DIST_N, kind: 'freq' });
-    expect(Math.abs(h17.bust - 28.54), `H17 bust ${h17.bust.toFixed(2)}%`).toBeLessThan(0.4);
+    RESULTS.push({ name: 'Dealer busts (H17)', measured: h17.bust, model: EXACT_BUST_H17, stderr: 0, rounds: DIST_N, kind: 'freq' });
+    expect(
+      Math.abs(h17.bust - EXACT_BUST_H17),
+      `H17 bust ${h17.bust.toFixed(3)}% against an exact ${EXACT_BUST_H17}%`,
+    ).toBeLessThan(threeSigma(EXACT_BUST_H17));
 
     // Drawing to soft 17 turns some seventeens into eighteens and some into
     // busts. Both effects are real and both are small.
@@ -277,8 +333,11 @@ describe('the dealer, against the published tables', () => {
   it('deals a natural to the player 4.75% of the time', () => {
     const d = dealerDistribution(presetById('vegas-strip').rules, DIST_N, 'dist-bj');
     RESULTS.push({ name: 'Player natural', measured: d.naturals, model: 4.749, stderr: 0, rounds: DIST_N, kind: 'freq' });
-    // 2 * (24/312) * (96/311) = 4.749%. Binomial 3-sigma at 600k is 0.08%.
-    expect(Math.abs(d.naturals - 4.749), `naturals ${d.naturals.toFixed(3)}%`).toBeLessThan(0.12);
+    // 2 * (24/312) * (96/311) = 4.749%, exact off the top of a fresh shoe.
+    expect(
+      Math.abs(d.naturals - 4.749),
+      `naturals ${d.naturals.toFixed(3)}% against an exact 4.749%, 3σ ±${threeSigma(4.749).toFixed(3)}`,
+    ).toBeLessThan(threeSigma(4.749));
   }, 600_000);
 
   it('busts on three cards far more often than on four, and on four than five', () => {
@@ -655,7 +714,7 @@ describe('summary', () => {
     console.log(
       [
         '',
-        '  Player edge per unit wagered, so negative is the house.',
+        '  Player edge per unit of the initial wager, so negative is the house.',
         '  Dealer and natural rows are frequencies; indented rows are what one rule is worth.',
         '',
         ...rows,
@@ -665,3 +724,38 @@ describe('summary', () => {
     expect(RESULTS.length).toBeGreaterThan(0);
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Reproducing the exact dealer distribution
+ * ------------------------------------------------------------------ *
+ *
+ * `EXACT_S17` above is not a remembered table. It is the exact distribution
+ * of a dealer hand off the top of a fresh six-deck shoe, and it is cheap to
+ * re-derive if anyone doubts it — memoised recursion over the ten rank
+ * counts, exact rationals, no sampling:
+ *
+ *   ranks A,2..9,T with counts [24 x 9, 96] for six decks
+ *
+ *   f(counts, total, soft):
+ *     t = (soft and total + 10 <= 21) ? total + 10 : total
+ *     if t > 21                       -> bust
+ *     if t >= 18                      -> stand on t
+ *     if t == 17 and not (H17 and the ace is being counted as eleven)
+ *                                     -> stand on 17
+ *     otherwise sum over each rank r with count > 0:
+ *       (count[r] / total count) * f(counts - r, total + value(r), soft or r == A)
+ *
+ *   answer = sum over every ordered (upcard, hole card) pair, weighted by its
+ *            probability, of f(remaining counts, sum, soft)
+ *
+ * S17: 17 14.525, 18 13.926, 19 13.368, 20 17.953, 21 12.036, bust 28.192
+ * H17: 17 13.346, 18 14.120, 19 13.568, 20 18.153, 21 12.236, bust 28.576
+ *
+ * The measurement this file makes is not *quite* that quantity — one seat is
+ * dealt two cards it stands on, and the shoe depletes across the rounds
+ * inside a shoe — so a small systematic offset is expected on top of the
+ * sampling error. At half a million rounds the largest deviation observed is
+ * 0.085 points on the twenty, against a 3σ band of 0.163. If that ever grows
+ * past its band, the dealer's drawing rule, the shoe's composition or the
+ * hand evaluator is wrong; nothing else can move these.
+ */

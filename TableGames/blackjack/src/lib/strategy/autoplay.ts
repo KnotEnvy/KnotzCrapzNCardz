@@ -163,6 +163,7 @@ function noRound(table: TableState): RoundOutcome {
     table,
     net: 0,
     wagered: 0,
+    initialWagered: 0,
     insuranceNet: 0,
     insuranceWagered: 0,
     sideNet: 0,
@@ -185,8 +186,19 @@ export interface RoundOutcome {
    * bot's insurance wins into `net` and its insurance stake nowhere.
    */
   net: number;
-  /** Main-bet cents wagered, including doubles and split stakes. */
+  /**
+   * Main-bet cents wagered, including doubles and split stakes — the total
+   * action. Useful for variance, wrong for a house edge.
+   */
   wagered: number;
+  /**
+   * The cents in the circles before a card came out.
+   *
+   * This is the denominator every published house edge uses, and therefore
+   * the one the measurement suite divides by. `wagered` exceeds it by
+   * whatever the doubles and splits added.
+   */
+  initialWagered: number;
   /** Signed cents on insurance, and what was staked on it. */
   insuranceNet: number;
   insuranceWagered: number;
@@ -226,6 +238,21 @@ export function playRound(
     const res = setBet(t, id, betFor(t, id, config));
     if (res.ok) t = res.table;
   }
+
+  /*
+   * The denominator of a house edge, captured before a card is dealt.
+   *
+   * Every published blackjack edge — including the 0.40% baseline the rule
+   * model is built on — is expected loss per *initial* wager, not per unit of
+   * total action. Those are not the same number: basic strategy doubles and
+   * splits enough to put about 1.133 units on the felt for every unit bet, so
+   * dividing by the action reports an edge roughly 12% smaller in relative
+   * terms than the figure it is being compared to. On the default game that is
+   * 0.05 points, comfortably under the 0.38-point noise floor, which is why it
+   * sat here for five rounds of review agreeing with a model it was not
+   * actually a measurement of.
+   */
+  const initialWagered = seats.reduce((n, id) => n + seatOf(t, id).pendingBet, 0);
 
   const dealt = deal(t, rng);
   if (!dealt.ok) return noRound(t);
@@ -306,6 +333,7 @@ export function playRound(
     table: t,
     net: sum('MAIN'),
     wagered,
+    initialWagered,
     insuranceNet: sum('INSURANCE'),
     insuranceWagered,
     sideNet: sum('SIDE'),

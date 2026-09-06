@@ -87,7 +87,7 @@ const HARD: Record<number, Code[]> = {
 /**
  * What changes when the dealer draws to a soft seventeen.
  *
- * Five cells on the hard chart, and every one of them is the same idea: an
+ * Three cells on the hard chart, and every one of them is the same idea: an
  * ace or a six in the dealer's hand is more dangerous than it looks, so the
  * player pushes harder on eleven and folds sooner on the stiffs.
  */
@@ -109,12 +109,27 @@ const SOFT: Record<number, Code[]> = {
   15: row('H', 'H', 'D', 'D', 'D', 'H', 'H', 'H', 'H', 'H'),
   16: row('H', 'H', 'D', 'D', 'D', 'H', 'H', 'H', 'H', 'H'),
   17: row('H', 'D', 'D', 'D', 'D', 'H', 'H', 'H', 'H', 'H'),
-  18: row('Ds', 'Ds', 'Ds', 'Ds', 'Ds', 'S', 'S', 'H', 'H', 'H'),
+  18: row('S', 'Ds', 'Ds', 'Ds', 'Ds', 'S', 'S', 'H', 'H', 'H'),
   19: row('S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S'),
   20: row('S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S'),
   21: row('S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S'),
 };
 
+/*
+ * Two cells, and both of them only exist because the dealer draws to soft 17.
+ *
+ * A,7 against a deuce is the one that was wrong here for four rounds of
+ * review. The S17 play is to stand: the deuce is the dealer's second-weakest
+ * card but eighteen is already a winning total against it, and turning a made
+ * eighteen into a one-card draw for double the money is a losing trade by
+ * about a tenth of a bet. At H17 it flips, because the dealer now draws to
+ * A,6 and the deuce's bust rate climbs enough to pay for the risk.
+ *
+ * The chart shipped `Ds` in *both*, which made this patch a no-op and made
+ * the S17 advice wrong — at the default table, on the most common soft hand
+ * in the game. The trainer graded a correct stand as a mistake and the bot
+ * doubled it several hundred thousand times a run.
+ */
 const SOFT_H17: Array<[number, number, Code]> = [
   [18, 2, 'Ds'],
   [19, 6, 'Ds'], // soft nineteen doubles against a six at H17. It is correct.

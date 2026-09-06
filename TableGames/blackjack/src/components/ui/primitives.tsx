@@ -219,13 +219,60 @@ export function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  const panel = React.useRef<HTMLDivElement>(null);
+
+  /*
+   * Escape closes, Tab stays inside, and focus comes back where it started.
+   *
+   * Round five found this dialog with none of the three: opening it left
+   * focus on the button behind it, tabbing walked straight out into the felt,
+   * and closing it dropped focus on the document. On a felt whose own
+   * documentation claims keyboard-only play was verified, a modal you can tab
+   * out of is a modal you can lose.
+   */
   React.useEffect(() => {
     if (!open) return;
+
+    const restoreTo = document.activeElement as HTMLElement | null;
+    // After the panel has mounted, so there is something to focus.
+    const focusables = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+
+    const first = focusables()[0];
+    (first ?? panel.current)?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const active = document.activeElement as HTMLElement | null;
+      const at = active ? items.indexOf(active) : -1;
+      // Wrap at both ends, and pull focus back in if it has already escaped.
+      if (e.shiftKey && (at <= 0)) {
+        e.preventDefault();
+        items[items.length - 1].focus();
+      } else if (!e.shiftKey && (at === -1 || at === items.length - 1)) {
+        e.preventDefault();
+        items[0].focus();
+      }
     };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      restoreTo?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -237,9 +284,11 @@ export function Modal({
       role="presentation"
     >
       <div
+        ref={panel}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={cn(
           'sweep-in flex max-h-[88vh] w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-pit-900 shadow-2xl',

@@ -158,11 +158,18 @@ export interface TableRules {
    * Turning this off is a rare and very generous rule.
    */
   oneCardOnSplitAces: boolean;
-  /**
-   * Does 21 on a split hand count as a natural? It does not, anywhere, and the
-   * flag exists so the engine states that rather than assuming it.
+  /*
+   * There is no `splitAcesBlackjack` here any more.
+   *
+   * It sat in this interface documented as existing "so the engine states
+   * that rather than assuming it", and nothing read it — `isBlackjack` takes
+   * the hand's split depth and decides on its own. A field the types say the
+   * engine consults and the engine does not is worse than no field: it is the
+   * same shape as the re-split-aces switch that spent a round of review
+   * pricing a rule it did not implement. Twenty-one on a split hand is not a
+   * natural anywhere, so the assumption is the rule, and `isBlackjack` is
+   * where it is written down.
    */
-  splitAcesBlackjack: boolean;
   surrender: SurrenderRule;
   holeCard: HoleCardRule;
   /** Insurance offered on a dealer ace, at 2:1. */

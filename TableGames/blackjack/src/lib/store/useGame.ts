@@ -19,7 +19,7 @@
 
 import { useMemo } from 'react';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import {
   initAudio,
   sndBlackjack,
@@ -78,6 +78,7 @@ import type {
   TableRules,
   TableState,
 } from '@/lib/engine/types';
+import { isAce } from '@/lib/engine/types';
 import { advise, type Advice } from '@/lib/strategy/basic';
 import { decide, DEFAULT_BOT, type BotConfig } from '@/lib/strategy/autoplay';
 import { countTable, insuranceIsGood, type CountSystem } from '@/lib/strategy/counting';
@@ -181,6 +182,101 @@ export interface Prefs {
  */
 const WIDE_ENOUGH_FOR_PANEL = 1180;
 const panelDefault = typeof window === 'undefined' || window.innerWidth >= WIDE_ENOUGH_FOR_PANEL;
+
+/* ------------------------------------------------------------------ *
+ * Persistence
+ * ------------------------------------------------------------------ */
+
+/**
+ * localStorage, written at most once every `PERSIST_MS`.
+ *
+ * zustand's persist middleware wraps `setState`, so *every* `set()` in this
+ * file — and there are fifteen to twenty in a single round, counting each
+ * dealt card, each toast appearing and each toast dismissing — serialised the
+ * whole persisted slice and wrote it synchronously. Measured at three seats
+ * and four hundred rounds of history that slice is about 150 KB, most of it a
+ * 416-card shoe and a history list that did not change, and the write is on
+ * the main thread between two animation frames.
+ *
+ * Coalescing is safe because nothing reads this back inside a session: it is
+ * read once, at rehydration. Better than coalescing, most of those writes are
+ * of state that will be thrown away — `merge` below abandons any round that
+ * was in flight when the tab closed, because the driver's timers are gone and
+ * the money is half committed. So a write made between the deal and the
+ * settlement is a write of something no reload will ever use. The flush skips
+ * them and waits for the felt to come to rest, which takes a round's worth of
+ * writes down to one.
+ *
+ * What must not happen is losing the last write when the tab goes away, so
+ * the pending write is flushed unconditionally on `pagehide` and whenever the
+ * page is hidden — the two events a browser actually guarantees before it
+ * discards a tab, and the moment where a half-written round is still better
+ * than a stale one. `beforeunload` is deliberately not used; it is unreliable
+ * on mobile and it costs the back/forward cache.
+ */
+const PERSIST_MS = 400;
+
+function debouncedLocalStorage(): StateStorage {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: [string, string] | null = null;
+
+  /** True while a round is on the felt and anything written would be abandoned. */
+  const midRound = (): boolean => {
+    try {
+      return useGame.getState().table.phase !== 'BETTING';
+    } catch {
+      // Before the store finishes constructing there is no round to be in.
+      return false;
+    }
+  };
+
+  const flush = (force = false) => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (!pending) return;
+    if (!force && midRound()) {
+      // Come back when the felt is clear rather than writing a round that
+      // rehydration would abandon anyway.
+      timer = setTimeout(() => {
+        timer = null;
+        flush();
+      }, PERSIST_MS);
+      return;
+    }
+    const [key, value] = pending;
+    pending = null;
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // A full or blocked storage is not a reason to take the game down.
+    }
+  };
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    window.addEventListener('pagehide', () => flush(true));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush(true);
+    });
+  }
+
+  return {
+    getItem: (key) => localStorage.getItem(key),
+    removeItem: (key) => {
+      pending = null;
+      localStorage.removeItem(key);
+    },
+    setItem: (key, value) => {
+      pending = [key, value];
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        flush();
+      }, PERSIST_MS);
+    },
+  };
+}
 
 export interface GameStore {
   table: TableState;
@@ -465,20 +561,62 @@ export const useGame = create<GameStore>()(
             // The offers are open; the player decides and the driver waits.
             set({ busy: false });
             if (get().autoplay) {
+              /*
+               * The offers phase opens for two different reasons — insurance
+               * against an ace, and early surrender, which a table offering
+               * it opens against a ten as well. The bot used to insure on
+               * either, so an early-surrender table dealt a ten produced a
+               * row of "Insurance needs a dealer ace" refusals every time the
+               * count ran high.
+               */
+              const up = after.dealer.cards[0];
+              const insurable = after.rules.insurance && up && isAce(up);
               const count = countTable(after, get().prefs.countSystem);
-              if (get().bot.deviations && insuranceIsGood(count.true)) {
+              if (insurable && get().bot.deviations && insuranceIsGood(count.true)) {
                 for (const s of after.seats) {
                   if (s.hands.length > 0) get().takeInsurance(s.id, Math.floor(s.hands[0].bet / 2));
                 }
               }
-              later(() => get().declineInsurance(), ms(TIMING.botThink));
+              /*
+               * And early surrender is taken here, because this is the only
+               * moment it exists. The simulation's bot has always taken it —
+               * it is worth 0.63% and the setup screen prices it — while the
+               * bot playing on the felt walked past it, so the two disagreed
+               * about a rule the game charges for.
+               */
+              later(() => {
+                let guard = 0;
+                while (
+                  get().table.phase === 'INSURANCE' &&
+                  get().table.focus &&
+                  guard++ < 64
+                ) {
+                  const t = get().table;
+                  const choice = decide(t, get().bot);
+                  if (!choice || choice.action !== 'SURRENDER') break;
+                  const before = get().table;
+                  get().act('SURRENDER');
+                  if (get().table === before) break;
+                }
+                get().declineInsurance();
+              }, ms(TIMING.botThink));
             }
           }
         },
 
         act(action) {
           initAudio();
-          const { table, prefs } = get();
+          const { prefs } = get();
+          /*
+           * `table` is reassigned by the grading block below, and it has to
+           * be: grading writes the decision onto the seat, and the engine
+           * call that follows must be made against the table that carries
+           * it. It used to be a const snapshot taken here, so the grade was
+           * written and then overwritten by `apply(res)` a few lines later —
+           * every decision was counted and every count thrown away, which is
+           * why the trainer's session tally could never appear.
+           */
+          let { table } = get();
           if (table.phase !== 'PLAYER' && table.phase !== 'INSURANCE') return;
 
           // Grade before the move, while the hand it was made on still exists.
@@ -498,10 +636,8 @@ export const useGame = create<GameStore>()(
                 hand: hand.cards.map((c) => `${c.rank}`).join('-'),
                 upcard: `${up.rank}`,
               };
-              set((s) => ({
-                grades: [grade, ...s.grades].slice(0, 40),
-                table: recordDecision(s.table, table.focus!.seat, correct),
-              }));
+              table = recordDecision(table, table.focus.seat, correct);
+              set((s) => ({ grades: [grade, ...s.grades].slice(0, 40), table }));
               if (!correct) sound(sndWrong, 0.05);
             }
           }
@@ -665,7 +801,7 @@ export const useGame = create<GameStore>()(
     },
     {
       name: 'knotz-blackjack',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(debouncedLocalStorage),
       /*
        * Bumped when ShoeState gained a required `seed`. A shoe persisted by
        * version 1 comes back without one, and the first mid-round reshuffle

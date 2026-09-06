@@ -38,7 +38,6 @@ const COMMON = {
   doubleSoft: true,
   resplitAces: false,
   oneCardOnSplitAces: true,
-  splitAcesBlackjack: false,
   insurance: true,
   minBet: dollars(5),
   maxBet: dollars(2000),
