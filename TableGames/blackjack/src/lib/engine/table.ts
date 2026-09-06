@@ -231,25 +231,9 @@ export function seatOf(table: TableState, id: SeatId): Seat {
   return seat;
 }
 
-export function focusedHand(table: TableState): Hand | null {
-  if (!table.focus) return null;
-  return seatOf(table, table.focus.seat).hands[table.focus.hand] ?? null;
-}
-
 /** Every seat with a wager in the circle. */
 export function bettingSeats(table: TableState): Seat[] {
   return table.seats.filter((s) => s.occupied && s.pendingBet > 0);
-}
-
-/** Cents currently at risk on the felt, across every seat and every bet type. */
-export function atRisk(table: TableState): number {
-  let sum = 0;
-  for (const seat of table.seats) {
-    sum += seat.pendingBet + seat.insurance;
-    for (const h of seat.hands) if (!h.done || h.outcome === null) sum += h.bet;
-    for (const sb of seat.pendingSideBets) if (sb.net === null) sum += sb.amount;
-  }
-  return sum;
 }
 
 /* ------------------------------------------------------------------ *
@@ -280,7 +264,19 @@ export function setBet(table: TableState, seatId: SeatId, amount: number): Actio
 
   return ok(
     produce(table, (d) => {
-      d.seats.find((s) => s.id === seatId)!.pendingBet = amount;
+      const s = d.seats.find((x) => x.id === seatId)!;
+      s.pendingBet = amount;
+      /*
+       * A side bet may not exceed the wager on the hand, and lowering the
+       * wager has to enforce that as much as raising the side bet does.
+       * Without this, betting $100 with $100 on Lucky Ladies and then dropping
+       * the hand to $5 leaves a 17.6% bet twenty times the size of a 0.5% one
+       * — which is exactly the shape the cap exists to prevent. Clearing the
+       * circle takes the side bets down with it, rather than leaving chips on
+       * the felt that the deal would silently ignore.
+       */
+      if (amount === 0) s.pendingSideBets = [];
+      else s.pendingSideBets = s.pendingSideBets.map((sb) => (sb.amount > amount ? { ...sb, amount } : sb));
     }),
   );
 }

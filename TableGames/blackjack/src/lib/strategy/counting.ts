@@ -12,7 +12,7 @@
  * and is deliberately not wired to any of this.
  */
 
-import type { Card, Rank, ShoeState } from '@/lib/engine/types';
+import type { Card, ShoeState } from '@/lib/engine/types';
 import { rankValue } from '@/lib/engine/types';
 
 export type CountSystem = 'HI_LO' | 'KO' | 'OMEGA_II' | 'HI_OPT_II';
@@ -310,5 +310,3 @@ export function fmtCount(n: number): string {
   const rounded = Math.round(n * 10) / 10;
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}`;
 }
-
-export type { Rank };

@@ -25,7 +25,7 @@
  */
 
 import type { Rng } from './rng';
-import type { Card, Rank, ShoeState, Suit } from './types';
+import type { Card, ShoeState } from './types';
 import { RANKS, SUITS } from './types';
 
 /** One deck, in a fixed order. The shuffle is what makes it random. */
@@ -135,42 +135,8 @@ export function draw(shoe: ShoeState): { card: Card; shoe: ShoeState } {
   };
 }
 
-/** Draw `n` cards at once, for the deal. */
-export function drawMany(shoe: ShoeState, n: number): { cards: Card[]; shoe: ShoeState } {
-  const cards: Card[] = [];
-  let s = shoe;
-  for (let i = 0; i < n; i++) {
-    const step = draw(s);
-    cards.push(step.card);
-    s = step.shoe;
-  }
-  return { cards, shoe: s };
-}
 
-/**
- * The discard tray: every card dealt since the shuffle, oldest first.
- *
- * This copies, so it is for display and for tests rather than for the count —
- * `countShoe` walks the same range in place. It exists because "show me what
- * has been dealt" is a reasonable question and reaching into `cards.slice` at
- * the call site would put the `pos` boundary in three files instead of one.
- */
-export function discardTray(shoe: ShoeState): Card[] {
-  return shoe.cards.slice(0, shoe.pos);
-}
 
-/**
- * A composition census of what is left, by rank.
- *
- * The simulation suite uses it to assert that a freshly built shoe holds
- * exactly the cards it should. Not something a player could compute at the
- * table, which is why nothing in the playing UI reads it.
- */
-export function composition(shoe: ShoeState): Record<Rank, number> {
-  const out = Object.fromEntries(RANKS.map((r) => [r, 0])) as Record<Rank, number>;
-  for (let i = shoe.pos; i < shoe.size; i++) out[shoe.cards[i].rank]++;
-  return out;
-}
 
 /** For the tests: is every suit and rank present exactly `decks` times? */
 export function isCompleteShoe(shoe: ShoeState, decks: number): boolean {
@@ -182,15 +148,4 @@ export function isCompleteShoe(shoe: ShoeState, decks: number): boolean {
   if (seen.size !== RANKS.length * SUITS.length) return false;
   for (const count of seen.values()) if (count !== decks) return false;
   return true;
-}
-
-/** Used by the tests to deal a chosen sequence. Not reachable from the UI. */
-export function stackShoe(order: Array<[Rank, Suit]>, filler: ShoeState): ShoeState {
-  const stacked: Card[] = order.map(([rank, suit], i) => ({ rank, suit, id: 10_000 + i }));
-  return {
-    ...filler,
-    cards: [...stacked, ...filler.cards.slice(filler.pos)],
-    pos: 0,
-    size: filler.size - filler.pos + stacked.length,
-  };
 }

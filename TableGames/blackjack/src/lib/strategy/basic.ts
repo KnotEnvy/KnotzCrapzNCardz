@@ -38,7 +38,7 @@
  */
 
 import { handValue, isPair } from '@/lib/engine/hand';
-import type { Card, Hand, Rank, TableRules } from '@/lib/engine/types';
+import type { Card, Hand, TableRules } from '@/lib/engine/types';
 import { rankValue } from '@/lib/engine/types';
 import type { Action } from '@/lib/engine/types';
 
@@ -460,5 +460,3 @@ export const CODE_TONE: Record<Code, 'hit' | 'stand' | 'double' | 'split' | 'sur
 export function upcardLabel(value: number): string {
   return value === 11 ? 'A' : String(value);
 }
-
-export type { Rank };

@@ -713,6 +713,31 @@ describe('side bets', () => {
     expect(setSideBet(t, 'A', 'PERFECT_PAIRS', dollars(11))).toMatchObject({ ok: false });
   });
 
+  /*
+   * The cap has to hold when the *main* bet moves, not only when the side bet
+   * does. Betting the maximum on both and then dropping the hand to the table
+   * minimum would otherwise leave a seventeen-percent bet twenty times the
+   * size of a half-percent one, which is the exact shape the cap exists to
+   * prevent.
+   */
+  it('brings a side bet down with the wager it is capped against', () => {
+    let t = withCards([], { sideBets: { ...defaultRules().sideBets, LUCKY_LADIES: true } });
+    t = bet(t, dollars(100));
+    const withSide = setSideBet(t, 'A', 'LUCKY_LADIES', dollars(100));
+    if (!withSide.ok) throw new Error(withSide.reason);
+    t = withSide.table;
+
+    const lowered = setBet(t, 'A', dollars(5));
+    if (!lowered.ok) throw new Error(lowered.reason);
+    expect(lowered.table.seats[0].pendingSideBets[0].amount).toBe(dollars(5));
+
+    // Clearing the circle takes the side bets with it rather than leaving
+    // chips on the felt that the deal would silently ignore.
+    const cleared = setBet(lowered.table, 'A', 0);
+    if (!cleared.ok) throw new Error(cleared.reason);
+    expect(cleared.table.seats[0].pendingSideBets).toHaveLength(0);
+  });
+
   it('refuses a side bet the table does not book', () => {
     let t = withCards([], { sideBets: { ...defaultRules().sideBets, LUCKY_LADIES: false } });
     t = bet(t, dollars(10));

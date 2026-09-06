@@ -35,7 +35,7 @@
  */
 
 import { winnings } from './money';
-import type { Card, Rank, SideBetKind, Suit } from './types';
+import type { Card, SideBetKind } from './types';
 import { isRed, rankValue } from './types';
 
 /* ------------------------------------------------------------------ *
@@ -369,6 +369,3 @@ export function topLine(kind: SideBetKind): PayLine {
 export function enabledSideBets(enabled: Record<SideBetKind, boolean>): SideBetKind[] {
   return SIDE_BET_ORDER.filter((k) => enabled[k]);
 }
-
-/** Exported for the composition tests: which ranks and suits a spec can pay on. */
-export type { Rank, Suit };
