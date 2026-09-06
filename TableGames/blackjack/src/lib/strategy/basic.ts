@@ -222,10 +222,13 @@ const FEW_DECK_ONE: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = 
  *
  * These are the hard-total cells of the standard Atlantic City 1978 set,
  * which is the table early surrender is written for. The pair cells of that
- * set (3,3 and 7,7 and 8,8 against an ace, 7,7 and 8,8 against a ten) are
- * deliberately **not** here — they are the part of the published chart I am
- * least able to check, and a chart that grades a player has no business
- * carrying a cell nobody has verified. `openItems` says so. What is here is
+ * set (3,3 and 6,6 and 7,7 and 8,8 against an ace, 7,7 and 8,8 against a ten)
+ * are deliberately **not** here — they are the part of the published chart I
+ * am least able to check, and a chart that grades a player has no business
+ * carrying a cell nobody has verified. `openItems` says so, including the
+ * inconsistency the omission leaves behind: `PAIRS_H17` already surrenders
+ * 8,8 against an ace, so an early-surrender table advises that one hand
+ * differently depending on the dealer's soft-17 rule. What is here is
  * the bulk of the rule and it is unambiguous.
  */
 const EARLY_SURRENDER: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [

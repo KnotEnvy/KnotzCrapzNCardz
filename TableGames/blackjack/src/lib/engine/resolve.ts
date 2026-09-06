@@ -19,7 +19,7 @@
  * function ends up paying doubles twice, so they are named apart everywhere.
  */
 
-import { handValue, isBlackjack } from './hand';
+import { handIsBlackjack, handValue, isBlackjack } from './hand';
 import { winnings } from './money';
 import { blackjackRatio, INSURANCE_RATIO } from './rules';
 import { resolveBustIt } from './sidebets';
@@ -174,7 +174,7 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
       const res = settleHand(hand, dealerCards, dealerBJ, table.rules);
       bankroll += res.returned;
       net += res.net;
-      bumpStats(stats, res.outcome);
+      bumpStats(stats, res.outcome, handIsBlackjack(hand));
 
       settlements.push({
         seat: seat.id,
@@ -275,10 +275,21 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
 /** Kept short enough that the charts stay responsive on a phone. */
 const HISTORY_LIMIT = 300;
 
-function bumpStats(stats: SeatStats, outcome: HandOutcome): void {
+/**
+ * `natural` is passed separately from the outcome, and it has to be.
+ *
+ * A player's natural against a dealer's natural pushes, so it settles as
+ * PUSH and never reaches the BLACKJACK case — which meant the panel's
+ * "blackjacks" figure, captioned "naturals dealt", quietly excluded about one
+ * natural in twenty-two. Over three million rounds that reads 4.55% against a
+ * true 4.749%, and the missing 4.2% is exactly the dealer-natural rate. It is
+ * the same shape as the wagered-versus-staked mix-up: a number that is right
+ * about something nobody asked it.
+ */
+function bumpStats(stats: SeatStats, outcome: HandOutcome, natural: boolean): void {
+  if (natural) stats.blackjacks += 1;
   switch (outcome) {
     case 'BLACKJACK':
-      stats.blackjacks += 1;
       stats.wins += 1;
       break;
     case 'WIN':

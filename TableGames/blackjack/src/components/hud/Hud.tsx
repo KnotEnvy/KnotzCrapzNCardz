@@ -178,7 +178,7 @@ function SessionPanel() {
         label="Measured edge"
         value={agg.handsPlayed >= 25 ? `${measured.toFixed(2)}%` : `needs ${25 - agg.handsPlayed} more`}
         tone={measured > 0 ? 'bad' : measured < 0 ? 'good' : undefined}
-        title="Your loss on the hands themselves, as a fraction of what you wagered on them — side bets and insurance are shown separately below. It takes thousands of hands to mean anything."
+        title="Your loss on the hands themselves, per dollar you put in the circle before the cards came out — not per dollar of total action, which the Wagered line above counts and which doubles and splits push about 13% higher. Every published house edge means the first one. Side bets and insurance are shown separately below, and it takes thousands of hands to mean anything."
       />
 
       <div className="my-2 border-t border-white/6" />

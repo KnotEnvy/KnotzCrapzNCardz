@@ -296,11 +296,18 @@ function ActionBar() {
         README's "each button knows why it is unavailable and says so rather
         than sitting there dead" was true of the data and false of the felt.
         Printing them is duller than a tooltip and it is the only version that
-        reaches a keyboard, a phone and a screen reader alike. The `title` and
-        `aria-describedby` above stay, so a mouse still gets the hover and an
-        assistive reader still gets the association.
+        reaches a keyboard, a phone and a screen reader alike. The printed text
+        is doing all of the work: a `disabled` button is not focusable, so the
+        `aria-describedby` on it is unreachable in practice and stays only for
+        the case where a reader walks the tree rather than the tab order. The
+        `title` stays for the hover.
+
+        Rendered whenever there is a refusal to show — including while the
+        driver is busy, which is when the buttons are dead but the rules
+        behind them have not changed. Hiding it there left the buttons'
+        `aria-describedby` pointing at nothing.
       */}
-      {refusals.length > 0 && !busy ? (
+      {refusals.length > 0 ? (
         <p className="max-w-xl text-center text-[10px] leading-tight text-pit-500">
           {refusals.map(({ action, reason }) => (
             <span key={action} id={`why-${action}`} className="mr-2 inline-block">
@@ -357,6 +364,49 @@ function WaitingBar() {
  * is the thing that makes a hundred hands feel like work. Space deals and
  * stands, which covers most of a session on its own.
  */
+/**
+ * Should the game's own keyboard handler leave this keystroke alone?
+ *
+ * Two separate reasons, and a round of judging for each.
+ *
+ * A form field always wins: typing a seat name should not deal a round.
+ *
+ * Enter and Space are harder, because they are both the game's shortcuts and
+ * the two keys every button on the page is activated with. Round six found
+ * the handler swallowing them from every focused control — focus "Paytables",
+ * press Enter, and a round was dealt instead of the dialog opening — so a
+ * guard was added for any focused button. Round seven found what that guard
+ * cost: a *mouse* click leaves focus on the button it clicked, so after
+ * clicking Hit the Hit button held focus and Space re-hit the hand instead of
+ * standing it, which is the shortcut the README leads with.
+ *
+ * `:focus-visible` is the distinction the platform already draws, and it is
+ * exactly the one wanted here: it matches a control the browser is showing a
+ * focus ring on — one reached by keyboard — and not one that merely holds
+ * focus because it was clicked. So a keyboard user's Enter reaches their
+ * button, and a mouse user's Space still stands the hand.
+ *
+ * Exported, and taking an element rather than reading the DOM, because the
+ * whole of this decision is worth a test and the suite runs in node.
+ */
+export function ignoresGameKey(key: string, target: Element | null): boolean {
+  if (!target) return false;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true;
+  if (key !== ' ' && key !== 'enter') return false;
+
+  const control = target.closest?.('button, a, [role="switch"], [tabindex]');
+  if (!control) return false;
+  try {
+    // Focused by keyboard, so the browser is drawing a ring on it and the
+    // player is aiming at it. Focused by a click, so they are not.
+    return control.matches(':focus-visible');
+  } catch {
+    // No `:focus-visible` support. Yielding is the safer half: a swallowed
+    // shortcut is an annoyance, an uncontrollable header is a wall.
+    return true;
+  }
+}
+
 export function useKeyboard(): void {
   const act = useGame((s) => s.act);
   const deal = useGame((s) => s.deal);
@@ -365,31 +415,8 @@ export function useKeyboard(): void {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      /*
-       * Stand down for anything the browser is already going to activate.
-       *
-       * This exempted only form fields, so Enter and Space — the two keys
-       * every button on the page is activated with — were swallowed by the
-       * game and `preventDefault()`ed before the focused control ever saw
-       * them. Focus "Paytables" and press Enter and a round was dealt instead
-       * of the dialog opening; focus "Stats" during a hand and press Space
-       * and the hand stood. That made the entire header keyboard-inoperable,
-       * on a game whose whole argument for shortcuts is that reaching for a
-       * mouse a hundred times an hour is what makes it feel like work.
-       *
-       * The single-letter shortcuts are unaffected: a focused button does
-       * nothing with H or S, so those still reach the table.
-       */
       const key = e.key.toLowerCase();
-      const target = e.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-      if (
-        target &&
-        (key === ' ' || key === 'enter') &&
-        target.closest('button, a, [role="switch"], [tabindex]')
-      ) {
-        return;
-      }
+      if (ignoresGameKey(key, e.target as Element | null)) return;
 
       const { table, dialog } = useGame.getState();
       /*

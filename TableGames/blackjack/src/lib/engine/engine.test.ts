@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from './rng';
 import { createShoe, isCompleteShoe, shuffle } from './shoe';
-import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, resetHandIds, seatOf, setRules } from './table';
+import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, rebet, resetHandIds, seatOf, setRules } from './table';
 import { settle, settleHand } from './resolve';
 import { canDouble, dealerShouldHit, handValue, isBlackjack, isPair, displayTotal } from './hand';
 import { fmt, winnings } from './money';
@@ -29,9 +29,11 @@ import {
   resolveTwentyOnePlusThree,
   sideBetEdge,
   sideBetEdgeIsExact,
+  enumerateSideBetEdge,
+  SIDE_BET_ORDER,
   SIDE_BET_SPECS,
 } from './sidebets';
-import type { Card, Rank, Suit, TableRules, TableState } from './types';
+import type { Card, Rank, Suit, SideBetWager, TableRules, TableState } from './types';
 import { dollars } from './money';
 
 /* ------------------------------------------------------------------ *
@@ -783,6 +785,29 @@ describe('side bets', () => {
    * argument is that the honest way to offer a bad bet is to print the number
    * beside it, that is the worst place to be eight times too kind.
    */
+  /*
+   * The precomputed table, regenerated.
+   *
+   * `sideBetEdge` reads a constant because the enumeration behind it is up to
+   * sixty milliseconds of ordered triples and the UI reads these figures
+   * during render. This is what keeps the constant honest: every cell is
+   * recomputed from the paytables and compared. Editing a paytable without
+   * regenerating the table fails here, which is the same guarantee the
+   * enumeration gave when it ran at runtime — for the price of a second in
+   * the fast suite rather than a stall on the felt.
+   */
+  it('has a precomputed edge table that matches the enumeration', () => {
+    for (const decks of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      for (const kind of SIDE_BET_ORDER) {
+        if (!sideBetEdgeIsExact(kind)) continue;
+        expect(
+          sideBetEdge(kind, decks),
+          `${kind} at ${decks} deck${decks === 1 ? '' : 's'}`,
+        ).toBeCloseTo(enumerateSideBetEdge(kind, decks), 5);
+      }
+    }
+  });
+
   it('prices a side bet for the shoe in front of the player', () => {
     // Six decks reproduces the published figures the sim suite enumerates.
     expect(sideBetEdge('PERFECT_PAIRS', 6)).toBeCloseTo(6.109, 2);
@@ -1021,6 +1046,73 @@ describe('the betting circle', () => {
    * so raising it above a seat's bankroll produced a wager the seat could not
    * pay, and `deal` subtracted it anyway.
    */
+  /*
+   * `rebet` is the third door into a betting circle, after `setBet` and
+   * `setRules`, and it went five rounds of review without a test at all —
+   * which is how it came to check the bankroll and the maximum and not the
+   * minimum. A table minimum raised between rounds let last round's smaller
+   * wager straight back in, and `deal` books whatever it finds in the circle.
+   */
+  /*
+   * A natural that pushes is still a natural. The panel's "blackjacks" count
+   * is captioned "naturals dealt", and it used to be incremented only by the
+   * BLACKJACK outcome — so a player natural against a dealer natural, which
+   * settles as a push, was never counted. Over three million rounds that
+   * reads 4.55% against a true 4.749%.
+   */
+  it('counts a natural that pushes as a natural', () => {
+    // Player A,K; dealer A,K. Both naturals, so the hand pushes.
+    let t = bet(withCards([[14, S], [14, H], [13, D], [13, C]]));
+    t = must(deal(t, rng()));
+    if (t.phase === 'INSURANCE') t = must(closeOffers(t));
+    if (t.phase === 'DEALER') t = dealerPlayOut(t);
+    const settled = settle(t).table;
+
+    const stats = seatOf(settled, 'A').stats;
+    expect(stats.pushes).toBe(1);
+    expect(stats.wins).toBe(0);
+    expect(stats.blackjacks, 'the natural still happened').toBe(1);
+  });
+
+  describe('re-betting last round', () => {
+    const previous = (main: number, side: SideBetWager[] = []) =>
+      new Map([['A' as const, { main, side }]]);
+
+    it('puts back what was there', () => {
+      let t = withCards([]);
+      t = must(rebet(t, previous(dollars(25))));
+      expect(seatOf(t, 'A').pendingBet).toBe(dollars(25));
+    });
+
+    it('refuses a wager the table minimum has moved past', () => {
+      const t = { ...withCards([]), rules: { ...defaultRules(), minBet: dollars(50) } };
+      // Last round's $25 is below the new $50 minimum. It cannot come back.
+      expect(rebet(t, previous(dollars(25)))).toMatchObject({ ok: false });
+    });
+
+    it('refuses a wager the table maximum or the bankroll has moved past', () => {
+      const capped = { ...withCards([]), rules: { ...defaultRules(), maxBet: dollars(20) } };
+      expect(rebet(capped, previous(dollars(25)))).toMatchObject({ ok: false });
+
+      const broke = withCards([]);
+      const poor: TableState = {
+        ...broke,
+        seats: broke.seats.map((s) => (s.id === 'A' ? { ...s, bankroll: dollars(10) } : s)),
+      };
+      expect(rebet(poor, previous(dollars(25)))).toMatchObject({ ok: false });
+    });
+
+    it('drops a side bet the table no longer books', () => {
+      const t = withCards([]);
+      const side: SideBetWager[] = [
+        { kind: 'LUCKY_LADIES', amount: dollars(5), net: null, label: null, jackpot: null, bonus: null },
+      ];
+      // The default table books no side bets, so only the main wager returns.
+      const back = must(rebet(t, previous(dollars(25), side)));
+      expect(seatOf(back, 'A').pendingSideBets).toEqual([]);
+    });
+  });
+
   describe('changing the rules under standing chips', () => {
     const withBankroll = (t: TableState, cents: number): TableState => ({
       ...t,

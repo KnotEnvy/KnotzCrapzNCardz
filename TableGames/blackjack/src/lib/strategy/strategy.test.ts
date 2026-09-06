@@ -411,16 +411,42 @@ describe('chart integrity', () => {
     expect(at(late, 5, 11)).toBe('H');
     expect(at(early, 5, 11)).toBe('R');
 
-    // The two charts have to differ *only* against a ten and an ace: the peek
-    // moving changes nothing about a dealer six.
+    /*
+     * And the two charts differ in *exactly* these cells and no others.
+     *
+     * Asserting only "they differ against a ten and an ace" does not
+     * constrain which ten and ace cells moved, so a chart that surrendered
+     * hard 8 against an ace — which is a losing play, at -0.444 against the
+     * -0.5 that surrender pays — would pass it. The set below is the whole
+     * delta, so a cell added or dropped fails here.
+     */
+    const moved: string[] = [];
     for (const total of Object.keys(early.hard).map(Number)) {
       for (const up of UPCARDS) {
-        if (up === 10 || up === 11) continue;
-        expect(at(early, total, up), `hard ${total} v ${up}`).toBe(at(late, total, up));
+        if (at(early, total, up) !== at(late, total, up)) moved.push(`${total}v${up}`);
       }
     }
+    /*
+     * Nine cells, not the twelve `EARLY_SURRENDER` lists: late surrender
+     * already folds 16 against a ten and an ace and 15 against a ten, so
+     * those three are the same on both charts. The delta is what early
+     * surrender adds *on top of* late surrender, which is the comparison a
+     * player choosing between the two rules is actually making.
+     */
+    expect(moved.sort()).toEqual(
+      [
+        '5v11', '6v11', '7v11', '12v11', '13v11', '14v11', '15v11', '17v11',
+        '14v10',
+      ].sort(),
+    );
+
+    // The soft and pair charts are untouched: nothing about a soft total or a
+    // pair changes when the peek moves, in the set implemented here.
     for (const row of Object.keys(early.soft).map(Number)) {
-      expect(early.soft[row]).toEqual(late.soft[row]);
+      expect(early.soft[row], `soft ${row}`).toEqual(late.soft[row]);
+    }
+    for (const row of Object.keys(early.pairs).map(Number)) {
+      expect(early.pairs[row], `pair ${row}`).toEqual(late.pairs[row]);
     }
   });
 
@@ -780,18 +806,88 @@ describe('counting', () => {
    * the same Hi-Lo equivalent from a different running count, which is the
    * whole point of having one.
    */
+  /*
+   * The conversion, checked against a shoe rather than against itself.
+   *
+   * The first version of this test asserted `hiLoEquivalent(12, 3, 'OMEGA_II')
+   * === 2`, which is the implementation restated: it would have passed for any
+   * scale factor the implementation happened to pick. What the conversion has
+   * to be is *unbiased against the real Hi-Lo count of the same shoe* — deal a
+   * few hundred cards, ask each system what it thinks, and see whether the
+   * converted answer lands where Hi-Lo actually is.
+   */
   it('converts each system to the Hi-Lo count its indices are written in', () => {
     // Knock-Out's pivot is +4 for every shoe size, and at the pivot its own
     // claim — that you never need to divide — is exactly true.
     expect(hiLoEquivalent(4, 1, 'KO')).toBeCloseTo(4, 6);
     expect(hiLoEquivalent(4, 3, 'KO')).toBeCloseTo(4, 6);
     expect(hiLoEquivalent(-20, 6, 'KO')).toBeCloseTo(0, 6);
-
-    // A balanced level-one count is already the number the indices use.
+    // And a balanced level-one count is already the number the indices use.
     expect(hiLoEquivalent(6, 3, 'HI_LO')).toBeCloseTo(2, 6);
 
-    // Level-two tags run to ±2, so their true counts run to about double.
-    expect(hiLoEquivalent(12, 3, 'OMEGA_II')).toBeCloseTo(2, 6);
-    expect(hiLoEquivalent(12, 3, 'HI_OPT_II')).toBeCloseTo(2, 6);
+    for (const system of COUNT_ORDER) {
+      if (system === 'HI_LO') continue;
+
+      let error = 0;
+      let errorSq = 0;
+      let worst = 0;
+      let samples = 0;
+
+      for (let trial = 0; trial < 240; trial++) {
+        const decks = [1, 2, 6, 8][trial % 4];
+        const shoe = createShoe(decks, 0.9, createRng(`conv-${system}-${trial}`), 1);
+        // Walk the shoe in steps, comparing at each depth.
+        for (let pos = 26; pos < shoe.size * 0.8; pos += 26) {
+          const dealt = { ...shoe, pos };
+          const truth = countShoe(dealt, 'HI_LO', decks).true;
+          const converted = countShoe(dealt, system, decks).hiLo;
+          const d = converted - truth;
+          error += d;
+          errorSq += d * d;
+          worst = Math.max(worst, Math.abs(d));
+          samples++;
+        }
+      }
+
+      /*
+       * What is asserted is the centre, and what the centre is allowed to be
+       * is a tenth of a true count.
+       *
+       * These are conversions between systems that genuinely disagree about a
+       * given shoe — Knock-Out counts the seven, the level-two counts are
+       * ace-neutral — so the per-state spread is large and real, and only the
+       * average is a claim about the conversion.
+       *
+       * The three residuals measured here are -0.087 (KO), -0.056 (Omega II)
+       * and -0.077 (Hi-Opt II). They are correlated, because these systems
+       * are read off the same seeded shoes, and the level-two pair is inside
+       * sampling error. Knock-Out's is not quite: it is a small real bias, and
+       * it has a cause. The conversion inverts `E[sevens seen] = 4(D - r)`,
+       * an *unconditional* expectation, while the quantity actually wanted is
+       * conditional on the count you are holding — and a high KO count partly
+       * *is* sevens seen, so conditioning on it implies more of them than
+       * average. No single linear map can remove that; a shrinkage factor
+       * could, and inventing one nobody has checked is how a chart cell comes
+       * to be wrong for four rounds.
+       *
+       * A tenth of a true count is worth about 0.05% of edge, against index
+       * numbers that are integers and a ramp whose steps are a whole count
+       * apart. It changes no decision this game makes. A conversion wrong by
+       * even ten percent, by contrast, would show here as a bias several
+       * times this and growing with the count — which is what this catches.
+       */
+      const bias = error / samples;
+      const sd = Math.sqrt(Math.max(0, errorSq / samples - bias * bias));
+      const threeSigma = (3 * sd) / Math.sqrt(samples);
+
+      expect(
+        Math.abs(bias),
+        `${system} bias ${bias.toFixed(4)} over ${samples} shoe states (naive 3σ ±${threeSigma.toFixed(4)}; the states are not independent, so that band is optimistic)`,
+      ).toBeLessThan(0.1);
+
+      // And no single state may be absurd, which an inverted sign or a
+      // division by a depleted shoe would be.
+      expect(worst, `${system} worst single-state error ${worst.toFixed(2)}`).toBeLessThan(12);
+    }
   });
 });

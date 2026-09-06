@@ -63,8 +63,8 @@ published for fifty years:
 | Dealer busts, six decks, S17 | 28.13% | 28.192% |
 | Dealer busts, H17 | 28.53% | 28.576% |
 | Player is dealt a natural | 4.77% | 4.749% |
-| Vegas Strip house edge | 0.64% | 0.40% (model) |
-| Mimicking the dealer instead | 5.95% | 5.5% |
+| Vegas Strip house edge | 0.41% ± 0.07 | 0.40% (model) |
+| Mimicking the dealer instead | 5.95% | ~5.5% |
 | Flat bettor's hands at a true count of +2 or better | **+1.45% to the player** | |
 | the same hands at −2 or worse | −2.80% | |
 
@@ -82,6 +82,18 @@ a model quoted per initial bet — the difference is 0.05 points on the default
 game, comfortably beneath a 0.38-point noise floor, which is exactly why it
 took that long to notice.
 
+The first three rows have an *exact* right-hand column; the fourth has an
+error bar, and it needs one. A single 800,000-round run of the Vegas Strip
+preset measures 0.64%, and a second and third measure 0.34% — the per-hand
+standard deviation of blackjack is about 1.15 units, so one run of that size
+places the edge to about ±0.13 and no better. Pooled over three million rounds
+the answer is 0.408% ± 0.066 against a model of 0.400%, which is agreement to
+an eighth of a standard error. Printing one run's point estimate in a column
+next to three exact figures, with no band, made a correct engine look like a
+disagreement — and it is the same mistake, in the opposite direction, as the
+tolerances that let a wrong dealer table through: a number quoted to more
+precision than it has.
+
 The right-hand column of the first three rows is *exact*, not published. The
 dealer's finishing distribution off a fresh six-deck shoe is a finite sum, so
 the suite enumerates it — every ordered upcard and hole card, weighted by its
@@ -91,6 +103,11 @@ of those numbers were wrong: the twenty by 0.37 points and the bust rate by
 0.19. Nothing failed, because the tolerances were six and eight standard
 errors while the comment beside them claimed three. This table reported a
 correct dealer as low against a figure that was itself the error.
+
+The mimic-the-dealer row is the one figure here still compared to a
+remembered number, and the two are not quite the same experiment: the 5.48%
+usually quoted for copying the dealer assumes a natural pays even money, while
+this bot is paid 3:2 like any other player. The tilde is doing real work.
 
 Both bust figures count every round the dealer plays out, naturals included.
 The 29.1% you will more often see quoted for H17 is conditioned on the dealer
@@ -186,7 +203,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 168 tests, about a second
+pnpm test            # the fast suite — 179 tests, about two seconds
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets

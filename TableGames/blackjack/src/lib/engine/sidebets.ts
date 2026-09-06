@@ -43,8 +43,7 @@
 
 import { winnings } from './money';
 import type { Card, SideBetKind } from './types';
-import { RANKS, SUITS } from './types';
-import { isRed, rankValue } from './types';
+import { RANKS, SUITS, isAce as isAceCard, isRed, rankValue } from './types';
 
 /* ------------------------------------------------------------------ *
  * Specs
@@ -389,24 +388,65 @@ export function resolveSuperSevens(
  * six decks and returned unchanged — {@link sideBetEdgeIsExact} says which is
  * which, so the UI can qualify it rather than overstate it.
  */
-const EDGE_CACHE = new Map<string, number>();
+/**
+ * The answers, precomputed.
+ *
+ * `enumerateSideBetEdge` walks up to 140,608 ordered triples, which takes
+ * about sixty milliseconds — nothing in a test and a visible stall on the
+ * main thread, and these figures are read *during render*: once per seat per
+ * enabled bet on the felt, and for all six kinds on every keystroke in the
+ * rules editor. Stepping the deck selector from eight to one paid it five
+ * times over, synchronously, inside React.
+ *
+ * So the table is a constant and the enumeration is the thing that proves it:
+ * `engine.test.ts` recomputes every cell and asserts it matches. That keeps
+ * the property that made the enumeration worth having — the number on the
+ * chip is derived, not remembered — while costing a lookup instead of a
+ * hitch. Regenerate by running that test and reading the failure.
+ */
+const EDGE_TABLE: Record<number, Record<string, number>> = {
+  1: { PERFECT_PAIRS: 47.058824, TWENTY_ONE_PLUS_THREE: 18.208145, LUCKY_LADIES: 36.048265, ROYAL_MATCH: 10.859729, SUPER_SEVENS: 39.819005 },
+  2: { PERFECT_PAIRS: 22.330097, TWENTY_ONE_PLUS_THREE: 11.167245, LUCKY_LADIES: 24.938866, ROYAL_MATCH: 8.32711, SUPER_SEVENS: 27.307473 },
+  3: { PERFECT_PAIRS: 14.193548, TWENTY_ONE_PLUS_THREE: 8.071928, LUCKY_LADIES: 21.278311, ROYAL_MATCH: 7.493797, SUPER_SEVENS: 20.080565 },
+  4: { PERFECT_PAIRS: 10.144928, TWENTY_ONE_PLUS_THREE: 6.390233, LUCKY_LADIES: 19.45602, ROYAL_MATCH: 7.079153, SUPER_SEVENS: 15.919299 },
+  5: { PERFECT_PAIRS: 7.722008, TWENTY_ONE_PLUS_THREE: 5.339098, LUCKY_LADIES: 18.365202, ROYAL_MATCH: 6.831007, SUPER_SEVENS: 13.250357 },
+  6: { PERFECT_PAIRS: 6.109325, TWENTY_ONE_PLUS_THREE: 4.62097, LUCKY_LADIES: 17.639054, ROYAL_MATCH: 6.665842, SUPER_SEVENS: 11.40003 },
+  7: { PERFECT_PAIRS: 4.958678, TWENTY_ONE_PLUS_THREE: 4.099567, LUCKY_LADIES: 17.120899, ROYAL_MATCH: 6.547997, SUPER_SEVENS: 10.043798 },
+  8: { PERFECT_PAIRS: 4.096386, TWENTY_ONE_PLUS_THREE: 3.703913, LUCKY_LADIES: 16.732567, ROYAL_MATCH: 6.459685, SUPER_SEVENS: 9.007804 },
+};
 
 /** A large round stake, so integer flooring in the payouts cannot bias the sum. */
 const ENUM_STAKE = 100_000;
 
-/** True when this kind's edge is enumerated rather than measured. */
+/**
+ * True when this kind's edge is enumerated exactly rather than measured.
+ *
+ * Only Bust It is measured: it is a bet on a hand the dealer plays out and
+ * has no closed form here. Everything else, Lucky Ladies included, is a
+ * finite sum — see `dealerNaturalAfter` for the term that used to be an
+ * approximation and is not one any more.
+ */
 export function sideBetEdgeIsExact(kind: SideBetKind): boolean {
   return kind !== 'BUST_IT';
 }
 
+/**
+ * The edge, computed from scratch rather than looked up.
+ *
+ * Exported for the test that regenerates {@link EDGE_TABLE}. Nothing in the
+ * running game should call this: it is up to sixty milliseconds of ordered
+ * triples, and the UI reads these figures during render.
+ */
+export function enumerateSideBetEdge(kind: SideBetKind, decks: number): number {
+  return (1 - expectedReturn(kind, decks)) * 100;
+}
+
 export function sideBetEdge(kind: SideBetKind, decks: number): number {
   if (!sideBetEdgeIsExact(kind)) return SIDE_BET_SPECS[kind].edge;
-  const key = `${kind}:${decks}`;
-  const hit = EDGE_CACHE.get(key);
-  if (hit !== undefined) return hit;
-  const edge = (1 - expectedReturn(kind, decks)) * 100;
-  EDGE_CACHE.set(key, edge);
-  return edge;
+  // One to eight decks is the whole range the setup screen offers. Anything
+  // else can only arrive from a hand-edited rules object, and paying sixty
+  // milliseconds for it once is better than refusing to price it.
+  return EDGE_TABLE[decks]?.[kind] ?? enumerateSideBetEdge(kind, decks);
 }
 
 /** The 52 distinct cards. Each appears `decks` times in a fresh shoe. */
@@ -427,14 +467,27 @@ function expectedReturn(kind: SideBetKind, decks: number): number {
 
   /*
    * The 1000:1 Lucky Ladies line needs a dealer natural as well as the
-   * player's two queens of hearts. The two are very nearly independent — the
-   * player's cards remove no ace and one of the shoe's queens — so the
-   * jackpot term is the 200:1 line's probability times the dealer's natural
-   * rate. The whole term is worth about a twentieth of a percent, well below
-   * the precision this figure is quoted to, and it is the one number here
-   * that is not exact.
+   * player's two queens of hearts, and this is where that term is computed.
+   *
+   * It used to treat the two as independent, with a flat six-deck natural
+   * rate — an approximation the comment here admitted to and `handoff.json`
+   * carried as an open item, while `sideBetEdgeIsExact` cheerfully returned
+   * true for this bet and the paytable dialog printed "enumerated exactly".
+   *
+   * There is no need for the approximation. The enumeration already knows
+   * exactly which two cards the player holds, so it knows exactly what is
+   * left for the dealer: the natural rate conditioned on this pair is a
+   * closed form over the remaining aces and tens. For the only pair that can
+   * pay the jackpot — two queens of hearts — that is two fewer tens and every
+   * ace, which the flat rate got wrong in the direction that flattered the
+   * bet.
    */
-  const dealerNatural = (2 * (4 * decks) * (16 * decks)) / ((size - 2) * (size - 3));
+  const dealerNaturalAfter = (a: Card, b: Card): number => {
+    const isTenCard = (c: Card) => rankValue(c.rank) === 10;
+    const aces = 4 * decks - (isAceCard(a) ? 1 : 0) - (isAceCard(b) ? 1 : 0);
+    const tens = 16 * decks - (isTenCard(a) ? 1 : 0) - (isTenCard(b) ? 1 : 0);
+    return (2 * aces * tens) / ((size - 2) * (size - 3));
+  };
 
   const pairPayout = (a: Card, b: Card): number => {
     switch (kind) {
@@ -445,7 +498,7 @@ function expectedReturn(kind: SideBetKind, decks: number): number {
       case 'LUCKY_LADIES': {
         const plain = resolveLuckyLadies([a, b], ENUM_STAKE, false).net;
         const jackpot = resolveLuckyLadies([a, b], ENUM_STAKE, true).net;
-        return plain + (jackpot - plain) * dealerNatural + (plain > 0 ? ENUM_STAKE : 0);
+        return plain + (jackpot - plain) * dealerNaturalAfter(a, b) + (plain > 0 ? ENUM_STAKE : 0);
       }
       default:
         return 0;

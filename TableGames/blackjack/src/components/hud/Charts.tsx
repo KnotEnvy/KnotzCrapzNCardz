@@ -88,12 +88,21 @@ export function OutcomeBars({ stats }: { stats: SeatStats }) {
  * ------------------------------------------------------------------ */
 
 /**
- * Cumulative result, oldest to newest.
+ * Cumulative result over the last {@link WINDOW} rounds, oldest to newest.
  *
  * The zero line is drawn because it is the only reference that matters, and
  * the fill is split at it so a losing session is visibly below the water
  * rather than being a line you have to read the axis to place.
+ *
+ * It is a window, not the session, and the caption has to say so. The history
+ * itself is capped at 300 records to keep a phone responsive, and the curve
+ * shows the last 160 of those — so past a couple of hundred rounds the
+ * endpoint here and the "Net" figure four rows above it in the same panel are
+ * different quantities. The label used to read "Session result", which made
+ * that look like a bug in one of them.
  */
+const WINDOW = 160;
+
 export function Equity({ history, className }: { history: readonly RoundRecord[]; className?: string }) {
   const points = React.useMemo(() => {
     const out: number[] = [0];
@@ -103,7 +112,7 @@ export function Equity({ history, className }: { history: readonly RoundRecord[]
       sum += history[i].net;
       out.push(sum);
     }
-    return out.slice(-160);
+    return out.slice(-WINDOW);
   }, [history]);
 
   if (points.length < 3) {
@@ -125,7 +134,7 @@ export function Equity({ history, className }: { history: readonly RoundRecord[]
 
   return (
     <div className={className}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full" role="img" aria-label={`Session result: ${fmt(last)}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full" role="img" aria-label={`Result over the last ${points.length - 1} rounds: ${fmt(last)}`}>
         <defs>
           <linearGradient id="equity-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={up ? 'var(--color-win)' : 'var(--color-lose)'} stopOpacity="0.3" />
@@ -144,7 +153,12 @@ export function Equity({ history, className }: { history: readonly RoundRecord[]
         <circle cx={W} cy={y(last)} r="2.5" fill={up ? 'var(--color-win)' : 'var(--color-lose)'} />
       </svg>
       <div className="flex justify-between text-[9px] text-pit-500">
-        <span>{points.length - 1} rounds</span>
+        {/*
+          "last N rounds" rather than a bare count, because this is a window
+          and the Net figure above is the whole session. Once the curve fills
+          they are different numbers, and the caption is what says so.
+        */}
+        <span>{points.length - 1 >= WINDOW ? `last ${WINDOW} rounds` : `${points.length - 1} rounds`}</span>
         <span className="font-mono">{fmt(last)}</span>
       </div>
     </div>

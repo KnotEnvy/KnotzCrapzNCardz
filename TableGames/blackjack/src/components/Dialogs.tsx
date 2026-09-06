@@ -528,9 +528,10 @@ function SideBetsDialog({ open, onClose }: { open: boolean; onClose: () => void 
         them — every figure below is enumerated for that paytable at {rules.decks} deck
         {rules.decks === 1 ? '' : 's'}, not copied from a chart describing somebody else&rsquo;s.
         Deck count matters more than it sounds: a perfect pair needs a second copy of an identical
-        card, so Perfect Pairs is 6.11% at six decks and impossible at one. Bust It is the
-        exception — it is a bet on a hand the dealer plays out, so its figure is measured at six
-        decks rather than enumerated.
+        card, so Perfect Pairs costs {sideBetEdge('PERFECT_PAIRS', 6).toFixed(2)}% at six decks and{' '}
+        {sideBetEdge('PERFECT_PAIRS', 1).toFixed(2)}% at one, where it cannot win its top line at
+        all. Bust It is the exception — it is a bet on a hand the dealer plays out, so its figure is
+        measured at six decks rather than enumerated.
       </p>
 
       <div className="grid gap-2 sm:grid-cols-2">

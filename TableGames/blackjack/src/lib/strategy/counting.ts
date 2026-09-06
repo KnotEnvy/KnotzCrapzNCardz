@@ -171,6 +171,18 @@ export function initialCount(system: CountSystem, decks: number): number {
  * own claim (that you never need to divide) is exactly true. Away from the
  * pivot the two systems genuinely disagree, and this expresses the average
  * disagreement rather than pretending there is none.
+ *
+ * It carries a known residual. Measured over fifteen hundred shoe states
+ * (`strategy.test.ts`), the conversion runs about **0.09 true counts low**
+ * for Knock-Out — the level-two pair are inside sampling error. The cause is
+ * in the derivation above: it inverts an *unconditional* expectation of how
+ * many sevens have been seen, while the quantity actually wanted is
+ * conditional on the count in hand, and a high KO count partly *is* sevens
+ * seen. No single linear map removes that. A tenth of a true count is worth
+ * about 0.05% of edge against index numbers that are integers and a ramp
+ * whose steps are a whole count apart, so it changes no decision this game
+ * makes — but it is a residual, it is measured, and it is written down here
+ * rather than left for the next round of review to find.
  */
 export function hiLoEquivalent(running: number, decksLeft: number, system: CountSystem): number {
   const spec = COUNT_SYSTEMS[system];

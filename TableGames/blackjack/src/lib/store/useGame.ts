@@ -810,12 +810,16 @@ export const useGame = create<GameStore>()(
        *   2  `ShoeState.seed`. A version-1 shoe comes back without one and
        *      the first mid-round reshuffle calls `createRng(undefined)` and
        *      throws — the crash the reshuffle was added to fix, resurrected.
+       *      Handled at the point of use rather than here: `reshuffleKeeping`
+       *      falls back to a fresh seed, so there is deliberately no `from <
+       *      2` branch below.
        *   3  `SeatStats.staked`. A version-2 seat comes back without it and
        *      the stats panel divides by `undefined`, printing NaN% where the
-       *      measured edge goes.
+       *      measured edge goes. Backfilled below.
        *
        * Any change that adds a required field to persisted state has to come
-       * with a bump here *and* a case in `migrate`.
+       * with a bump here and a decision about where it is filled in — a
+       * branch in `migrate`, or a documented fallback at the point of use.
        */
       version: 3,
       /**

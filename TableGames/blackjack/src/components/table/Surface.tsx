@@ -306,7 +306,17 @@ function SeatArea({
                 title={`${spec.name} — ${spec.blurb} House edge ${sideBetEdge(kind, table.rules.decks).toFixed(2)}%${
                   sideBetEdgeIsExact(kind) ? '' : ' (measured at six decks)'
                 } at this shoe size.`}
-                aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}`}
+                /*
+                  The price goes in the label, not only the tooltip. A
+                  `title` reaches a mouse and nothing else, and this game's
+                  whole argument is that a bad bet should be offered with its
+                  number attached — which is worth least to the player who
+                  cannot hover to see it.
+                */
+                aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}. House edge ${sideBetEdge(
+                  kind,
+                  table.rules.decks,
+                ).toFixed(2)} percent${sideBetEdgeIsExact(kind) ? '' : ', measured at six decks'}.`}
                 className={cn(
                   'sidebet-box relative flex flex-col items-center justify-center gap-px rounded-md border leading-none font-medium tracking-wide transition-colors',
                   tight ? 'h-[26px] w-[28px] text-[6px]' : 'h-[34px] w-[38px] text-[8px]',
