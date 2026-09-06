@@ -114,7 +114,7 @@ export const SIDE_BET_SPECS: Record<SideBetKind, SideBetSpec> = {
       { label: 'Suited 20', ratio: [10, 1] },
       { label: 'Any 20', ratio: [4, 1] },
     ],
-    edge: 17.63,
+    edge: 17.64,
     accent: 'var(--color-side-ladies)',
   },
   ROYAL_MATCH: {

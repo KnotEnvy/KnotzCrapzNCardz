@@ -139,7 +139,7 @@ written against.
 | Royal Match | 6.67% | 10.86% |
 | Bust It | 6.92%, measured | — |
 | Super Sevens | 11.40% | 39.82% |
-| Lucky Ladies | 17.63% | 36.05% |
+| Lucky Ladies | 17.64% | 36.05% |
 
 The second column is not padding. These edges move enormously with shoe size,
 and the game prints the figure for **the table in front of you** — on the

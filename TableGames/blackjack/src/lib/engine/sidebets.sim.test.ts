@@ -132,22 +132,33 @@ describe('side bet edges, enumerated exactly', () => {
 
   it('Lucky Ladies', () => {
     /*
-     * The 1000:1 line needs a dealer natural as well as two queens of hearts.
-     * Those two are very nearly independent — the player's two queens remove
-     * no ace and one of the shoe's twenty-four queens — so the jackpot term is
-     * the 200:1 line's probability times the dealer's natural rate, which for
-     * six decks after two queens are gone is 0.04766. The whole term is worth
-     * about a twentieth of a percent, so the approximation is far below the
-     * precision the figure is published to.
+     * The 1000:1 line needs a dealer natural as well as two queens of hearts,
+     * and this used to be the one figure in the file that was not exact: it
+     * treated the two as independent and multiplied by a flat 0.04766.
+     *
+     * There was never any need. The enumeration knows exactly which two cards
+     * the player holds, so it knows exactly what is left for the dealer — the
+     * natural rate conditioned on this pair is a closed form over the
+     * remaining aces and tens. For the only pair that can pay the jackpot,
+     * two queens of hearts, that is every ace and two fewer tens, which the
+     * flat rate overstated in the direction that flattered the bet.
+     *
+     * So the tolerance drops from 0.4 to the 0.06 every other exact figure
+     * here is held to. It was 0.4 only because of the approximation.
      */
-    const DEALER_NATURAL = 0.04766;
+    const dealerNaturalAfter = (a: Card, b: Card): number => {
+      const isTenCard = (c: Card) => c.rank >= 10 && c.rank <= 13;
+      const aces = 4 * DECKS - (a.rank === 14 ? 1 : 0) - (b.rank === 14 ? 1 : 0);
+      const tens = 16 * DECKS - (isTenCard(a) ? 1 : 0) - (isTenCard(b) ? 1 : 0);
+      return (2 * aces * tens) / ((SHOE_SIZE - 2) * (SHOE_SIZE - 3));
+    };
     const ret = enumeratePairs((a, b) => {
       const plain = resolveLuckyLadies([a, b], STAKE, false);
       const jackpot = resolveLuckyLadies([a, b], STAKE, true);
-      const blended = plain.net + (jackpot.net - plain.net) * DEALER_NATURAL;
+      const blended = plain.net + (jackpot.net - plain.net) * dealerNaturalAfter(a, b);
       return blended + winStake(plain.net);
     });
-    check('Lucky Ladies', edgeOf(ret), SIDE_BET_SPECS.LUCKY_LADIES.edge, 0.4);
+    check('Lucky Ladies', edgeOf(ret), SIDE_BET_SPECS.LUCKY_LADIES.edge);
   });
 
   it('21 + 3', () => {
