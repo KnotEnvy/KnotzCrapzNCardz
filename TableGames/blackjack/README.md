@@ -126,6 +126,15 @@ src/lib/store/      zustand; owns pacing, never owns rules
 src/components/     the felt, the cards, the chips, the panels
 ```
 
+The felt comes in two geometries rather than one that scales. A blackjack
+table needs about 520 units of depth — dealer's cards, three printed lines,
+players' cards, circles, side-bet spots, nameplate — and a phone in landscape
+has around 290 pixels of height once the header and buttons have taken theirs.
+Scaling that shape left two thirds of the screen black, so the shallow
+geometry drops to one printed line, moves the nameplate into the header's
+territory and pulls the outside seats in from the rail. Both are the same set
+of fields, so nothing downstream branches on which is in use.
+
 The engine is pure and the store is a metronome. Every money-moving call goes
 through an engine function that returns either a new table or a refusal with a
 sentence in it, which is what lets the bot, the simulation and the felt share

@@ -125,7 +125,13 @@ function Header() {
   const bankroll = table.seats.filter((s) => s.occupied).reduce((n, s) => n + s.bankroll, 0);
 
   return (
-    <header className="app-header flex shrink-0 items-center gap-2 border-b border-white/6 bg-pit-950/70 px-3 py-1.5">
+    /*
+     * `z-50` is not decoration. Below 1280px the stats rail is a drawer pinned
+     * to the right at z-40, and on a narrow screen it covers the right end of
+     * the header — which is where the button that closes it lives. The header
+     * has to sit above the thing it opens.
+     */
+    <header className="app-header relative z-50 flex shrink-0 items-center gap-2 border-b border-white/6 bg-pit-950/70 px-3 py-1.5">
       <h1
         className="mr-1 text-sm tracking-[0.2em] text-brass-400 uppercase"
         style={{ fontFamily: 'var(--font-display)' }}

@@ -20,7 +20,7 @@ import * as React from 'react';
 import { cn } from '@/components/ui/primitives';
 import { CardFan, PlayingCard } from './Card';
 import { ChipStack } from './Chip';
-import { Felt, DEALER_SPOT, FELT_H, FELT_W, SEAT_SPOTS, SHOE_SPOT, handSpot } from './Felt';
+import { Felt, geometryFor, handSpot, type FeltGeometry } from './Felt';
 import { Shoe } from './Shoe';
 import { displayTotal, handValue, isBlackjack } from '@/lib/engine/hand';
 import { fmt, fmtSigned } from '@/lib/engine/money';
@@ -32,24 +32,41 @@ import type { Hand, Seat, Settlement, SideBetKind, TableState } from '@/lib/engi
  * Scaling
  * ------------------------------------------------------------------ */
 
-/** Measure the container and report the scale from felt units to pixels. */
-function useFeltScale(ref: React.RefObject<HTMLDivElement | null>): number {
-  const [scale, setScale] = React.useState(1);
+/**
+ * Measure the container, choose a geometry, and report the scale between them.
+ *
+ * The geometry comes first: a window with no height to spare wants a shallower
+ * table rather than the same table shrunk, so `geometryFor` picks one and the
+ * scale is computed against whichever was chosen. `contain`, not `cover` — the
+ * whole layout has to be on screen, and a felt with its betting circles
+ * cropped off is not a felt.
+ */
+function useFelt(ref: React.RefObject<HTMLDivElement | null>): {
+  g: FeltGeometry;
+  scale: number;
+} {
+  const [box, setBox] = React.useState({ width: 0, height: 0 });
 
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      // `contain`, not `cover`: the whole layout has to be on screen. A felt
-      // with its betting circles cropped off is not a felt.
-      setScale(Math.min(width / FELT_W, height / FELT_H));
+      setBox((prev) =>
+        Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5
+          ? prev
+          : { width, height },
+      );
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, [ref]);
 
-  return scale;
+  return React.useMemo(() => {
+    const g = geometryFor(box.width, box.height);
+    const scale = box.width === 0 ? 1 : Math.min(box.width / g.w, box.height / g.h);
+    return { g, scale };
+  }, [box]);
 }
 
 /* ------------------------------------------------------------------ *
@@ -70,7 +87,7 @@ export function Surface({
   className?: string;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  const scale = useFeltScale(ref);
+  const { g, scale } = useFelt(ref);
   const sideKinds = React.useMemo(() => enabledSideBets(table.rules.sideBets), [table.rules.sideBets]);
 
   return (
@@ -78,20 +95,20 @@ export function Surface({
       <div
         className="relative"
         style={{
-          width: FELT_W * scale,
-          height: FELT_H * scale,
+          width: g.w * scale,
+          height: g.h * scale,
         }}
       >
-        <Felt rules={table.rules} />
+        <Felt rules={table.rules} g={g} />
 
         {/* Everything below is in felt units, scaled as one block. */}
         <div
           className="absolute top-0 left-0 origin-top-left"
-          style={{ width: FELT_W, height: FELT_H, transform: `scale(${scale})` }}
+          style={{ width: g.w, height: g.h, transform: `scale(${scale})` }}
         >
-          <Shoe shoe={table.shoe} x={SHOE_SPOT.x} y={SHOE_SPOT.y} />
+          <Shoe shoe={table.shoe} x={g.shoe.x} y={g.shoe.y} compact={g.namePlateOffset === null} />
 
-          <DealerArea table={table} />
+          <DealerArea table={table} g={g} />
 
           {table.seats.map((seat, i) => (
             <SeatArea
@@ -99,6 +116,7 @@ export function Surface({
               seat={seat}
               index={i}
               table={table}
+              g={g}
               settlements={settlements}
               sideKinds={sideKinds}
               onClick={() => onSeatClick?.(i)}
@@ -115,18 +133,18 @@ export function Surface({
  * The dealer
  * ------------------------------------------------------------------ */
 
-function DealerArea({ table }: { table: TableState }) {
+function DealerArea({ table, g }: { table: TableState; g: FeltGeometry }) {
   const { cards, holeDown } = table.dealer;
   const shown = holeDown ? cards.slice(0, 1) : cards;
   const v = handValue(shown);
   const natural = !holeDown && isBlackjack(cards);
 
   return (
-    <div className="absolute -translate-x-1/2" style={{ left: DEALER_SPOT.x, top: DEALER_SPOT.y }}>
+    <div className="absolute -translate-x-1/2" style={{ left: g.w / 2, top: g.dealerY }}>
       <div className="flex flex-col items-center gap-1.5">
         {cards.length > 0 ? (
           <>
-            <CardFan cards={cards} holeDown={holeDown} size={68} />
+            <CardFan cards={cards} holeDown={holeDown} size={g.dealerCard} />
             <TotalPill
               label={holeDown ? displayTotal(shown) : displayTotal(cards)}
               tone={natural ? 'gold' : v.busted && !holeDown ? 'bad' : 'neutral'}
@@ -154,6 +172,7 @@ function SeatArea({
   seat,
   index,
   table,
+  g,
   settlements,
   sideKinds,
   onClick,
@@ -162,16 +181,20 @@ function SeatArea({
   seat: Seat;
   index: number;
   table: TableState;
+  g: FeltGeometry;
   settlements: readonly Settlement[];
   sideKinds: readonly SideBetKind[];
   onClick: () => void;
   onSideClick: (kind: SideBetKind) => void;
 }) {
-  const spot = SEAT_SPOTS[index];
-  const hands = handSpot(index);
+  const spot = g.seats[index];
+  const hands = handSpot(g, index);
   const focused = table.focus?.seat === seat.id;
   const betting = table.phase === 'BETTING';
   const bonusCard = seat.pendingSideBets.find((sb) => sb.bonus)?.bonus ?? null;
+  // The shallow table has no nameplate, and no room for full-size side-bet
+  // spots at an outside seat either.
+  const tight = g.namePlateOffset === null;
 
   if (!seat.occupied) {
     return (
@@ -199,7 +222,8 @@ function SeatArea({
             hand={hand}
             active={focused && table.focus?.hand === i}
             settlement={settlements.find((s) => s.seat === seat.id && s.handIndex === i)}
-            compact={seat.hands.length > 2}
+            compact={seat.hands.length > 2 || g.namePlateOffset === null}
+            size={g.seatCard}
           />
         ))}
         {/*
@@ -266,8 +290,8 @@ function SeatArea({
          * outside seat's second row would hang over the rail.
          */
         <div
-          className="absolute flex -translate-x-1/2 gap-[3px]"
-          style={{ left: spot.x, top: spot.y + 44 }}
+          className={cn('absolute flex -translate-x-1/2', tight ? 'gap-[2px]' : 'gap-[3px]')}
+          style={{ left: spot.x, top: spot.y + g.sideBetOffset }}
         >
           {sideKinds.map((kind) => {
             const wager = seat.pendingSideBets.find((sb) => sb.kind === kind);
@@ -282,7 +306,8 @@ function SeatArea({
                 title={`${spec.name} — ${spec.blurb} House edge ${spec.edge}%.`}
                 aria-label={`${spec.name} side bet, ${fmt(wager?.amount ?? 0)}`}
                 className={cn(
-                  'sidebet-box relative flex h-[34px] w-[38px] flex-col items-center justify-center gap-px rounded-md border text-[8px] leading-none font-medium tracking-wide transition-colors',
+                  'sidebet-box relative flex flex-col items-center justify-center gap-px rounded-md border leading-none font-medium tracking-wide transition-colors',
+                  tight ? 'h-[26px] w-[28px] text-[6px]' : 'h-[34px] w-[38px] text-[8px]',
                   wager
                     ? 'border-white/40 bg-black/50 text-white'
                     : 'border-white/12 bg-black/25 text-white/35',
@@ -294,7 +319,7 @@ function SeatArea({
               >
                 <span style={{ fontFamily: 'var(--font-display)' }}>{spec.short}</span>
                 {wager ? (
-                  <span className="font-mono text-[9px] text-white">
+                  <span className={cn('font-mono text-white', tight ? 'text-[7px]' : 'text-[9px]')}>
                     {Math.round(wager.amount / 100)}
                   </span>
                 ) : null}
@@ -315,10 +340,12 @@ function SeatArea({
         </div>
       ) : null}
 
-      {/* The nameplate, under everything. */}
+      {/* The nameplate, under everything — and only where there is room for
+          it. On the shallow table the header already carries the bankroll. */}
+      {g.namePlateOffset !== null ? (
       <div
         className="absolute -translate-x-1/2 text-center"
-        style={{ left: spot.x, top: spot.y + (sideKinds.length > 0 ? 84 : 52) }}
+        style={{ left: spot.x, top: spot.y + (sideKinds.length > 0 ? g.namePlateOffset : 52) }}
       >
         <div
           className={cn(
@@ -331,6 +358,7 @@ function SeatArea({
         </div>
         <div className="font-mono text-[11px] tabular-nums text-white/60">{fmt(seat.bankroll)}</div>
       </div>
+      ) : null}
     </>
   );
 }
@@ -344,15 +372,17 @@ function HandView({
   active,
   settlement,
   compact,
+  size: base,
 }: {
   hand: Hand;
   active: boolean;
   settlement?: Settlement;
   compact: boolean;
+  size: number;
 }) {
   const v = handValue(hand.cards);
   const natural = isBlackjack(hand.cards, hand.splitDepth);
-  const size = compact ? 46 : 60;
+  const size = compact ? Math.round(base * 0.78) : base;
 
   return (
     <div

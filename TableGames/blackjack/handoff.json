@@ -51,7 +51,8 @@
         "The persist merge refunded unresolved side bets but left resolved ones on the felt with their result, so a resumed session displayed a win it had already paid.",
         "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced.",
         "The session panel reported one net figure, so a hand that lost its wager and hit a side bet showed a positive total beside a hundred-percent loss rate. SeatStats now books sideNet and insuranceNet apart from the whole, and the panel breaks them out.",
-        "playRound read `handsBefore` after the deal and compared it against a value taken after settlement \u2014 but the deal is what increments handsPlayed, so the figure was always zero. It went unnoticed because nothing divided by it until the new per-thousand rule tests did. `insuranceWagered` had the same shape: read before the offers phase opened, so it was always zero too. Both are read at the right moment now, and strategy.test.ts checks the bot's own reporting against arithmetic over two thousand rounds."
+        "playRound read `handsBefore` after the deal and compared it against a value taken after settlement \u2014 but the deal is what increments handsPlayed, so the figure was always zero. It went unnoticed because nothing divided by it until the new per-thousand rule tests did. `insuranceWagered` had the same shape: read before the offers phase opened, so it was always zero too. Both are read at the right moment now, and strategy.test.ts checks the bot's own reporting against arithmetic over two thousand rounds.",
+        "The stats drawer covered the button that closes it. Below 1280px the rail is pinned right at z-40 and the header was not stacked at all, so on a narrow screen the drawer painted over the Stats button \u2014 found by driving the phone layout with a browser rather than by reading it."
       ],
       "defects2": [
         "The persist merge conjured money. A round is unwound on reload because it cannot be resumed honestly \u2014 but the driver parks a *finished* round at SETTLE for a couple of seconds so the figures can be read, and during that window `hand.bet` and `seat.insurance` are still populated even though settle() has already returned every stake. A reload there refunded them a second time: a $10 hand with $5 of winning insurance came back $15 up. The unwind now runs only when `!table.settled`, and it moved into the engine as `abandonRound` because it moves money and everything that moves money is testable engine code.",
@@ -115,7 +116,8 @@
     "The counting claim is asserted where it converges. Spread-versus-flat is a coin flip at this length because a 1-12 spread's variance is several times a flat bet's; instead a flat bettor's result is bucketed by the true count at the deal, and the rich bucket must beat the poor one by a point. Same evidence that the shoe is real, an order of magnitude tighter.",
     "The edge model is defined by a named reference game rather than a bare baseline constant, and `estimateHouseEdge` is that game's edge less the sum of `ruleEffects`. Deriving the number and its itemisation from one list is what makes them agree; when they were computed separately, the panel credited '+0.22 dealer stands on all 17s' against a baseline that already stood on all seventeens, and double-counted DAS on top. A rule the reference game already has is priced as a penalty when absent, never a bonus when present.",
     "The counting trainer takes what is *visible*, not what has left the shoe. Those differ by exactly one card \u2014 the dealer's hole card \u2014 and that difference is the whole distinction between a trainer and a cheat. `countTable` is the only function anything should call during a round.",
-    "The Super Sevens bonus card is drawn on the felt rather than discarded. It was simpler to consume it silently, but a card that leaves the shoe unseen is a card the counter would be counting behind the player's back \u2014 so it is stored on the wager and shown."
+    "The Super Sevens bonus card is drawn on the felt rather than discarded. It was simpler to consume it silently, but a card that leaves the shoe unseen is a card the counter would be counting behind the player's back \u2014 so it is stored on the wager and shown.",
+    "The felt has two geometries, not one scale factor. A blackjack table needs about 520 units of depth for the dealer's cards, three printed lines, the players' cards, the circles, the side-bet spots and a nameplate \u2014 and a phone in landscape has roughly 290 pixels of height once the header and button bar have taken theirs, so scaling that shape left two thirds of an 844-pixel screen black. The shallow geometry drops to one printed line and moves the nameplate into the header's territory, buying back 150 units of depth; it also pulls the outside seats inward, because the shallow arc closes on the rail much faster and six side-bet spots under an outside seat would hang over it. Both are described by the same `FeltGeometry` fields, so nothing downstream branches: Surface measures the container, `geometryFor` picks one, and every coordinate follows. Phone landscape went from 61% of the width to 84%."
   ],
   "gotchas": [
     "deal() takes an Rng because a reshuffle happens there. It is the only action that does.",
@@ -167,8 +169,8 @@
       "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
-      "when": "2026-09-06, after the review fixes",
-      "note": "What the suite printed on its last full run (28 tests, 6m19s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
+      "when": "2026-09-06, after both rounds of review",
+      "note": "What the suite printed on its last full run (28 tests, 6m32s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
@@ -182,17 +184,36 @@
         "dealerBustH17": 28.519,
         "playerNatural": 4.781
       },
-      "houseEdge": {
-        "SingleDeck": 1.849,
-        "VegasStrip": 0.375,
-        "AtlanticCity": 0.207,
-        "European": 0.632,
-        "LiberalShoe": 0.172,
-        "MimicTheDealer": 5.635
+      "houseEdgeMeasuredVsModel": {
+        "SingleDeck": [
+          1.849,
+          1.85
+        ],
+        "VegasStrip": [
+          0.375,
+          0.4
+        ],
+        "AtlanticCity": [
+          0.207,
+          0.35
+        ],
+        "European": [
+          0.632,
+          0.73
+        ],
+        "LiberalShoe": [
+          0.172,
+          0.05
+        ],
+        "MimicTheDealer": [
+          5.635,
+          null
+        ]
       },
-      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.331% for the player at a true count of +2 or better against -2.166% at -2 or worse. That three-and-a-half point gap is the assertion. Spread-versus-flat (-0.384% against +0.317%) is printed but not asserted; the spread arm's own three-sigma band is 1.75%.",
-      "resplitAces": "Now measures at +0.058% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing \u2014 the clearest single piece of evidence that the fix landed.",
-      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds. The Liberal Shoe preset remains the largest gap against the rule model (0.26 points, inside the 0.385 tolerance, and down from 0.33 before re-split aces was fixed), which suggests the model still slightly overvalues stacking several player-friendly rules at once."
+      "modelNote": "The corrected model now tracks the measurements: exact to a thousandth on single deck, within 0.025 on Vegas Strip, and inside 0.15 everywhere. Before the double-counted DAS term was removed it read 0.26% for Vegas Strip and -0.09% for Liberal Shoe \u2014 a player advantage.",
+      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.331% for the player at a true count of +2 or better against -2.166% at -2 or worse. That gap is the assertion. Spread-versus-flat is printed but not asserted; the spread arm's own three-sigma band is 1.75%.",
+      "resplitAces": "+0.058% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
+      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing. Atlantic City is the loosest preset at 0.14 points under the model; the published figure for that game is nearer the model's, so the suspect is the measurement (most likely the six-deck chart being used at eight decks) rather than the model."
     }
   },
   "openItems": [
@@ -201,7 +222,7 @@
     "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
     "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
     "The rule model now agrees with the simulation to within 0.15 points on every preset (and to a thousandth on single deck), but Atlantic City is the loose one: the model says 0.35% against a measured 0.207%. The published figure for that game is nearer 0.36%, so the suspect is the measurement rather than the model \u2014 most likely that the chart is the six-deck one at eight decks, or that late surrender is being taken slightly too often. Inside the 3\u03c3 band either way.",
-    "The felt is one fixed 1000x560 geometry that scales. A tall narrow window now puts the stats rail underneath rather than leaving the height empty, and short viewports get compact chrome, but a phone in landscape still letterboxes. A genuinely responsive table means a second, shallower layout rather than a scale factor.",
+    "The shallow felt drops the insurance line and the dealer's rule from the print, because there is no depth for them. Both are still in the HUD and the help dialog, but a player on a phone reads them off a panel rather than off the felt.",
     "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
     "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
     "The equity chart caps at 300 rounds of history and has no zoom.",

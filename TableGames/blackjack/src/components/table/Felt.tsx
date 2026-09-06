@@ -22,95 +22,175 @@ import { blackjackRatio } from '@/lib/engine/rules';
 import type { TableRules } from '@/lib/engine/types';
 
 /**
- * The felt's coordinate space.
+ * The felt comes in two geometries.
  *
- * Everything on the table is expressed in these units, including the HTML
- * overlay — `Surface` scales one to the other. 1000 x 560 is close to the
- * proportions of a real seven-seat layout and divides tidily.
+ * A blackjack table needs, from the dealer outward: the dealer's cards, three
+ * printed lines, the players' cards, the betting circles, a row of side-bet
+ * spots and a nameplate. That is about 520 units of depth, and at 1000 wide it
+ * makes a shape close to a real seven-seat layout.
+ *
+ * A phone held sideways has roughly 290 pixels of height once the header and
+ * the button bar have taken theirs, so scaling that shape to fit leaves it
+ * about 520 pixels wide in an 844-pixel window — two thirds of the screen is
+ * black. Scaling is the wrong answer: what a short table needs is to be a
+ * *shallower table*, so the second geometry drops to a single printed line and
+ * moves the nameplate into the header's territory, which buys back 150 units
+ * of depth and most of the width.
+ *
+ * Both are described by the same fields, so nothing downstream branches on
+ * which one is in use — `Surface` measures the container, picks one, and every
+ * coordinate follows from it.
  */
-export const FELT_W = 1000;
-export const FELT_H = 560;
+export interface FeltGeometry {
+  w: number;
+  h: number;
+  /** The elliptical bulge the players sit around. */
+  arcTop: number;
+  arcRx: number;
+  arcRy: number;
+  /** Centre of the concentric printed arcs, well below the table. */
+  arcCy: number;
+  /** Radii and half-angles of the printed lines, dealer-outward. */
+  insurance: [number, number] | null;
+  payout: [number, number];
+  rule: [number, number] | null;
+  /** Font sizes for those lines. */
+  payoutSize: number;
+  ruleSize: number;
+  insuranceSize: number;
+  /** The dealer's cards: their top edge, and how wide a card is drawn. */
+  dealerY: number;
+  dealerCard: number;
+  /** Betting circles, left to right. */
+  seats: ReadonlyArray<{ x: number; y: number }>;
+  /** Card width for a player's hand, and the baseline its bottom sits on. */
+  seatCard: number;
+  handOffset: number;
+  /** Vertical offsets from a seat's centre. */
+  sideBetOffset: number;
+  namePlateOffset: number | null;
+  /** Where the shoe and discard tray sit. */
+  shoe: { x: number; y: number };
+}
 
 /**
- * The arc the players sit on.
- *
- * A blackjack table is a straight dealer edge with a shallow elliptical bulge
- * toward the room. `ARC_RY` is chosen so the lowest point of that bulge lands
- * exactly on the bottom of the viewBox with a little air under it — get this
- * wrong and the felt is clipped rather than curved.
+ * The full table. Apex heights of 180, 215 and 252 are the whole vertical
+ * budget of the printed area: the dealer's cards and total end at about 162
+ * and the players' cards begin at about 270, so three lines of type have
+ * ninety units to live in. The spreads are chosen so each line's *text* — not
+ * its arc — stays clear of the outside seats' cards, which reach in to x ≈ 328.
  */
-const ARC_TOP = 300;
-const ARC_RX = 500;
-const ARC_RY = 250;
-const TABLE_PATH = `M 0 0 H 1000 V ${ARC_TOP} A ${ARC_RX} ${ARC_RY} 0 0 1 0 ${ARC_TOP} Z`;
+export const FULL: FeltGeometry = {
+  w: 1000,
+  h: 560,
+  arcTop: 300,
+  arcRx: 500,
+  arcRy: 250,
+  arcCy: 800,
+  insurance: [620, 20],
+  payout: [585, 25],
+  rule: [548, 25],
+  payoutSize: 26,
+  ruleSize: 13.5,
+  insuranceSize: 12.5,
+  dealerY: 40,
+  dealerCard: 68,
+  seats: [
+    { x: 270, y: 410 },
+    { x: 500, y: 436 },
+    { x: 730, y: 410 },
+  ],
+  seatCard: 60,
+  handOffset: 54,
+  sideBetOffset: 44,
+  namePlateOffset: 84,
+  shoe: { x: 868, y: 92 },
+};
 
 /**
- * The printed arcs are concentric, struck from a single centre well below the
- * table, which is the only way to guarantee they never cross. Ordered from the
- * dealer outward: insurance nearest the dealer, then the payout, then the
- * dealer's own rule nearest the players — exactly how a felt is printed.
- *
- * `arc(r, spread)` returns the path for a radius and a half-angle in degrees.
+ * The shallow table, for a window with no height to spare. One printed line
+ * instead of three, and no nameplate — the header already carries the
+ * bankroll, and on a screen this size there is only one seat in play anyway.
  */
-const ARC_CX = 500;
-const ARC_CY = 800;
+export const COMPACT: FeltGeometry = {
+  w: 1000,
+  h: 400,
+  arcTop: 210,
+  arcRx: 500,
+  arcRy: 185,
+  arcCy: 640,
+  insurance: null,
+  // Apex 150, which is the whole budget: the dealer's total ends at 120 and
+  // the players' cards begin at 163, and the 24-degree spread keeps the text
+  // inside x 340..660 where no seat's cards reach.
+  payout: [490, 24],
+  rule: null,
+  payoutSize: 24,
+  ruleSize: 13,
+  insuranceSize: 12,
+  dealerY: 20,
+  dealerCard: 54,
+  // Pulled in from 270/730. The shallow table's arc closes on the rail much
+  // faster, and a row of six side-bet spots under an outside seat would hang
+  // over the edge of it.
+  seats: [
+    { x: 300, y: 286 },
+    { x: 500, y: 304 },
+    { x: 700, y: 286 },
+  ],
+  seatCard: 52,
+  handOffset: 48,
+  sideBetOffset: 44,
+  namePlateOffset: null,
+  shoe: { x: 872, y: 66 },
+};
 
-function arc(radius: number, spreadDeg: number): string {
+/**
+ * Which geometry a container of this shape wants.
+ *
+ * Purely a question of how much height there is per unit of width: below about
+ * 0.44 the full table would be scaled down by its depth and leave the width
+ * empty, which is exactly what the shallow one exists to avoid.
+ */
+export function geometryFor(width: number, height: number): FeltGeometry {
+  if (width <= 0 || height <= 0) return FULL;
+  return height / width < 0.44 ? COMPACT : FULL;
+}
+
+/** Where a seat's cards sit — the bottom edge of the hand. */
+export function handSpot(g: FeltGeometry, index: number): { x: number; y: number } {
+  const spot = g.seats[index];
+  return { x: spot.x, y: spot.y - g.handOffset };
+}
+
+function tablePath(g: FeltGeometry): string {
+  return `M 0 0 H ${g.w} V ${g.arcTop} A ${g.arcRx} ${g.arcRy} 0 0 1 0 ${g.arcTop} Z`;
+}
+
+/** The path for a printed line, as a radius and half-angle about `arcCy`. */
+function arc(g: FeltGeometry, [radius, spreadDeg]: [number, number]): string {
   const rad = (spreadDeg * Math.PI) / 180;
   const dx = radius * Math.sin(rad);
   const dy = radius * Math.cos(rad);
-  const x1 = (ARC_CX - dx).toFixed(1);
-  const x2 = (ARC_CX + dx).toFixed(1);
-  const y = (ARC_CY - dy).toFixed(1);
-  return `M ${x1} ${y} A ${radius} ${radius} 0 0 1 ${x2} ${y}`;
+  return `M ${(g.w / 2 - dx).toFixed(1)} ${(g.arcCy - dy).toFixed(1)} A ${radius} ${radius} 0 0 1 ${(g.w / 2 + dx).toFixed(1)} ${(g.arcCy - dy).toFixed(1)}`;
 }
 
-/*
- * Apex heights of 180, 215 and 252, which is the whole vertical budget of the
- * printed area: the dealer's cards and total end at about 162 and the players'
- * cards begin at about 270, so three lines of type have ninety units to live
- * in. The spreads are chosen so each line's *text* — not its arc — stays clear
- * of the outside seats' cards, which reach in to x ≈ 328.
- */
-const ARC_INSURANCE = arc(620, 20);
-const ARC_PAYOUT = arc(585, 25);
-const ARC_RULE = arc(548, 25);
-
-/**
- * Where each seat's betting circle sits.
- *
- * Three of them, on an arc centred well below the table so the curve is
- * shallow — a blackjack layout is a wide arc, not a semicircle. The middle
- * seat is the closest to the dealer, which is why it sits highest.
- */
-export const SEAT_SPOTS: ReadonlyArray<{ x: number; y: number }> = [
-  { x: 270, y: 410 },
-  { x: 500, y: 436 },
-  { x: 730, y: 410 },
-];
-
-/**
- * The baseline a seat's cards sit on — the bottom edge of the hand, far
- * enough above the circle that a five-card hand still clears the chips.
- */
-export function handSpot(index: number): { x: number; y: number } {
-  const spot = SEAT_SPOTS[index];
-  return { x: spot.x, y: spot.y - 54 };
-}
-
-/** The dealer's cards, centred at the top. This is their top edge. */
-export const DEALER_SPOT = { x: 500, y: 40 };
-
-/** The shoe, at the dealer's left — which is the player's right. */
-export const SHOE_SPOT = { x: 868, y: 92 };
-
-export function Felt({ rules, className }: { rules: TableRules; className?: string }) {
+export function Felt({
+  rules,
+  g,
+  className,
+}: {
+  rules: TableRules;
+  g: FeltGeometry;
+  className?: string;
+}) {
   const [num, den] = blackjackRatio(rules.blackjackPays);
   const payout = `BLACKJACK PAYS ${num} TO ${den}`;
+  const path = tablePath(g);
 
   return (
     <svg
-      viewBox={`0 0 ${FELT_W} ${FELT_H}`}
+      viewBox={`0 0 ${g.w} ${g.h}`}
       className={cn('absolute inset-0 h-full w-full', className)}
       aria-hidden
       preserveAspectRatio="xMidYMid meet"
@@ -151,60 +231,70 @@ export function Felt({ rules, className }: { rules: TableRules; className?: stri
         </radialGradient>
 
         {/* Text arcs, concentric so they cannot cross. */}
-        <path id="arc-payout" d={ARC_PAYOUT} fill="none" />
-        <path id="arc-rule" d={ARC_RULE} fill="none" />
-        <path id="arc-insurance" d={ARC_INSURANCE} fill="none" />
+        <path id="arc-payout" d={arc(g, g.payout)} fill="none" />
+        {g.rule ? <path id="arc-rule" d={arc(g, g.rule)} fill="none" /> : null}
+        {g.insurance ? <path id="arc-insurance" d={arc(g, g.insurance)} fill="none" /> : null}
       </defs>
 
       {/* The table body. */}
-      <path d={TABLE_PATH} fill="url(#cloth)" />
-      <path d={TABLE_PATH} fill="url(#weave)" />
-      <path d={TABLE_PATH} fill="url(#lamp)" />
+      <path d={path} fill="url(#cloth)" />
+      <path d={path} fill="url(#weave)" />
+      <path d={path} fill="url(#lamp)" />
 
       {/* The rail. Drawn as a thick stroke on the same path so it hugs the
           curve exactly rather than being a second shape that nearly does. */}
-      <path d={TABLE_PATH} fill="none" stroke="url(#rail)" strokeWidth="26" />
+      <path d={path} fill="none" stroke="url(#rail)" strokeWidth="26" />
       <path
-        d={`M 0 12 H 1000 V ${ARC_TOP} A ${ARC_RX - 8} ${ARC_RY - 8} 0 0 1 0 ${ARC_TOP} Z`}
+        d={`M 0 12 H ${g.w} V ${g.arcTop} A ${g.arcRx - 8} ${g.arcRy - 8} 0 0 1 0 ${g.arcTop} Z`}
         fill="none"
         stroke="rgba(255,214,150,0.10)"
         strokeWidth="1.5"
       />
 
-      <text className="felt-text felt-text--gold" style={{ fontSize: 26, letterSpacing: '0.1em' }}>
+      <text
+        className="felt-text felt-text--gold"
+        style={{ fontSize: g.payoutSize, letterSpacing: '0.1em' }}
+      >
         <textPath href="#arc-payout" startOffset="50%">
           {payout}
         </textPath>
       </text>
 
-      <text className="felt-text felt-text--muted" style={{ fontSize: 13.5 }}>
-        <textPath href="#arc-rule" startOffset="50%">
-          {rules.hitsSoft17 ? 'DEALER MUST DRAW TO 16 AND HIT SOFT 17' : 'DEALER MUST DRAW TO 16 AND STAND ON ALL 17s'}
-        </textPath>
-      </text>
-
-      {rules.insurance ? (
-        <text className="felt-text felt-text--muted" style={{ fontSize: 12.5 }}>
-          <textPath href="#arc-insurance" startOffset="50%">
-            INSURANCE PAYS 2 TO 1
+      {g.rule ? (
+        <text className="felt-text felt-text--muted" style={{ fontSize: g.ruleSize }}>
+          <textPath href="#arc-rule" startOffset="50%">
+            {rules.hitsSoft17
+              ? 'DEALER MUST DRAW TO 16 AND HIT SOFT 17'
+              : 'DEALER MUST DRAW TO 16 AND STAND ON ALL 17s'}
           </textPath>
         </text>
       ) : null}
 
-      {/* The insurance line itself: the arc a player's insurance chips sit on. */}
-      {rules.insurance ? (
-        <path d={arc(634, 22)} fill="none" stroke="rgba(241,236,221,0.18)" strokeWidth="1.5" />
+      {rules.insurance && g.insurance ? (
+        <>
+          <text className="felt-text felt-text--muted" style={{ fontSize: g.insuranceSize }}>
+            <textPath href="#arc-insurance" startOffset="50%">
+              INSURANCE PAYS 2 TO 1
+            </textPath>
+          </text>
+          {/* The insurance line itself: the arc a player's chips sit on. */}
+          <path
+            d={arc(g, [g.insurance[0] + 14, g.insurance[1] + 2])}
+            fill="none"
+            stroke="rgba(241,236,221,0.20)"
+            strokeWidth="1.5"
+          />
+        </>
       ) : null}
 
       {/* Betting circles. Two rings, as they are printed. */}
-      {SEAT_SPOTS.map((spot, i) => (
+      {g.seats.map((spot, i) => (
         <g key={i}>
           <circle cx={spot.x} cy={spot.y} r="42" fill="none" stroke="url(#arcInk)" strokeWidth="2.5" opacity="0.75" />
           <circle cx={spot.x} cy={spot.y} r="36" fill="none" stroke="url(#arcInk)" strokeWidth="1" opacity="0.4" />
           <circle cx={spot.x} cy={spot.y} r="42" fill="rgba(0,0,0,0.18)" />
         </g>
       ))}
-
     </svg>
   );
 }

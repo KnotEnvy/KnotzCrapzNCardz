@@ -17,14 +17,25 @@ import { cn } from '@/components/ui/primitives';
 import { decksRemaining, penetrationSoFar, remaining as cardsLeft } from '@/lib/engine/shoe';
 import type { ShoeState } from '@/lib/engine/types';
 
-export function Shoe({ shoe, x, y }: { shoe: ShoeState; x: number; y: number }) {
+export function Shoe({
+  shoe,
+  x,
+  y,
+  compact = false,
+}: {
+  shoe: ShoeState;
+  x: number;
+  y: number;
+  /** The shallow table has no room for a full-height shoe. */
+  compact?: boolean;
+}) {
   const left = cardsLeft(shoe) / Math.max(1, shoe.size);
   const pen = penetrationSoFar(shoe);
   const cutFraction = shoe.cutAt / Math.max(1, shoe.size);
   const decks = decksRemaining(shoe);
 
-  const H = 74;
-  const W = 46;
+  const H = compact ? 54 : 74;
+  const W = compact ? 36 : 46;
 
   return (
     <div className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: x, top: y }}>
