@@ -52,10 +52,16 @@ published for fifty years:
 
 | | measured | published |
 | --- | --- | --- |
-| Dealer busts, six decks, S17 | 28.2% | 28.3% |
-| Dealer finishes on 20 | 18.0% | 17.6% |
-| Player is dealt a natural | 4.74% | 4.749% |
-| Basic strategy vs. mimicking the dealer | worth >1% a hand | ~2% |
+| Dealer busts, six decks, S17 | 28.15% | 28.32% |
+| Dealer busts, H17 | 28.52% | 29.1% |
+| Player is dealt a natural | 4.78% | 4.749% |
+| Vegas Strip house edge | 0.38% | 0.26% (model) |
+| Mimicking the dealer instead | 5.64% | 5.5% |
+
+The last two lines are the argument: playing the chart costs you about a third
+of a percent, and copying the dealer costs you five and a half. Every figure
+above comes out of `pnpm run test:stats`, which runs in about four minutes and
+prints the table.
 
 The side bets are not measured — they are **enumerated**. Five of the six are
 decided by two or three cards off the top of the shoe, so the suite walks every

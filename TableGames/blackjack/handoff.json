@@ -49,7 +49,7 @@
     "dev": "pnpm run dev",
     "build": "pnpm run build",
     "test": "pnpm test \u2014 114 tests, under a second. Run this constantly.",
-    "testStats": "pnpm run test:stats \u2014 26 tests, about three minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
+    "testStats": "pnpm run test:stats \u2014 26 tests, about four minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
     "note": "All commands run from TableGames/blackjack. The repository root has no build.",
@@ -117,7 +117,34 @@
       "Touch interaction on a real phone. The layout was checked at phone dimensions in a desktop browser, which is not the same thing.",
       "The PWA install path (Share \u2192 Add to Home Screen) has not been run on an actual iPhone.",
       "Docker build and the nginx config are copied from craps with the paths and ports changed, and have not been built here."
-    ]
+    ],
+    "lastRun": {
+      "when": "2026-09-06",
+      "note": "The figures the suite printed on its last full run. Kept here so a future change can be compared against a real baseline rather than against the tolerances.",
+      "sideBetEdges": {
+        "21+3": 4.621,
+        "PerfectPairs": 6.109,
+        "RoyalMatch": 6.666,
+        "BustIt": 6.706,
+        "SuperSevens": 11.4,
+        "LuckyLadies": 17.625
+      },
+      "frequencies": {
+        "dealerBustS17": 28.147,
+        "dealerBustH17": 28.519,
+        "playerNatural": 4.781
+      },
+      "houseEdge": {
+        "SingleDeck": 1.854,
+        "VegasStrip": 0.375,
+        "AtlanticCity": 0.207,
+        "European": 0.682,
+        "LiberalShoe": 0.236,
+        "MimicTheDealer": 5.635
+      },
+      "counting": "A flat bettor measured 0.384% against the house; the same shoes with a Hi-Lo 1-12 spread and index plays measured 0.210% in the player's favour.",
+      "caveat": "The five per-rule delta rows are the noisy ones and always will be: a rule change alters how many cards leave the shoe, so the two arms diverge within a few rounds and a shared seed only equalises the opening shoes. They are asserted for sign and order of magnitude. The Liberal Shoe preset is the largest gap against the rule model (0.33 points, inside the 0.39 tolerance), which suggests the model slightly overvalues stacking several player-friendly rules at once."
+    }
   },
   "openItems": [
     "The felt is height-constrained on a phone in landscape: at 844x390 it scales to about 55% and leaves horizontal letterboxing. Compact chrome under 520px of height claws back about forty pixels. Fixing it properly means a second, shallower felt layout for short viewports rather than scaling the one there is.",
