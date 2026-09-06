@@ -1139,6 +1139,57 @@ describe('rule sets', () => {
     }
   });
 
+  /*
+   * The presets are five points in a space the setup screen lets a player
+   * roam. One deck with re-split aces, hit split aces and early surrender is
+   * four toggles away and genuinely favours the player — the model is right
+   * about that, and the screen says so rather than clamping it. What must hold
+   * across the whole reachable space is that the arithmetic stays sane and the
+   * itemisation still sums to the headline.
+   */
+  it('stays sane across every table the setup screen can build', () => {
+    const base = defaultRules();
+    let worstForHouse = Infinity;
+    let count = 0;
+
+    for (const decks of [1, 2, 4, 6, 8]) {
+      for (const hitsSoft17 of [false, true]) {
+        for (const blackjackPays of ['3:2', '6:5'] as const) {
+          for (const double of ['ANY2', '9-11', '10-11'] as const) {
+            for (const das of [false, true]) {
+              for (const resplitAces of [false, true]) {
+                for (const oneCardOnSplitAces of [false, true]) {
+                  for (const surrender of ['NONE', 'LATE', 'EARLY'] as const) {
+                    for (const holeCard of ['PEEK', 'ENHC'] as const) {
+                      const rules = {
+                        ...base,
+                        decks, hitsSoft17, blackjackPays, double, das,
+                        resplitAces, oneCardOnSplitAces, surrender, holeCard,
+                      };
+                      const edge = estimateHouseEdge(rules);
+                      const sum = ruleEffects(rules).reduce((n, e) => n + e.delta, 0);
+                      expect(0.4 - sum).toBeCloseTo(edge, 9);
+                      expect(Number.isFinite(edge)).toBe(true);
+                      worstForHouse = Math.min(worstForHouse, edge);
+                      count++;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    expect(count).toBe(2880);
+    // The most generous table buildable is a single deck that re-splits and
+    // hits aces with early surrender: about one percent to the player. Any
+    // further than that and a term has gone wrong.
+    expect(worstForHouse).toBeGreaterThan(-1.5);
+    expect(worstForHouse).toBeLessThan(0);
+  });
+
   it('itemises exactly what it charges for', () => {
     // The breakdown beside the headline has to add up to it, or the screen is
     // arguing with itself. It did: the list credited "+0.22 dealer stands on

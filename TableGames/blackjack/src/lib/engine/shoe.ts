@@ -22,9 +22,12 @@
  *     card. The array is built once by the shuffle and read-only thereafter,
  *     and `pos` is the only thing a deal changes. That took the simulation
  *     from milliseconds a round to microseconds.
+ *
+ *   - A shoe that runs out mid-round reshuffles rather than raising. See
+ *     {@link reshuffleKeeping}.
  */
 
-import type { Rng } from './rng';
+import { createRng, seedFrom, type Rng } from './rng';
 import type { Card, ShoeState } from './types';
 import { RANKS, SUITS } from './types';
 
@@ -83,6 +86,43 @@ export function createShoe(
     cutAt: Math.max(20, Math.min(size - 15, Math.round(size * penetration))),
     cutReached: false,
     shuffleId,
+    seed: seedFrom(rng),
+  };
+}
+
+/**
+ * Reshuffle mid-round, keeping the cards that are on the felt.
+ *
+ * A shoe can run out before a round finishes. It is rare — it needs a small
+ * shoe, several seats and a lot of splitting — but "rare" is not "impossible",
+ * and a single deck cut at 65% leaves eighteen cards while three seats
+ * splitting to four hands can want more than that. This used to throw, on the
+ * stated premise that the cut card made it unreachable; three seats on the
+ * single-deck preset reached it in thirteen thousand rounds.
+ *
+ * What a dealer does is gather the discards, leave the cards in play where
+ * they are, shuffle, and carry on. `inPlay` is those cards, and they are
+ * removed from the new shoe so nobody ends up holding a card that is also
+ * still to come. `cutReached` stays set, so the round still finishes and the
+ * table takes a clean shoe before the next one.
+ */
+export function reshuffleKeeping(
+  shoe: ShoeState,
+  decks: number,
+  penetration: number,
+  inPlay: readonly Card[],
+): ShoeState {
+  const fresh = createShoe(decks, penetration, createRng(shoe.seed), shoe.shuffleId + 1);
+  const held = new Set(inPlay.map((c) => c.id));
+  const cards = fresh.cards.filter((c) => !held.has(c.id));
+
+  return {
+    ...fresh,
+    cards,
+    size: cards.length,
+    // The cut card has already surfaced; nothing about a mid-round reshuffle
+    // changes that the shoe is spent once this hand is over.
+    cutReached: true,
   };
 }
 
@@ -121,7 +161,9 @@ export function penetrationSoFar(shoe: ShoeState): number {
  */
 export function draw(shoe: ShoeState): { card: Card; shoe: ShoeState } {
   if (shoe.pos >= shoe.size) {
-    throw new Error('The shoe is empty. The cut card should have ended the round first.');
+    // Unreachable: every caller runs `ensureCards` first, which reshuffles the
+    // discards back in. Kept as an assertion rather than a code path.
+    throw new Error('The shoe is empty. ensureCards should have reshuffled it.');
   }
   const card = shoe.cards[shoe.pos];
   const pos = shoe.pos + 1;

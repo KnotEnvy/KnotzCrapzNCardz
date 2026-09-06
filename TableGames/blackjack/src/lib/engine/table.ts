@@ -32,7 +32,7 @@ import {
   isBlackjack,
 } from './hand';
 import { maxInsurance } from './rules';
-import { createShoe, draw } from './shoe';
+import { createShoe, draw, reshuffleKeeping } from './shoe';
 import type { Rng } from './rng';
 import {
   luckyLadiesJackpotUpgrade,
@@ -98,6 +98,39 @@ export function refuse(reason: string): ActionResult {
  */
 function withShoe(table: TableState, shoe: ShoeState): TableState {
   return table.shoe === shoe ? table : { ...table, shoe };
+}
+
+/**
+ * Every card currently on the felt.
+ *
+ * What a dealer would leave alone when gathering the discards to reshuffle:
+ * the dealer's own hand, every player hand, and any side-bet bonus card lying
+ * beside a circle.
+ */
+function cardsInPlay(table: TableState): Card[] {
+  const out: Card[] = [...table.dealer.cards];
+  for (const seat of table.seats) {
+    for (const hand of seat.hands) out.push(...hand.cards);
+    for (const sb of seat.pendingSideBets) if (sb.bonus) out.push(sb.bonus);
+  }
+  return out;
+}
+
+/**
+ * Make sure the shoe can deal `n` more cards, reshuffling if it cannot.
+ *
+ * Called before every draw. It almost never does anything — a six-deck shoe
+ * cut at 75% has seventy-eight cards behind the cut card — but a single deck
+ * cut at 65% leaves eighteen, and three seats splitting to four hands can want
+ * more than that inside one round. It used to throw there, out of a React
+ * event handler, taking the tree down mid-hand.
+ */
+function ensureCards(table: TableState, n: number): TableState {
+  if (table.shoe.size - table.shoe.pos >= n) return table;
+  return {
+    ...table,
+    shoe: reshuffleKeeping(table.shoe, table.rules.decks, table.rules.penetration, cardsInPlay(table)),
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -465,11 +498,21 @@ export function deal(table: TableState, rng: Rng): ActionResult {
    * dealt at all under ENHC.
    */
 
-  // Reshuffle before the deal rather than after the last round: a player
-  // should see the new shoe go in before they bet into it.
-  let shoe = table.shoe.cutReached
-    ? createShoe(table.rules.decks, table.rules.penetration, rng, table.shoe.shuffleId + 1)
-    : table.shoe;
+  /*
+   * Reshuffle before the deal rather than after the last round: a player
+   * should see the new shoe go in before they bet into it.
+   *
+   * The second condition is the belt to that brace. The cut card guarantees at
+   * least fifteen cards behind it, and a full deal for three seats wants two
+   * each, two for the dealer and up to one Super Sevens bonus apiece — eleven.
+   * That fits, but it fits by four, and nothing else in the file should have
+   * to know that. Nothing is in play here, so a plain fresh shoe is right.
+   */
+  const needed = playing.length * 3 + 2;
+  let shoe = table.shoe;
+  if (shoe.cutReached || shoe.size - shoe.pos < needed) {
+    shoe = createShoe(table.rules.decks, table.rules.penetration, rng, shoe.shuffleId + 1);
+  }
 
   const take = (): Card => {
     const step = draw(shoe);
@@ -789,10 +832,11 @@ export function hit(table: TableState): ActionResult {
   if (!check.ok) return check;
 
   const focus = table.focus!;
-  const step = draw(table.shoe);
+  const t = ensureCards(table, 1);
+  const step = draw(t.shoe);
 
   let busted = false;
-  const next = updateSeat(table, focus.seat, (seat) => {
+  const next = updateSeat(t, focus.seat, (seat) => {
     const updated = updateHand(seat, focus.hand, (hand) => {
       const cards = [...hand.cards, step.card];
       const v = handValue(cards);
@@ -838,9 +882,10 @@ export function double(table: TableState): ActionResult {
   if (!check.ok) return check;
 
   const focus = table.focus!;
-  const step = draw(table.shoe);
+  const t = ensureCards(table, 1);
+  const step = draw(t.shoe);
 
-  const next = updateSeat(table, focus.seat, (seat) => {
+  const next = updateSeat(t, focus.seat, (seat) => {
     const hand = seat.hands[focus.hand];
     const cards = [...hand.cards, step.card];
     const busted = handValue(cards).busted;
@@ -881,10 +926,11 @@ export function split(table: TableState): ActionResult {
   if (!check.ok) return check;
 
   const focus = table.focus!;
-  const first = draw(table.shoe);
+  const t = ensureCards(table, 2);
+  const first = draw(t.shoe);
   const second = draw(first.shoe);
 
-  const next = updateSeat(table, focus.seat, (seat) => {
+  const next = updateSeat(t, focus.seat, (seat) => {
     const hand = seat.hands[focus.hand];
     const splittingAces = isAce(hand.cards[0]);
 
@@ -1151,7 +1197,8 @@ export function dealerStep(table: TableState): ActionResult {
   const needsHoleCard =
     revealing && table.rules.holeCard === 'ENHC' && table.dealer.cards.length === 1;
   const needsDraw = !revealing && dealerShouldHit(table.dealer.cards, table.rules);
-  const step = needsHoleCard || needsDraw ? draw(table.shoe) : null;
+  const t = needsHoleCard || needsDraw ? ensureCards(table, 1) : table;
+  const step = needsHoleCard || needsDraw ? draw(t.shoe) : null;
 
   const cards = step ? [...table.dealer.cards, step.card] : table.dealer.cards;
   const v = handValue(cards);
@@ -1167,7 +1214,7 @@ export function dealerStep(table: TableState): ActionResult {
   }
 
   const next: TableState = {
-    ...table,
+    ...t,
     dealer: { cards, holeDown: false, outcome },
     phase: outcome === null ? 'DEALER' : 'SETTLE',
   };

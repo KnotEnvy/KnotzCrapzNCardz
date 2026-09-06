@@ -445,6 +445,15 @@ body {
     break-inside: avoid;
     margin-bottom: 0.5rem;
   }
+
+  /*
+   * The rail is part of the page here, not a drawer over it, so there is
+   * nothing to dismiss and nothing to dim. The scrim exists only where the
+   * rail covers the table.
+   */
+  .rail-scrim {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ *

@@ -60,7 +60,7 @@ published for fifty years:
 | Dealer busts, six decks, S17 | 28.15% | 28.32% |
 | Dealer busts, H17 | 28.52% | 28.54% |
 | Player is dealt a natural | 4.78% | 4.749% |
-| Vegas Strip house edge | 0.38% | 0.26% (model) |
+| Vegas Strip house edge | 0.375% | 0.400% (model) |
 | Mimicking the dealer instead | 5.64% | 5.5% |
 | Flat bettor's hands at a true count of +2 or better | **+1.33% to the player** | |
 | the same hands at −2 or worse | −2.17% | |
@@ -93,8 +93,9 @@ payout. Those edges carry no sampling error at all:
 | Super Sevens | 11.40% |
 | Lucky Ladies | 17.63% |
 
-Against a main game that runs between 0.26% and 2%. That comparison is the
-argument, and it is why the figures are on the chips.
+Against a main game that runs between 0.05% and 1.85% across the presets —
+and 0.40% on the default table. That comparison is the argument, and it is why
+the figures are on the chips.
 
 ## Playing it
 
@@ -144,7 +145,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 144 tests, about a second
+pnpm test            # the fast suite — 145 tests, about a second
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets

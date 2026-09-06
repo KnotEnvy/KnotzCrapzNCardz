@@ -75,6 +75,18 @@ export function createRng(seed: string): Rng {
   };
 }
 
+/**
+ * A seed drawn from an existing stream.
+ *
+ * Lets a value carry the seed of its own next shuffle — which is how the shoe
+ * can reshuffle itself mid-round without every function that deals a card
+ * having to be handed a generator. It stays deterministic: the same session
+ * replays the same reshuffles.
+ */
+export function seedFrom(rng: Rng): string {
+  return `${rng.int(0xffffffff).toString(36)}-${rng.int(0xffffffff).toString(36)}`;
+}
+
 /** A seed drawn from the platform CSPRNG, or the clock if one is unavailable. */
 export function randomSeed(): string {
   const g = globalThis as { crypto?: Crypto };

@@ -33,6 +33,9 @@ export default function Page() {
   const table = useGame((s) => s.table);
   const settlements = useGame((s) => s.settlements);
   const panelOpen = useGame((s) => s.prefs.panelOpen);
+  const setPanelOpen = React.useCallback((open: boolean) => {
+    useGame.getState().setPref('panelOpen', open);
+  }, []);
   const hydrated = useHydrated();
 
   const onSeatClick = React.useCallback((index: number) => {
@@ -92,7 +95,21 @@ export default function Page() {
           the table cannot use the height anyway — see .stats-rail in
           globals.css. Over it on anything short and narrow, where there is no
           room for either.
+
+          Where it overlays, it needs a way out. On a phone in landscape the
+          rail covers a third of the felt *and* the action bar underneath it,
+          so with the panel open you could see the table and not press Deal.
+          The scrim closes it on a tap anywhere else, which is what a drawer
+          that covers the thing you are using has to do.
         */}
+        {panelOpen ? (
+          <button
+            type="button"
+            aria-label="Close the statistics panel"
+            onClick={() => setPanelOpen(false)}
+            className="rail-scrim fixed inset-0 z-30 cursor-default bg-black/40 xl:hidden"
+          />
+        ) : null}
         <Hud
           className={cn(
             'stats-rail border-l border-white/6 bg-pit-950/80 backdrop-blur',

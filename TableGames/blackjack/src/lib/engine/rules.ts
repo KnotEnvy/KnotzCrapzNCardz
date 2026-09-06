@@ -2,7 +2,9 @@
  * House rules, and what they cost.
  *
  * Blackjack is not one game. The same table shape runs at anywhere between
- * 0.26% and 2.0% against the player depending on six or seven switches, and
+ * 0.05% and 1.85% against the player across the presets here — and further in
+ * both directions once the switches are moved by hand — depending on six or
+ * seven of them, and
  * the whole point of putting them in the setup screen is that a player can see
  * the number move. So every rule here carries its measured cost as well as its
  * value, and the setup screen reads both from this file.
@@ -220,8 +222,9 @@ export function maxInsurance(mainBet: number): number {
  * The published basic-strategy edge deltas, in percent of the initial wager.
  *
  * Positive is good for the player. These are the standard figures for a
- * six-deck game; the deck-count term is absolute rather than a delta, which is
- * why {@link estimateHouseEdge} starts from it.
+ * six-deck game. The deck-count entry is an absolute position rather than a
+ * delta, so {@link ruleEffects} subtracts the baseline's own six-deck value
+ * from it before reporting; everything else is already a delta.
  */
 export const RULE_EFFECTS = {
   decks: { 1: 0.48, 2: 0.19, 4: 0.06, 6: 0.0, 8: -0.02 } as Record<number, number>,

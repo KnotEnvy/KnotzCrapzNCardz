@@ -320,6 +320,46 @@ describe('the shoe, over a long session', () => {
     }
     expect(shuffles).toBeGreaterThan(100);
   }, 300_000);
+
+  /*
+   * The case the cut card does not cover.
+   *
+   * A single deck cut at 65% leaves eighteen cards, and three seats splitting
+   * to four hands can want more than that inside one round. `draw` used to
+   * throw there — out of a React event handler, taking the tree down mid-hand
+   * — on the stated premise that the cut card made it unreachable. Three seats
+   * on the shipped Single Deck preset reached it in thirteen thousand rounds.
+   *
+   * It now reshuffles the discards and carries on, which is what a dealer
+   * does, and the cards on the felt are excluded from the new shoe so nobody
+   * ends up holding one that is also still to come.
+   */
+  it('reshuffles mid-round rather than running dry', () => {
+    const rng = createRng('dry-shoe');
+    const rules = presetById('single-deck').rules;
+    let table = createTable(rules, rng, { seats: 3, bankroll: dollars(10_000_000) });
+    let duplicates = 0;
+
+    for (let i = 0; i < 120_000; i++) {
+      if (table.seats.some((s) => s.bankroll < dollars(1000))) {
+        table = { ...table, seats: table.seats.map((s) => ({ ...s, bankroll: dollars(10_000_000) })) };
+      }
+      table = playRound(table, DEFAULT_BOT, rng, ['A', 'B', 'C']).table;
+
+      const seen = new Set<number>();
+      for (const seat of table.seats) {
+        for (const hand of seat.hands) {
+          for (const card of hand.cards) {
+            if (seen.has(card.id)) duplicates++;
+            seen.add(card.id);
+          }
+        }
+      }
+    }
+
+    expect(duplicates).toBe(0);
+    expect(table.round).toBe(120_000);
+  }, 600_000);
 });
 
 /* ------------------------------------------------------------------ *

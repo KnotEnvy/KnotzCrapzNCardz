@@ -386,6 +386,17 @@ export interface ShoeState {
   cutReached: boolean;
   /** Increments on every shuffle, so React can key a whole new shoe. */
   shuffleId: number;
+  /**
+   * The seed this shoe would use if it had to reshuffle itself.
+   *
+   * A shoe can run out mid-round — a single deck cut at 65% leaves eighteen
+   * cards, and three seats splitting can eat that inside one hand. A real
+   * dealer reshuffles the discards and carries on, and so does this; carrying
+   * the seed is what lets it happen inside `draw`'s callers without threading
+   * a generator through every function that deals a card, and without giving
+   * up replayability.
+   */
+  seed: string;
 }
 
 export interface TableState {
