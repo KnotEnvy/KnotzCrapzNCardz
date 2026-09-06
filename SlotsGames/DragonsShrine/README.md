@@ -12,8 +12,8 @@ image files and no audio files in the repository, which is why the whole game
 is 0.3 MB over the wire.
 
 ```bash
-npm install
-npm run dev -- --port 3001
+pnpm install
+pnpm run dev -- --port 3001
 ```
 
 ---
@@ -89,7 +89,7 @@ respins** on average.
 
 ## What it actually returns
 
-Not a target — a measurement. `npm run test:stats` plays twenty million seeded
+Not a target — a measurement. `pnpm run test:stats` plays twenty million seeded
 spins and reports where every fraction of the return comes from:
 
 ```
@@ -201,10 +201,10 @@ find three weeks later in a screenshot.
 ### Checks
 
 ```bash
-npm test          # 125 tests, about two seconds
-npm run typecheck
-npm run lint
-npm run test:stats   # twenty million spins, about five minutes
+pnpm test          # 125 tests, about two seconds
+pnpm run typecheck
+pnpm run lint
+pnpm run test:stats   # twenty million spins, about five minutes
 ```
 
 The fast suite splits along a clean line: `engine.test.ts` asks whether the

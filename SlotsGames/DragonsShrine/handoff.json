@@ -2,7 +2,7 @@
   "project": "Dragon's Shrine",
   "path": "SlotsGames/DragonsShrine",
   "oneLine": "A five-reel video slot with fifty lines, free spins with a multiplier trail, a hold-and-win link with four jackpots and a fair gamble -- every feature won at the reels, never bought -- drawn entirely in SVG and canvas, sounded entirely by synthesis, and returning a measured 96.56%.",
-  "handoffDate": "2026-08-31",
+  "handoffDate": "2026-09-05",
   "status": "Feature complete, measured, and play-tested. 125 fast tests, typecheck, lint at zero warnings, a twenty-million-spin simulation returning 96.556% inside its target band, and a browser pass at four viewports with no console errors -- both features driven through their natural triggers, the gamble played through win, loss and collect, and reduced motion watched in both polarities. The mix is measured rather than argued about. What is left is a short, known list: see whatIsLeft, which is ordered.",
   "whatIsLeft": [
     {
@@ -139,11 +139,22 @@
     "One audio render is not a measurement. The noise buffer is regenerated per context and noiseTrim can multiply a narrowband voice by twelve, so a single render of dragonReel lands anywhere between 0.32 and 0.79. Take the median of five."
   ],
   "ifYouChangeOneThing": {
-    "theStrips": "Re-run npm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
+    "theStrips": "Re-run pnpm run test:stats. The strips are the whole feel of the machine and every number in paytable.ts is tuned against them. Then re-measure the buy prices -- do not scale them by eye.",
     "theDrawOrder": "Expect engine.test.ts's draw-order pin to fail, and know that every seeded expectation in both suites has moved at the same time.",
     "theContracts": "src/lib/engine/types.ts and src/lib/store/contract.ts are published: add to them, never rename or remove. Everything else compiles against them.",
     "theLayout": "There are two layouts, not one. `tight` in globals.css (short and wide) puts the deck in a rail beside the board; everything else stacks. The rail is ~265px wide while the viewport is 812px, so `sm:` utilities are actively wrong inside it -- that is why the tight variant is declared after the Tailwind import, so its utilities sort last and win. Check both.",
     "aFanfare": "Re-run the harness in tools/measure-audio.md and check the one invariant at the bottom of it: jackpotGrand must be louder than winLegendary. It was not, for the whole of the previous handoff, and nothing but a measurement would have caught it."
+  },
+  "toolchain": {
+    "packageManager": "pnpm 10.13.1, pinned by the `packageManager` field in package.json. Run `corepack enable` once and the right version fetches itself. Both games in the repo were converted together on 2026-09-05; package-lock.json is gone from both and pnpm-lock.yaml is the only lockfile.",
+    "whyItMatters": "The Docker build reads the same pinned version through corepack, so the image cannot quietly install with a different resolver than a developer did. `pnpm install --frozen-lockfile` fails rather than silently updating the lockfile, which is what makes the build reproducible.",
+    "oneWrinkle": "pnpm 10 refuses to run dependency build scripts unless they are named. unrs-resolver (an eslint transitive) ships one, and it is listed under `pnpm.ignoredBuiltDependencies` because eslint resolves fine without its native binary -- verified by running the lint, not assumed. If a future dependency genuinely needs its postinstall, add it to `pnpm.onlyBuiltDependencies` instead."
+  },
+  "deployment": {
+    "arcade": "`docker compose up -d --build` from the repo root builds and runs both games: craps on http://localhost:8080 and Dragon's Shrine on http://localhost:8081. The per-game compose files still work standalone, but not at the same time as the root one -- container names are pinned, and Docker will not give one name to two containers.",
+    "image": "Two stages. Node builds the static export and is then thrown away; the shipped image is nginx plus a folder of HTML, JS and self-hosted fonts, with no Node and no installed packages in it to patch.",
+    "buildNeedsNetwork": "next/font/google fetches Cinzel, Inter and Orbitron at build time and self-hosts them into out/. That is what stops the running game calling Google, but an offline build machine fails at the build step.",
+    "verified": "Both images rebuilt from scratch with --no-cache under pnpm on 2026-09-05 and both serve: HTTP 200 on / and /healthz, real app HTML, and both containers report healthy."
   },
   "verifiedBy": {
     "typecheck": "clean",

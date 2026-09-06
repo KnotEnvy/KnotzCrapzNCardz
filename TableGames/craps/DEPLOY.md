@@ -2,7 +2,7 @@
 
 The game is entirely client-side — the engine, the physics, the strategies and
 the saved session all run in the browser, and nothing needs a server except
-something to hand over the files. So `npm run build` produces a folder of static
+something to hand over the files. So `pnpm run build` produces a folder of static
 files (`out/`), and everything below is a different way of serving that folder.
 
 There is no database, no API and no secrets. That is what makes all of this
@@ -27,7 +27,7 @@ docker compose down        # stop it
 
 The image is a two-stage build: Node compiles the game, then everything except
 the output is thrown away and the result is copied into `nginx:alpine`. The
-shipped image is about **69 MB** and contains no Node and no npm packages — just
+shipped image is about **69 MB** and contains no Node and no installed packages — just
 nginx and the built game.
 
 The build stage needs network access, because `next/font/google` downloads Inter
@@ -86,7 +86,7 @@ Nothing to run, nothing to keep patched, and a real HTTPS domain (which is also
 what makes the home-screen install feel like an app anywhere, not just at home).
 
 ```bash
-npm run build       # produces out/
+pnpm run build       # produces out/
 
 npx vercel deploy --prod out          # Vercel
 npx netlify deploy --prod --dir out   # Netlify

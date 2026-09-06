@@ -60,16 +60,16 @@
     "fonts": "next/font/google — Oswald (felt lettering) + Inter (UI)"
   },
   "commands": {
-    "dev": "npm run dev",
-    "build": "npm run build",
-    "test": "npm test — 216 tests, ~2s. Run this constantly.",
-    "testStats": "npm run test:stats — 71 tests, ~2m38s. Every bet on the layout plus the seventeen-strategy EV table. Opt-in, separate config.",
-    "typecheck": "npm run typecheck",
-    "lint": "npm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
+    "dev": "pnpm run dev",
+    "build": "pnpm run build",
+    "test": "pnpm test — 216 tests, ~2s. Run this constantly.",
+    "testStats": "pnpm run test:stats — 71 tests, ~2m38s. Every bet on the layout plus the seventeen-strategy EV table. Opt-in, separate config.",
+    "typecheck": "pnpm run typecheck",
+    "lint": "pnpm run lint — currently zero errors and zero warnings; keep it that way, it caught two real bugs before and two more this session.",
     "note": "All commands run from TableGames/craps, not the repository root. The root has no build of its own.",
     "dockerUp": "docker compose up -d --build → http://localhost:8080. Rebuilds the image and restarts the container.",
     "dockerDown": "docker compose down",
-    "start": "npm start — serves the built out/ as static files on :3000. NOT `next start`, which a static export does not have."
+    "start": "pnpm start — serves the built out/ as static files on :3000. NOT `next start`, which a static export does not have."
   },
   "architecture": {
     "principle": "The engine is pure. `src/lib/engine` and `src/lib/strategy` contain no React, no I/O, no clock and no randomness at the point of use. `applyRoll(table, roll)` returns a new table, the settlements to animate, and a ledger record; `runStrategy(...)` returns a new table, new memory, and a log. That is what makes the game replayable from a seed and testable without a browser. Keep it that way.",
@@ -408,7 +408,7 @@
     "The stats harness books an up-front commission ONCE PER PLACEMENT, not once per decision (`sp.vig` is zeroed after the first settlement of a placement in runSpots). That is what makes the buy figures amortise across a ride. Charging it per decision instead silently reproduces a re-vigging table and reports 4.762% on every up-front buy and lay, which is what it did before the rule was settled.",
     "A lay bet is charged five percent of what it WINS, a buy five percent of what it STAKES. These are not the same quantity, because a lay risks more than it wins. Both rules are in odds.ts; do not reimplement either at a call site. This exact drift was a live bug until the house-edge suite caught it.",
     "There is no way to turn increment snapping off, and there must not be. `enforceIncrements` was a house rule until this session; with it off, placeBet skipped the snap but the resolver still paid the true ratio, so a literal $10 place bet on the six paid $11.666666666666668 into the bankroll and float dust into everything downstream. The rule is deleted from TableRules and both toggles are gone from the UI. The increments are not cosmetic - HORN divides the wager by 4, WORLD and HORN_HIGH by 5, C_AND_E by 2, and those divisions are only whole because the wager was snapped first. Regression tests: the 'every wager is taken at a payable multiple' block.",
-    "On a FRESH CLONE, `npm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `npm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
+    "On a FRESH CLONE, `pnpm run typecheck` fails with `src/app/layout.tsx: Cannot find name 'LayoutProps'`. This is not a regression. LayoutProps is a Next-generated global that lives in .next/types, which does not exist until something builds. Run `pnpm run build` once and typecheck is clean. Do not go hunting in layout.tsx.",
     "Do not typecheck while `next dev` is running - you will get `.next/dev/types/validator.ts: Unexpected keyword or identifier` from a generated file the dev server is mid-write on. It is transient and not yours.",
     "Frozen arrays are slow. history, bets and anything else immer has auto-frozen must not be fed to slice(), find() or filter() in a hot path - see keyDecisions. Spread, or write the scan out.",
     "fastRoll is persisted, and the fast path in throwDice deliberately sets animation to null. If the dice never appear, check the FAST button before you go looking at the canvas - a saved session with fast mode left on looks exactly like a broken renderer. This cost real debugging time this session.",
@@ -432,14 +432,14 @@
     "The dice test 'is fast enough to run synchronously on a click' asserts under 60ms per throw and measured 61.5ms once on a machine also running a dev server and a browser. It passes comfortably on its own. If it fails, re-run it alone before believing it.",
     "A green build, typecheck and lint prove nothing about whether the 3D canvas actually drew anything, whether an effect layer animated, or whether a bot actually put chips on the felt. All three were verified this session by driving the live app and reading the DOM back. That is the standard to hold.",
     "nginx `add_header` does not accumulate down the config tree: the moment a location block sets one, every add_header from the server block above stops applying there. The security headers in nginx.conf are therefore repeated in each location on purpose — deleting the duplicates silently strips them from the HTML responses.",
-    "`npm start` no longer runs `next start`; a static export has no Next server. It serves out/ as files instead, which is what previewing the real production build means now."
+    "`pnpm start` no longer runs `next start`; a static export has no Next server. It serves out/ as files instead, which is what previewing the real production build means now."
   ],
   "verification": {
     "automated": {
       "unit": "126 tests. Every bet's payout, come-out and point cycles, contract bets, come-bet travel and come-out protection, working/off behaviour, buy and lay commission both ways, Fire Bet, All/Tall/Small, shooter rotation, solo play, chip denomination conversion, the table minimum auto-fill, the short-rack step-down, the grouped place calls, number-scoped pressing, and an invariant that a bankroll never moves except by the settlements the engine reports. Plus a new 'every wager is taken at a payable multiple' block: the increment table for every bet kind, and an invariant that walks a full hand with seventeen bet types on the felt at seven awkward stake amounts and asserts no settlement credit, debit or net - and no bankroll - is ever fractional.",
       "strategy": "77 tests. Everything the previous session covered, plus a new 'the library a player actually sees' block: a custom carrying a house id never shadows the house version, every id in the library is unique, and a custom with its own id survives.",
       "dice": "4 tests. All 36 combinations land exactly as requested, both dice settle flat and inside the rails over 40 throws, tumble length is watchable, and a throw solves in under 60ms.",
-      "statistical": "npm run test:stats — 71 tests across two files, ~2m38s. Now covers EVERY bet on the layout, not five of them: pass, don't pass, come, don't come, all four odds bets measured in isolation (which must and do come out at zero edge), all six place numbers, buy and lay on all six with BOTH vig polarities, the four hardways, Big 6/8, all sixteen props including the four horn highs, easy and hard hops, the field in both twelve polarities, the Fire Bet and All/Tall/Small. Bands are theory +/- 3 standard errors computed from each run's own per-decision variance. It prints its own summary table. This is the suite that caught the lay commission bug.",
+      "statistical": "pnpm run test:stats — 71 tests across two files, ~2m38s. Now covers EVERY bet on the layout, not five of them: pass, don't pass, come, don't come, all four odds bets measured in isolation (which must and do come out at zero edge), all six place numbers, buy and lay on all six with BOTH vig polarities, the four hardways, Big 6/8, all sixteen props including the four horn highs, easy and hard hops, the field in both twelve polarities, the Fire Bet and All/Tall/Small. Bands are theory +/- 3 standard errors computed from each run's own per-decision variance. It prints its own summary table. This is the suite that caught the lay commission bug.",
       "static": "tsc --noEmit clean (after one build - see gotchas); eslint clean, 0 errors 0 warnings; next build succeeds.",
       "strategyEv": "src/lib/engine/strategy-ev.sim.test.ts — the expected value of all seventeen house systems over 200,000 seeded rolls each, reported as net per roll, realised edge, and action generated per roll. Two invariants make it a test rather than a report: no system may measure a better edge than the cheapest bet it is built from, and the seventeen pooled must measure a losing proposition. Closes a long-standing open item."
     },
@@ -588,8 +588,8 @@
     "ignored": "stats-run.txt and bench-out.txt are local test artefacts and are gitignored."
   },
   "pickUpHere": {
-    "firstCommand": "cd TableGames/craps && npm install && npm run build && npm run dev",
-    "firstCheck": "npm test (193, ~4s), then open the app and press space a few times. Run `npm run build` BEFORE `npm run typecheck` on a fresh clone - LayoutProps is generated into .next/types and typecheck fails without it (see gotchas). If the dice do not appear, check the FAST button before anything else - fast mode is persisted and deliberately skips the animation. Everything was green at handoff, so anything red is something you changed.",
+    "firstCommand": "cd TableGames/craps && pnpm install && pnpm run build && pnpm run dev",
+    "firstCheck": "pnpm test (193, ~4s), then open the app and press space a few times. Run `pnpm run build` BEFORE `pnpm run typecheck` on a fresh clone - LayoutProps is generated into .next/types and typecheck fails without it (see gotchas). If the dice do not appear, check the FAST button before anything else - fast mode is persisted and deliberately skips the animation. Everything was green at handoff, so anything red is something you changed.",
     "thenRead": [
       "README.md for how the game plays and how to build a strategy",
       "keyDecisions in this file before changing the engine, the dice, the strategy runner, or how a wager is sized"
@@ -613,11 +613,11 @@
   },
   "deployment": {
     "model": "Static. The game is client-side end to end, so `next build` runs with `output: 'export'` and writes out/ — a folder of files. No Node runs in production.",
-    "why": "Nothing in the app needs a server: the engine, the physics, the strategies and the saved session are all in the browser. Exporting statically makes the image small, removes the whole npm dependency surface from production, and lets the same build go to any static host without change.",
+    "why": "Nothing in the app needs a server: the engine, the physics, the strategies and the saved session are all in the browser. Exporting statically makes the image small, removes the whole installed dependency surface from production, and lets the same build go to any static host without change.",
     "consequence": "Anything requiring a server — route handlers, server actions, ISR, next/image optimisation, sessions shared across devices — now fails the build instead of silently not working. That is the intended trade, not an oversight.",
     "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. ~69 MB. Runs read_only with tmpfs for nginx scratch dirs.",
     "run": "docker compose up -d --build  →  http://localhost:8080",
-    "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/. That keeps the running game from calling Google, but an offline build machine fails at `npm run build`.",
+    "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/. That keeps the running game from calling Google, but an offline build machine fails at `pnpm run build`.",
     "tls": "nginx.conf is an origin server speaking plain HTTP on 80. TLS belongs at a reverse proxy or tunnel in front of it, never in this config.",
     "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting with the trade-offs spelled out."
   },

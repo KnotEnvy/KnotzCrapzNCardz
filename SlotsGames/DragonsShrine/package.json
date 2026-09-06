@@ -2,10 +2,11 @@
   "name": "dragons-shrine",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "npx --yes serve@14 out -l 3000",
+    "start": "pnpm dlx serve@14 out -l 3000",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -37,5 +38,10 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "unrs-resolver"
+    ]
   }
 }

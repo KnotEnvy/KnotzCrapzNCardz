@@ -17,14 +17,19 @@ More table and card games are on the way, which is what the shared
 
 Each game carries its own `package.json` and runs on its own.
 
+Both use pnpm, pinned by a `packageManager` field. Run `corepack enable` once
+and the right version fetches itself, which is the point of pinning it there
+rather than in a README nobody re-reads: the version that built the lockfile is
+the version that installs it, on a laptop and inside the Docker build alike.
+
 ```bash
 cd TableGames/craps
-npm install
-npm run dev        # http://localhost:3000
+pnpm install
+pnpm run dev        # http://localhost:3000
 
 cd SlotsGames/DragonsShrine
-npm install
-npm run dev -- --port 3001
+pnpm install
+pnpm run dev -- --port 3001
 ```
 
 See [the craps README](TableGames/craps/README.md) for how it plays, what is on
@@ -98,10 +103,10 @@ touching:
 
 ```bash
 cd TableGames/craps        # or SlotsGames/DragonsShrine
-npm test                   # the fast suite
-npm run typecheck
-npm run lint
-npm run test:stats         # the long simulations: house edge, or RTP
+pnpm test                   # the fast suite
+pnpm run typecheck
+pnpm run lint
+pnpm run test:stats         # the long simulations: house edge, or RTP
 ```
 
 Each game keeps its own handoff notes —

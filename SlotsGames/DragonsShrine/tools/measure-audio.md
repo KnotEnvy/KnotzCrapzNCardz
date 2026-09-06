@@ -15,7 +15,7 @@ renders far faster than real time, and costs nothing to use.
 
 ## Running it
 
-1. `npm run dev`, open the game.
+1. `pnpm run dev`, open the game.
 2. The module publishes itself as `window.__dsAudio` in development only --
    see the bottom of `audio.ts`. It exposes `playSound`, `startMusic`,
    `stopMusic`, `stopLoop`, the two enable switches, and `reset`.

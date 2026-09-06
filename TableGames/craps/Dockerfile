@@ -6,7 +6,7 @@
 # The game is entirely client-side, so this builds it to static files and
 # then throws the toolchain away: the shipped image is nginx plus a folder
 # of HTML, JS and fonts. No Node runs in production, which is why the final
-# image is tens of megabytes rather than hundreds and has no npm packages in
+# image is tens of megabytes rather than hundreds and has no installed packages in
 # it to need patching.
 # ------------------------------------------------------------------------
 
@@ -14,10 +14,17 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 
+# Corepack reads the `packageManager` field in package.json and fetches exactly
+# that pnpm, so the image cannot quietly build with a different one than a
+# developer has.
+RUN corepack enable
+
 # Dependencies are their own layer, so editing game code does not reinstall
-# them. `npm ci` builds exactly the lockfile, which is the point of pinning.
-COPY package.json package-lock.json ./
-RUN npm ci
+# them. `--frozen-lockfile` builds exactly the lockfile and fails rather than
+# updating it, which is the point of pinning; it is the default in CI but not
+# always here, so it is stated.
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
@@ -25,7 +32,7 @@ COPY . .
 # Oswald at build time and self-hosts them in the output -- that is what keeps
 # the running game from calling out to Google, but it means an offline build
 # machine will fail here.
-RUN npm run build
+RUN pnpm run build
 
 # Precompress everything worth compressing so nginx can serve the .gz directly
 # instead of compressing the same 4 MB bundle on every request. `-k` keeps the

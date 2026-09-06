@@ -5,8 +5,8 @@ true casino odds, and a strategy workshop for building systems and playing
 against them.
 
 ```bash
-npm install
-npm run dev        # http://localhost:3000
+pnpm install
+pnpm run dev        # http://localhost:3000
 ```
 
 Or run the packaged build, which is what gets deployed:
@@ -241,13 +241,13 @@ seeded rolls in a test with no browser anywhere in sight.
 ## Tests
 
 ```bash
-npm test           # 216 tests, about ten seconds
-npm run test:stats # long-running house-edge simulations
-npm run typecheck
-npm run lint
+pnpm test           # 216 tests, about ten seconds
+pnpm run test:stats # long-running house-edge simulations
+pnpm run typecheck
+pnpm run lint
 ```
 
-`npm test` covers the payout of every bet on the layout, the come-out and point
+`pnpm test` covers the payout of every bet on the layout, the come-out and point
 cycles, contract bets, come-bet travel and protection, working/off behaviour,
 commission handling, the side bets, shooter rotation, solo play, chip
 denomination conversion, the table minimum, the grouped place calls, and an
@@ -260,7 +260,7 @@ invents a dollar: whatever a strategy does between rolls has to leave a seat
 worth exactly what the settlements left it worth, because all it may do is move
 chips between the rack and the felt.
 
-`npm run test:stats` is the real proof: it plays hundreds of thousands of
+`pnpm run test:stats` is the real proof: it plays hundreds of thousands of
 decisions and checks the measured house edge lands where the mathematics says it
 should — 1.41% on the pass line, 1.36% on don't pass, 2.78% on the field, 16.67%
 on any seven, and around 0.37% on the pass line backed with full odds. It also
@@ -270,10 +270,10 @@ plus or minus three standard errors. It takes a few minutes.
 
 ## How it ships
 
-The game is client-side from top to bottom, so `npm run build` writes a folder
+The game is client-side from top to bottom, so `pnpm run build` writes a folder
 of static files (`out/`) rather than something that needs a Node process. The
 Docker image builds that folder and then serves it from nginx, which is why it
-is about 69 MB and has no npm packages in it to keep patched.
+is about 69 MB and has no installed packages in it to keep patched.
 
 The practical consequence: anything that would need a server — a route handler,
 a server action, saved sessions shared between devices — will fail the build
