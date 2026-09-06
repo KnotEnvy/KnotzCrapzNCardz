@@ -60,6 +60,12 @@ published for fifty years:
 | Player is dealt a natural | 4.78% | 4.749% |
 | Vegas Strip house edge | 0.38% | 0.26% (model) |
 | Mimicking the dealer instead | 5.64% | 5.5% |
+| Flat bettor's hands at a true count of +2 or better | **+1.33% to the player** | |
+| the same hands at −2 or worse | −2.17% | |
+
+That last pair is the whole case for counting, and it is measured from the
+player's own results rather than asserted: the same flat bet, the same chart,
+bucketed by what the discard tray was saying when the chips went out.
 
 The last two lines are the argument: playing the chart costs you about a third
 of a percent, and copying the dealer costs you five and a half. Every figure

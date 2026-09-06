@@ -152,8 +152,8 @@
       "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
-      "when": "2026-09-06",
-      "note": "The figures the suite printed on its last full run. Kept here so a future change can be compared against a real baseline rather than against the tolerances.",
+      "when": "2026-09-06, after the review fixes",
+      "note": "What the suite printed on its last full run (28 tests, 6m19s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
@@ -168,15 +168,16 @@
         "playerNatural": 4.781
       },
       "houseEdge": {
-        "SingleDeck": 1.854,
+        "SingleDeck": 1.849,
         "VegasStrip": 0.375,
         "AtlanticCity": 0.207,
-        "European": 0.682,
-        "LiberalShoe": 0.236,
+        "European": 0.632,
+        "LiberalShoe": 0.172,
         "MimicTheDealer": 5.635
       },
-      "counting": "A flat bettor measured 0.384% against the house; the same shoes with a Hi-Lo 1-12 spread and index plays measured 0.210% in the player's favour.",
-      "caveat": "The five per-rule delta rows are the noisy ones and always will be: a rule change alters how many cards leave the shoe, so the two arms diverge within a few rounds and a shared seed only equalises the opening shoes. They are asserted for sign and order of magnitude. The Liberal Shoe preset is the largest gap against the rule model (0.33 points, inside the 0.39 tolerance), which suggests the model slightly overvalues stacking several player-friendly rules at once."
+      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.331% for the player at a true count of +2 or better against -2.166% at -2 or worse. That three-and-a-half point gap is the assertion. Spread-versus-flat (-0.384% against +0.317%) is printed but not asserted; the spread arm's own three-sigma band is 1.75%.",
+      "resplitAces": "Now measures at +0.058% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing \u2014 the clearest single piece of evidence that the fix landed.",
+      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds. The Liberal Shoe preset remains the largest gap against the rule model (0.26 points, inside the 0.385 tolerance, and down from 0.33 before re-split aces was fixed), which suggests the model still slightly overvalues stacking several player-friendly rules at once."
     }
   },
   "openItems": [
