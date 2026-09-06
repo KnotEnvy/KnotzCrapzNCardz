@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Knotz Blackjack 21",
+  "short_name": "Blackjack",
+  "description": "A full blackjack table: every rule set, every side bet, with a strategy trainer and a card counter built in.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "landscape",
+  "theme_color": "#0a0c10",
+  "background_color": "#07080a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

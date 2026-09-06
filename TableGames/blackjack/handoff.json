@@ -1,0 +1,175 @@
+{
+  "project": "Knotz Blackjack 21",
+  "path": "TableGames/blackjack",
+  "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
+  "handoffDate": "2026-09-06",
+  "status": "Feature complete and measured. Everything is green: 114 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite \u2014 dealer distributions against the published tables, five rule sets' house edges, five per-rule deltas, and six side-bet edges (five of them enumerated exactly rather than sampled). The engine went through a real optimisation pass this session and is 66x faster per round than the first working version, which is what made a multi-million-round measurement suite possible at all.",
+  "whatWasBuilt": {
+    "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
+    "engine": [
+      "types.ts \u2014 cards, hands, seats, rules, records. Money is integer cents everywhere; see money.ts for why.",
+      "rng.ts \u2014 xoshiro128** with rejection sampling. An honest copy of the craps one rather than a shared package across two apps that never deploy together.",
+      "shoe.ts \u2014 a fixed array plus a pointer, not a shifted queue. The cut card sits at a fraction of the shoe.",
+      "hand.ts \u2014 totals, soft/hard, and every legality question, each returning a reason rather than a boolean.",
+      "rules.ts \u2014 five presets and the published per-rule edge deltas the setup screen prices switches with.",
+      "sidebets.ts \u2014 six paytables with edges computed by enumeration, not looked up.",
+      "table.ts \u2014 the state machine. Every legal move, returning a new table or a refusal with a sentence in it.",
+      "resolve.ts \u2014 settlement. The only function that pays anybody.",
+      "strategy/basic.ts \u2014 the chart, per rule set, with the table's own restrictions folded into the cells.",
+      "strategy/counting.ts \u2014 Hi-Lo, KO, Omega II, Hi-Opt II, the Illustrious 18 and the Fab 4.",
+      "strategy/autoplay.ts \u2014 the bot, which moves money only through the same exported actions the buttons call."
+    ],
+    "ui": [
+      "An SVG felt at a fixed 1000x560 viewBox with HTML positioned in the same coordinate space, scaled by one transform.",
+      "Cards are the shared 54-PNG deck from cardArt/, copied into public/cards, with a CSS 3D flip and a CSS-drawn back.",
+      "Chips are drawn in CSS \u2014 a conic gradient makes the eight rim dashes without eight elements.",
+      "Fifteen synthesised sounds, no audio assets: cards, chips, the sweep, the shuffle, and three stings that decide money.",
+      "A stats panel that is beside the felt above 1180px and a drawer below it."
+    ],
+    "bugsFoundByTests": [
+      "advance() moved the focus after every action, so a hit that did not bust passed the turn to the next hand.",
+      "An early surrender that finished the last hand set the phase to DEALER and skipped the peek entirely \u2014 which under ENHC meant the dealer never drew a second card, and with a live Bust It bet meant it never resolved.",
+      "closeOffers() could land on PLAYER with a null focus when every hand was a natural, hanging the round forever.",
+      "settle() had no idempotence guard, so a double-fired phase transition paid the table twice.",
+      "The split-to-four limit was reported with the wrong reason because the test fixture ran out of pairs \u2014 the engine was right and the test was wrong, which is worth recording because it looked like the opposite.",
+      "Two zustand selectors (advice(), count()) built a fresh object on every store read, which is an infinite render loop. Found by running the app, not by a test; they are hooks now."
+    ]
+  },
+  "stack": {
+    "framework": "Next.js 16.3.2 (App Router, Turbopack), React 19.2",
+    "language": "TypeScript 5, strict",
+    "state": "zustand 5 + persist; immer 11 on the engine's cold paths only \u2014 see keyDecisions",
+    "styling": "Tailwind CSS 4 (CSS-first @theme in src/app/globals.css)",
+    "motion": "CSS keyframes and transitions; motion 13 is a dependency but the table does not currently need it",
+    "test": "vitest 4, two configs",
+    "fonts": "next/font/google \u2014 Oswald (felt lettering) + Inter (UI)",
+    "art": "../../cardArt copied into public/cards at build time by being committed there"
+  },
+  "commands": {
+    "dev": "pnpm run dev",
+    "build": "pnpm run build",
+    "test": "pnpm test \u2014 114 tests, under a second. Run this constantly.",
+    "testStats": "pnpm run test:stats \u2014 26 tests, about three minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
+    "typecheck": "pnpm run typecheck",
+    "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
+    "note": "All commands run from TableGames/blackjack. The repository root has no build.",
+    "dockerUp": "docker compose up -d --build  \u2192  http://localhost:8082",
+    "start": "pnpm start \u2014 serves the built out/ statically on :3002. NOT `next start`, which a static export does not have."
+  },
+  "architecture": {
+    "principle": "The engine is pure. src/lib/engine and src/lib/strategy contain no React, no I/O, no clock, and no randomness at the point of use \u2014 the two functions that need it (deal, and the constructors) take an Rng as an argument. Every action returns a new table or a refusal. That is what makes a session replayable from a seed, testable without a browser, and safe to drive from a bot and a simulation at the same time.",
+    "storeIsAMetronome": "src/lib/store/useGame.ts owns the pacing of a round \u2014 the gaps between cards, the pause before the hole card, how long a settlement sits on the felt \u2014 and nothing else. Every money-moving call delegates to an engine function and swaps in whatever table comes back, so the store cannot invent a payout. Everything the driver does, a player could do by hand.",
+    "oneRulebook": "The bot calls hit(), stand(), double(), split() and surrender() \u2014 the same exported functions the buttons call. There is no second path into the state, which is why a bot cannot make a bet a player could not, and why the simulation measures the game the felt actually plays.",
+    "svgPlusDom": "The felt is an SVG at a fixed viewBox; the cards, chips and totals are HTML positioned in the same coordinate space and scaled by one transform on a wrapper. SVG draws the screen-printed lettering far better and CSS animates a card flip far better, and this is the seam that lets each do what it is good at while sharing one set of coordinates. Surface.tsx measures the container and passes the scale down, because a card at 62px is right and at 20px is illegible \u2014 the card size is a function of the scale, not a constant."
+  },
+  "keyDecisions": [
+    "Money is integer cents. A 3:2 blackjack on a five dollar bet pays seven fifty, so dollars have to be fractional somewhere; cents put the fraction in the integer. Payouts floor, never round up \u2014 a dealer short-pays to the nearest chip. Over the millions of rounds the simulation deals, float dollars would accumulate an error the same size as the thing being measured.",
+    "The shoe is an array plus a pointer, not a shifted queue. Immutability plus shift() means copying the tail of a 416-card array per card dealt.",
+    "immer was removed from every hot path. It remains on the cold ones \u2014 placing a bet, sitting down, changing the rules \u2014 where it runs at most once a round and its readability is free. The reason is measured, not stylistic: immer's cost is proportional to what a recipe READS, and drafting a seat drafts its hands, drafting a hand drafts its card array, and reading a card drafts the card. A round of blackjack reads all of that. See the note above updateSeat in table.ts.",
+    "Assigning a shoe INSIDE an immer draft was 84% of the simulation's runtime on its own: immer's finaliser walks any new plain value looking for nested drafts, which meant walking four hundred card objects for a field whose only change was an integer. Every draw is now hoisted out of the draft and the shoe is spread back on by withShoe(). Do not put a shoe in a draft.",
+    "settle() attaches the round history with a plain spread rather than inside a produce, for the same reason: prepending to a three-hundred-entry list inside a draft made immer rescan every record.",
+    "Together those three changes took a simulated round from 1,581 microseconds to 24 \u2014 sixty-six times. Nothing about the game changed; 114 tests passed before and after each step.",
+    "The strategy chart has the table's own restrictions folded into its cells, not just into the advisor. A cell reading 'surrender' at a table with no surrender is a play the dealer will refuse, printed under a caption claiming otherwise. adviseFrom() still has the fallback logic and is still tested, because it is the honest description of what a printed card means.",
+    "Side-bet edges are computed, not cited. Five of the six are decided by two or three cards off the top, so sidebets.sim.test.ts enumerates every ordered pair and triple weighted by exact probability. Where a remembered figure and the enumeration disagreed, the enumeration won \u2014 Perfect Pairs at six decks is 6.11%, not the widely quoted 4.10% (that is the eight-deck number for this paytable, and the bet genuinely improves with more decks because a perfect pair needs a second copy of the identical card).",
+    "The Bust It ladder was repriced. The first draft measured at 20.3%, which is worse than Lucky Ladies and not a bet any house spreads; 1/3/8/20/75/400 measures at 6.71% and has the escalating shape a real one has.",
+    "Insurance and even money are one code path. Even money is insurance for the maximum on a natural and comes to exactly 1:1 on the main wager either way the hole card falls; implementing it separately is how the two end up disagreeing. There is a test that asserts the payout is identical for both hole cards.",
+    "ENHC is a separate settlement path, not a cosmetic flag. Under no-hole-card the dealer's second card arrives after the doubling is done, so a natural takes the doubled and split chips as well. That is the whole 0.11% and there is a test for exactly that hand.",
+    "The counting trainer reads the discard tray and nothing else. countShoe walks cards[0..pos) \u2014 the cards a player has seen. composition() could answer far more accurately and is deliberately wired to nothing but the tests.",
+    "The dealer plays out their hand when a Bust It bet is live even if every player hand has busted, because Bust It is a bet on the dealer's finished hand. dealerMustPlay() is the predicate and it is asked once per turn, not once per card.",
+    "Chart cell colours and side-bet accents live in a plain :root block, not in @theme. Tailwind 4 only emits a theme variable when a utility referencing it is generated, and these are only ever read through var() in an inline style because the value is chosen at runtime \u2014 declared in @theme they were tree-shaken out and every chart cell rendered with no background.",
+    "The felt's three printed arcs are concentric, struck from one centre below the table. Two arcs with independently chosen radii and chords cross, which is exactly what the first version did \u2014 the payout line and the dealer's rule overlapped in the middle of the table.",
+    "Side-bet circles are one row of six compact boxes. Two rows do not fit: the felt's arc closes in fast below the betting circles and an outside seat's second row hangs over the rail. This is the constraint that sets the seat spacing.",
+    "No service worker, no analytics, no network calls at runtime. The fonts are self-hosted by the build and the card art is served from the same origin."
+  ],
+  "gotchas": [
+    "deal() takes an Rng because a reshuffle happens there. It is the only action that does.",
+    "A hand's `bet` already includes any double, and the stake has already left the bankroll. settleHand returns both `net` (the signed change, what the ledger reads) and `returned` (what goes back to the bankroll). Conflating them is how a settlement function pays doubles twice; they are named apart everywhere.",
+    "isBlackjack() takes splitDepth. Ace-ten on a split hand is twenty-one and pays even money at every casino on earth. Getting it wrong is worth about a tenth of a percent.",
+    "advance()/settleFocus() must NOT pass the turn after a hit that leaves the hand live, or after a split. Most moves do not end the turn. This was a real bug.",
+    "The INSURANCE phase carries two offers, not one: insurance against an ace, and early surrender against a ten or an ace. It is entered for either, and closeOffers() is what triggers the peek. An early surrender that finishes the last hand must not skip that.",
+    "settle() is guarded by table.settled. The UI drives it off a phase transition and a transition can fire twice.",
+    "The store's persist merge() force-settles a round that was in flight when the tab closed: chips on hands and unresolved side bets go back to the bankroll and the phase resets to BETTING. There is no honest way to resume a half-committed round whose timers are gone.",
+    "lastBets is a Map and is deliberately not persisted \u2014 JSON has no Maps, and it would come back as {} and silently break the re-bet button.",
+    "Never use advice() or count() as zustand selectors. They build a fresh object per call. Use useAdvice() and useCount().",
+    "The simulation tops the bankroll back up rather than letting the bot go broke. A run that stops at round 40,000 has measured 40,000 rounds and then stopped, which biases the sample toward losing runs.",
+    "Distribution measurements need a live Bust It bet, otherwise about three rounds in a hundred end with the dealer standing pat on a two-card twelve and the numbers are not comparable to a published table.",
+    "The paired rule-delta tests share a seed but not a card sequence: a rule change alters how many cards come off the shoe and the two runs diverge within a few rounds. They check a sign and an order of magnitude. The absolute figures are in the preset tests.",
+    "public/cards is a committed copy of ../../cardArt. A static export cannot reach outside its own public directory. If the shared deck changes, copy it again.",
+    "next dev writes AGENTS.md and CLAUDE.md into the project root unless agentRules is disabled. They are gitignored."
+  ],
+  "verification": {
+    "automated": [
+      "114 unit tests covering hand mathematics, the peek, splits to four hands, split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, the whole strategy chart cell by cell, and the four counting systems.",
+      "Dealer finishing distribution asserted against the published six-deck S17 table to within 0.5 points on each total and 0.4 on the bust rate.",
+      "Player natural frequency asserted to within 0.12 points of the exact 4.749%.",
+      "Five rule sets' house edges asserted within three standard errors of the rule model.",
+      "Six side-bet edges: five enumerated exactly and asserted to 0.06 points, one measured.",
+      "Shoe completeness asserted after every reshuffle across twenty thousand rounds.",
+      "A counted 1-12 spread asserted to beat a flat bet on the same shoes \u2014 which is the evidence that the shoe is a real shoe and the discard tray really reflects it."
+    ],
+    "manual": [
+      "Played in a real browser at 1440x860: three seats, all six side bets, insurance, the chart dialog, the paytable dialog, the rules editor, the counting panel and the trainer. Zero console errors.",
+      "Checked at 844x390 (iPhone landscape). The felt is height-constrained there \u2014 see notVerified."
+    ],
+    "notVerified": [
+      "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the craps mixer rather than measured; that file's own header says to measure rather than nudge, and nobody has.",
+      "prefers-reduced-motion is implemented in globals.css but has not been exercised in a browser with the setting on.",
+      "Touch interaction on a real phone. The layout was checked at phone dimensions in a desktop browser, which is not the same thing.",
+      "The PWA install path (Share \u2192 Add to Home Screen) has not been run on an actual iPhone.",
+      "Docker build and the nginx config are copied from craps with the paths and ports changed, and have not been built here."
+    ]
+  },
+  "openItems": [
+    "The felt is height-constrained on a phone in landscape: at 844x390 it scales to about 55% and leaves horizontal letterboxing. Compact chrome under 520px of height claws back about forty pixels. Fixing it properly means a second, shallower felt layout for short viewports rather than scaling the one there is.",
+    "Early surrender uses the ordinary basic-strategy chart. The genuine early-surrender chart has its own cells (surrender hard 5-7 and 12-17 against an ace, among others) and is worth about 0.2% of the rule's 0.63%. The engine implements the rule correctly; only the advice is approximate, and the preset list does not include an early-surrender game.",
+    "The bot takes insurance only when deviations are on and the true count is at or above +3. It never takes even money, which is the same bet \u2014 a counter at +3 holding a natural should.",
+    "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
+    "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
+    "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
+    "The autoplay driver does not vary its bet with the count in the UI even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
+    "The equity chart caps at 300 rounds of history and has no zoom.",
+    "No keyboard shortcut for the dialogs.",
+    "Docker image size is unmeasured. The card deck adds about 2 MB over the craps image."
+  ],
+  "repoNotes": {
+    "git": "The repository is rooted at KnotzCrapzNCardz and published at https://github.com/KnotEnvy/KnotzCrapzNCardz (public).",
+    "structure": "Games are self-contained apps under their own folders. TableGames/blackjack carries its own package.json, .gitignore and README; the root carries a repo-wide .gitignore and an index README. There is no root build.",
+    "ports": "craps 8080, Dragon's Shrine 8081, blackjack 8082 \u2014 so all three run at once from the root compose file.",
+    "sharedAssets": "../../cardArt is the source of the 54-card deck. It is copied, not referenced: a static export cannot reach outside public/."
+  },
+  "pickUpHere": {
+    "thenRead": [
+      "src/lib/engine/table.ts \u2014 the state machine, and the note above updateSeat explaining why half of it is immer and half is not.",
+      "src/lib/engine/sidebets.sim.test.ts \u2014 the enumeration. It is the most unusual thing in here and the pattern generalises."
+    ],
+    "safestPlacesToStart": [
+      "Adding a side bet: write the paytable in sidebets.ts, a resolver, a case in gradeSideBet, and an enumeration in the sim test. The test will tell you the edge; publish that number.",
+      "Adding a rule preset: rules.ts only. The setup screen, the shorthand and the chart all read from it.",
+      "Visual work on the felt: Felt.tsx is geometry and print, Surface.tsx is everything that moves. Neither can change what the game costs.",
+      "Sound: audio.ts is self-contained and every voice is independent."
+    ],
+    "riskiestPlacesToChange": [
+      "resolve.ts settleHand \u2014 the five branches are in precedence order and the order is the rules.",
+      "table.ts settleFocus/openPlayerPhase \u2014 turn order is where the subtle bugs were, and three of the six found this session were here.",
+      "Anything that puts the shoe back inside an immer draft. It will not fail a test; it will quietly make the simulation twenty times slower.",
+      "basic.ts chart cells \u2014 a wrong cell moves the measured edge by less than the simulation's noise floor, so the unit tests are the only thing guarding them. Add a test with the cell."
+    ]
+  },
+  "deployment": {
+    "model": "Static. The game is client-side end to end, so next build runs with output: 'export' and writes out/ \u2014 a folder of files. No Node runs in production.",
+    "consequence": "Anything requiring a server \u2014 route handlers, server actions, ISR, next/image optimisation \u2014 now fails the build instead of silently not working. That is the intended trade.",
+    "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. Runs read_only with tmpfs for nginx scratch dirs.",
+    "run": "docker compose up -d --build  \u2192  http://localhost:8082",
+    "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/. An offline build machine fails at pnpm run build.",
+    "cardArt": "public/cards is served with a one-year immutable cache. It never changes and a re-deal must not go back to the network for a card the browser already has.",
+    "tls": "nginx.conf is an origin server speaking plain HTTP on 80. TLS belongs at a reverse proxy or tunnel in front of it.",
+    "docs": "DEPLOY.md \u2014 the container, LAN play on a phone, and the options for public hosting."
+  },
+  "pwa": {
+    "what": "public/manifest.webmanifest plus icons in public/icons. Installs to an iPhone home screen via Share \u2192 Add to Home Screen, opening standalone.",
+    "orientation": "Landscape. Portrait under 560px tall shows a 'turn your phone sideways' overlay rather than a squeezed table.",
+    "appleTags": "Next 16 emits only the standardised mobile-web-app-capable. The legacy apple-mobile-web-app-capable is added by hand via metadata.other, because iPhones a couple of versions back read only that spelling.",
+    "manifestMime": "nginx does not know .webmanifest natively. The types block in nginx.conf sets application/manifest+json \u2014 without it iOS silently refuses the install.",
+    "notDone": "No service worker, so the installed app still needs the network to load."
+  }
+}

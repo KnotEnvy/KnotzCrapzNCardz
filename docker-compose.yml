@@ -1,24 +1,24 @@
 # The whole arcade, in one place.
 #
-#   docker compose up -d --build     build and run both games
+#   docker compose up -d --build     build and run every game
 #   docker compose logs -f           watch them
 #   docker compose down              stop them
 #
-# Craps answers on http://localhost:8080 and Dragon's Shrine on
-# http://localhost:8081 -- the same ports the per-game files use, so a bookmark
-# or a home-screen install does not care which of the two ways you started it.
+# Craps answers on http://localhost:8080, Dragon's Shrine on
+# http://localhost:8081 and Blackjack on http://localhost:8082 -- the same
+# ports the per-game files use, so a bookmark or a home-screen install does not
+# care which of the two ways you started it.
 #
-# The per-game files under TableGames/craps and SlotsGames/DragonsShrine still
-# stand on their own. What cannot happen is both ways at once: the container
-# names are pinned so they stay predictable, and Docker will not give the same
-# name to two containers. Bring an individually-started game down before coming
-# up from here.
+# The per-game files under each game's folder still stand on their own. What
+# cannot happen is both ways at once: the container names are pinned so they
+# stay predictable, and Docker will not give the same name to two containers.
+# Bring an individually-started game down before coming up from here.
 #
-# The two service blocks are near-identical and deliberately not folded into a
-# YAML anchor. They match today because both games happen to be static sites;
-# the first one that wants a volume, an environment variable or a different
-# base image would have to be pulled back out again, and an anchor that fits
-# exactly two things until it doesn't is not worth the indirection.
+# The service blocks are near-identical and deliberately not folded into a
+# YAML anchor. They match today because all three games happen to be static
+# sites; the first one that wants a volume, an environment variable or a
+# different base image would have to be pulled back out again, and an anchor
+# that fits until it doesn't is not worth the indirection.
 
 services:
   craps:
@@ -65,6 +65,32 @@ services:
       retries: 3
       start_period: 5s
     # Same reasoning as above: static files, no state, no reason to be writable.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+
+  blackjack:
+    build:
+      context: ./TableGames/blackjack
+      dockerfile: Dockerfile
+    image: knotz-blackjack:latest
+    container_name: knotz-blackjack
+    restart: unless-stopped
+    ports:
+      # Host 8082, so all three tables can run side by side on one machine.
+      # Change the left number freely.
+      - "8082:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # The container serves files and holds no state, so it has no business
+    # writing to its own filesystem outside of nginx's scratch directories.
     read_only: true
     tmpfs:
       - /var/cache/nginx

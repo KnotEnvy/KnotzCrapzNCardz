@@ -1,0 +1,467 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ *
+ * Palette
+ *
+ * A high-limit pit: a deep blue-green felt under a single overhead lamp,
+ * mahogany at the rail, and brass on everything that carries a number.
+ * Craps down the hall is emerald and amber; this room is cooler and
+ * quieter, which is what a blackjack pit actually is.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  --color-pit-950: #07080a;
+  --color-pit-900: #0d0f13;
+  --color-pit-850: #13161c;
+  --color-pit-800: #1a1e26;
+  --color-pit-700: #252b36;
+  --color-pit-600: #37404f;
+  --color-pit-400: #6a7588;
+  --color-pit-300: #98a3b5;
+  --color-pit-100: #e7eaf0;
+
+  --color-felt-950: #04241f;
+  --color-felt-900: #052e28;
+  --color-felt-800: #073c33;
+  --color-felt-700: #0a4d41;
+  --color-felt-600: #0d6153;
+  --color-felt-line: #f1ecdd;
+
+  /* The two inks printed on a blackjack layout, and nothing else. */
+  --color-print-gold: #e8c05a;
+  --color-print-red: #e2604c;
+
+  --color-brass-500: #c9a227;
+  --color-brass-400: #e2bc4e;
+  --color-brass-300: #f0d484;
+  --color-brass-700: #82691a;
+
+  --color-wood-900: #21140f;
+  --color-wood-800: #301d14;
+  --color-wood-700: #46291c;
+
+  --color-win: #45d98a;
+  --color-lose: #f2726a;
+  --color-push: #7cc3f0;
+
+  --font-display: var(--font-oswald), 'Arial Narrow', sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/*
+ * Plain custom properties rather than `@theme` entries.
+ *
+ * Everything in the `@theme` block above becomes a Tailwind utility — `bg-`,
+ * `text-`, `border-` and so on — and Tailwind emits its variable only when a
+ * utility referencing it is actually generated. These are never used as
+ * utilities: the chart grid, the advisor pill and the side-bet circles read
+ * them through `var()` in an inline style, because the value is chosen at
+ * runtime from data. Declared in `@theme` they were tree-shaken out of the
+ * build and every chart cell rendered with no background at all.
+ */
+:root {
+  /* Chart cell tones, used by the strategy grid and the advisor pill. */
+  --color-act-hit: #d4634f;
+  --color-act-stand: #3f9e6b;
+  --color-act-double: #d9a53c;
+  --color-act-split: #5b8fd6;
+  --color-act-surrender: #8b7fb8;
+
+  /* One accent per side bet, so a circle is recognisable before it is read. */
+  --color-side-pairs: #e0719b;
+  --color-side-213: #63aee0;
+  --color-side-ladies: #cf6ac9;
+  --color-side-royal: #d9a53c;
+  --color-side-bust: #e2604c;
+  --color-side-sevens: #5fc9a4;
+
+  /* Chip colours follow the standard casino denominations. */
+  --chip-1: #f4f4f2;
+  --chip-1-edge: #b9b9b4;
+  --chip-5: #c8102e;
+  --chip-5-edge: #7d0a1d;
+  --chip-25: #1f8a4c;
+  --chip-25-edge: #115c33;
+  --chip-100: #16181d;
+  --chip-100-edge: #000;
+  --chip-500: #6d28d9;
+  --chip-500-edge: #431a94;
+  --chip-1000: #c9a227;
+  --chip-1000-edge: #82691a;
+
+  /* A playing card is 2.5 x 3.5 inches. Every card on screen is that ratio. */
+  --card-ratio: 0.6944;
+}
+
+html,
+body {
+  height: 100%;
+  /* On a phone `100%` resolves against a viewport that grows and shrinks as
+     the browser chrome slides away, leaving the table either clipped or
+     short. `dvh` tracks the space actually on screen; the `100%` above stays
+     as the fallback for anything without it. */
+  height: 100dvh;
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 50% -12%, #1a2029 0%, #0a0c10 55%, #05060a 100%);
+  color: var(--color-pit-100);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+
+  /* `viewport-fit=cover` lets the felt run under the notch and the home
+     indicator, which is right for the background and wrong for the chip rack
+     and the action buttons. Padding the body back out by the insets keeps
+     every control reachable while the table still bleeds to the edge. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+
+  /* The felt is a tap surface and the cards animate. Without this, iOS reads
+     a double-tap on a betting circle as a zoom. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Felt typography
+ *
+ * A blackjack layout is screen printed in a heavy condensed face, arced
+ * across the felt. The stroke plus a low shadow sells the print rather
+ * than the label.
+ * ------------------------------------------------------------------ */
+
+.felt-text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  fill: var(--color-felt-line);
+  paint-order: stroke fill;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.felt-text--gold {
+  fill: var(--color-print-gold);
+}
+
+.felt-text--red {
+  fill: var(--color-print-red);
+}
+
+.felt-text--muted {
+  fill: color-mix(in srgb, var(--color-felt-line) 55%, transparent);
+  letter-spacing: 0.12em;
+}
+
+/* ------------------------------------------------------------------ *
+ * The card
+ *
+ * Two faces on one element, rotated in 3D. The back is the element's own
+ * gradient; the face is the PNG from the shared deck. `backface-visibility`
+ * is what keeps the down side actually hidden — without it, both faces
+ * render and the card looks like a printing error mid-flip.
+ * ------------------------------------------------------------------ */
+
+.card3d {
+  perspective: 900px;
+  aspect-ratio: 5 / 7.2;
+}
+
+.card3d__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 380ms cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+
+.card3d--down .card3d__inner {
+  transform: rotateY(180deg);
+}
+
+.card3d__face,
+.card3d__back {
+  position: absolute;
+  inset: 0;
+  border-radius: 6%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 6px 14px -6px rgba(0, 0, 0, 0.75);
+}
+
+.card3d__face {
+  background: #fbfbf8;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * The back.
+ *
+ * A real card back is a dense repeating figure, not a flat colour: it has to
+ * hide the ink of the face showing through and it has to look the same
+ * whichever way up it lands. Two crossed repeating gradients over a deep
+ * carmine do that in about eight lines and no image request.
+ */
+.card3d__back {
+  transform: rotateY(180deg);
+  background-color: #7a1524;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 6px),
+    radial-gradient(80% 70% at 50% 40%, rgba(255, 255, 255, 0.14), transparent 70%);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.card3d__back::after {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 4%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+/* The card being dealt slides in from the shoe rather than appearing. */
+@keyframes deal-in {
+  from {
+    transform: translate(var(--deal-x, 40vw), var(--deal-y, -30vh)) rotate(-24deg) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0) rotate(var(--card-tilt, 0deg)) scale(1);
+    opacity: 1;
+  }
+}
+
+.card-dealt {
+  animation: deal-in 340ms cubic-bezier(0.22, 0.9, 0.3, 1) backwards;
+}
+
+/* ------------------------------------------------------------------ *
+ * Chips
+ * ------------------------------------------------------------------ */
+
+.chip {
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.35), transparent 45%),
+    var(--chip-face);
+  box-shadow:
+    0 0 0 2px var(--chip-edge) inset,
+    0 0 0 5px color-mix(in srgb, var(--chip-face) 80%, #000) inset,
+    0 2px 5px rgba(0, 0, 0, 0.55);
+  /* The eight dashes around a clay chip's rim, drawn with a conic gradient
+     rather than eight elements. */
+  position: relative;
+}
+
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    var(--chip-edge) 0 6deg,
+    transparent 6deg 39deg,
+    var(--chip-edge) 39deg 45deg,
+    transparent 45deg 84deg,
+    var(--chip-edge) 84deg 90deg,
+    transparent 90deg 129deg,
+    var(--chip-edge) 129deg 135deg,
+    transparent 135deg 174deg,
+    var(--chip-edge) 174deg 180deg,
+    transparent 180deg 219deg,
+    var(--chip-edge) 219deg 225deg,
+    transparent 225deg 264deg,
+    var(--chip-edge) 264deg 270deg,
+    transparent 270deg 309deg,
+    var(--chip-edge) 309deg 315deg,
+    transparent 315deg 354deg,
+    var(--chip-edge) 354deg 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
+  mask: radial-gradient(circle, transparent 62%, #000 63%);
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion
+ * ------------------------------------------------------------------ */
+
+@keyframes pulse-focus {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brass-400) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-brass-400) 0%, transparent);
+  }
+}
+
+.focus-ring {
+  animation: pulse-focus 1.6s ease-out infinite;
+}
+
+@keyframes rise-fade {
+  from {
+    transform: translateY(6px) scale(0.94);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+}
+
+.settle-chip {
+  animation: rise-fade 2400ms ease-out forwards;
+}
+
+@keyframes sweep-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sweep-in {
+  animation: sweep-in 220ms ease-out backwards;
+}
+
+/*
+ * Everything above is decoration on top of a game that is fully playable
+ * without it. A player who has asked their operating system to stop moving
+ * things gets the game and not the motion — cards appear where they land,
+ * settlements are read rather than watched.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .card3d__inner,
+  .card-dealt,
+  .focus-ring,
+  .settle-chip,
+  .sweep-in {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Scrollbars inside panels
+ * ------------------------------------------------------------------ */
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-pit-600) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-pit-600);
+  border-radius: 3px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Short viewports
+ *
+ * A phone in landscape has about 390 pixels of height, and the felt gets
+ * whatever the header and the control bar leave it. Both are sized for a
+ * desktop, where the room is free; here every pixel taken back goes straight
+ * into the table, so both shrink and the chip rack loses its padding.
+ *
+ * The felt itself scales to fit rather than cropping — a blackjack layout with
+ * its betting circles cut off is not a layout — so the practical effect is a
+ * table forty pixels wider on a phone.
+ * ------------------------------------------------------------------ */
+
+@media (max-height: 520px) {
+  .app-header {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .control-bar {
+    min-height: 66px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Portrait
+ *
+ * A blackjack layout is an arc: wide and shallow. It fits a phone held
+ * sideways exactly and squeezes badly held upright, so upright gets a
+ * message rather than a compressed table.
+ * ------------------------------------------------------------------ */
+
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-height: 560px) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    text-align: center;
+    background: radial-gradient(120% 90% at 50% 0%, #131820, #06070a);
+  }
+
+  .rotate-hint ~ * {
+    /* The table keeps rendering behind the message so that returning to
+       landscape is instant, but nothing behind it is reachable. */
+    pointer-events: none;
+    filter: blur(2px);
+  }
+}
+
+.rotate-hint__cards {
+  animation: rock 2.4s ease-in-out infinite;
+}
+
+@keyframes rock {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint__cards {
+    animation: none;
+  }
+}
