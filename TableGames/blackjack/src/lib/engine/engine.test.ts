@@ -593,6 +593,57 @@ describe('settlement', () => {
     expect(record.hands[0].outcome).toBe('WIN');
   });
 
+  /*
+   * The strongest single assertion in the file: whatever a round did — split
+   * twice, double both halves, take insurance — the bankroll at the end has to
+   * be the bankroll at the start plus the sum of the signed results. It is the
+   * one check that catches a stake taken and not returned, or returned twice,
+   * anywhere in the money path.
+   */
+  it('conserves the bankroll across a split with two doubles', () => {
+    // 8,8 against a 6. Split, each eight draws a three, double both elevens.
+    let t = bet(
+      withCards(
+        [[8, S], [6, H], [8, D], [5, C], [3, H], [3, C], [10, S], [10, D], [10, H]],
+        { das: true },
+      ),
+      dollars(10),
+    );
+    const start = t.seats[0].bankroll;
+    t = must(deal(t, rng()));
+    t = must(split(t));
+    t = must(double(t));
+    t = must(double(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+    const seat = settled.seats[0];
+
+    expect(seat.hands).toHaveLength(2);
+    for (const hand of seat.hands) expect(hand.bet).toBe(dollars(20));
+    const net = seat.hands.reduce((n, h) => n + h.net, 0);
+    expect(seat.bankroll).toBe(start + net);
+  });
+
+  it('pushes a three-card twenty-one against a dealer twenty-one', () => {
+    let t = bet(withCards([[7, S], [10, H], [4, D], [5, C], [10, S], [6, H]]));
+    t = must(deal(t, rng()));
+    t = must(hit(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+    expect(settled.seats[0].hands[0].outcome).toBe('PUSH');
+  });
+
+  it('surrenders an odd wager in the house’s favour', () => {
+    // $1.01 surrendered returns $0.50, not $0.51 — a dealer pushing chips
+    // back rounds down, and so does this.
+    let t = bet(withCards([[10, S], [9, H], [6, D], [5, C]], { surrender: 'LATE', minBet: 1 }), 101);
+    t = must(deal(t, rng()));
+    t = must(surrender(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+    expect(settled.seats[0].hands[0].net).toBe(-51);
+  });
+
   it('cannot pay twice for the same round', () => {
     let t = bet(withCards([[10, S], [10, H], [10, D], [9, C]]), dollars(25));
     t = must(deal(t, rng()));

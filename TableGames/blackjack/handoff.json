@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete and measured. Everything is green: 114 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite \u2014 dealer distributions against the published tables, five rule sets' house edges, five per-rule deltas, and six side-bet edges (five of them enumerated exactly rather than sampled). The engine went through a real optimisation pass this session and is 66x faster per round than the first working version, which is what made a multi-million-round measurement suite possible at all.",
+  "status": "Feature complete and measured. Everything is green: 118 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite \u2014 dealer distributions against the published tables, five rule sets' house edges, five per-rule deltas, and six side-bet edges (five of them enumerated exactly rather than sampled). The engine went through a real optimisation pass this session and is 66x faster per round than the first working version, which is what made a multi-million-round measurement suite possible at all.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -48,7 +48,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 114 tests, under a second. Run this constantly.",
+    "test": "pnpm test \u2014 118 tests, under a second. Run this constantly.",
     "testStats": "pnpm run test:stats \u2014 26 tests, about four minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
@@ -99,7 +99,8 @@
   ],
   "verification": {
     "automated": [
-      "114 unit tests covering hand mathematics, the peek, splits to four hands, split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, the whole strategy chart cell by cell, and the four counting systems.",
+      "118 unit tests covering hand mathematics, the peek, splits to four hands, split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, the whole strategy chart cell by cell, and the four counting systems.",
+      "Bankroll conservation across a split with two doubles: whatever the round did, the bankroll at the end equals the bankroll at the start plus the sum of the signed results. It is the one assertion that catches a stake taken and not returned, or returned twice, anywhere in the money path.",
       "Dealer finishing distribution asserted against the published six-deck S17 table to within 0.5 points on each total and 0.4 on the bust rate.",
       "Player natural frequency asserted to within 0.12 points of the exact 4.749%.",
       "Five rule sets' house edges asserted within three standard errors of the rule model.",
