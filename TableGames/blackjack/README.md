@@ -60,7 +60,7 @@ published for fifty years:
 | Dealer busts, six decks, S17 | 28.15% | 28.32% |
 | Dealer busts, H17 | 28.52% | 28.54% |
 | Player is dealt a natural | 4.78% | 4.749% |
-| Vegas Strip house edge | 0.375% | 0.400% (model) |
+| Vegas Strip house edge | 0.46% | 0.40% (model) |
 | Mimicking the dealer instead | 5.64% | 5.5% |
 | Flat bettor's hands at a true count of +2 or better | **+1.33% to the player** | |
 | the same hands at −2 or worse | −2.17% | |

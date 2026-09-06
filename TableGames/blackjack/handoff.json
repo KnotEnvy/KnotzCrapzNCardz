@@ -183,8 +183,8 @@
       "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
-      "when": "2026-09-06, after three rounds of review",
-      "note": "What the suite printed on its last full run (29 tests, 6m41s). Kept so a future change is compared against real numbers rather than against the tolerances that admit them. The figures moved from the previous record for a reason worth knowing: the shoe now draws a seed for its own next shuffle, which shifts every seeded stream, so every measurement here is a different sample of the same distributions.",
+      "when": "2026-09-06, after four rounds of review",
+      "note": "What the suite printed on its last full run (29 tests, 6m45s), against the corrected model. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
@@ -213,7 +213,7 @@
         ],
         "European": [
           0.383,
-          0.73
+          0.6
         ],
         "LiberalShoe": [
           0.027,
@@ -226,8 +226,9 @@
       },
       "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.505% for the player at a true count of +2 or better against -2.721% at -2 or worse. That gap is the assertion.",
       "resplitAces": "+0.052% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
-      "watchThis": "RESOLVED. European measuring 0.347 points from the model was not noise \u2014 it was the soft-double restriction being charged twice. Fixed; the model for that preset is now 0.60% and every preset sits within 0.093 of the mean of two independent runs. Left here as the record of what a preset drifting from its measurement turned out to mean the one time it was chased down.",
-      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing."
+      "watchThis": "RESOLVED. European measuring 0.347 points from the model was not noise \u2014 it was the soft-double restriction being charged on top of a double restriction that already forbids it. Left here as the record of what a preset drifting from its own measurement turned out to mean the one time it was chased down rather than filed.",
+      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing.",
+      "modelAccuracy": "Every preset is inside 0.22 points on this single run and inside 0.093 against the mean of two independent 800,000-round runs. The worst single-run gap is European at 0.217 against a 0.373 tolerance; before the soft-double double-charge was found it was 0.347."
     }
   },
   "openItems": [
