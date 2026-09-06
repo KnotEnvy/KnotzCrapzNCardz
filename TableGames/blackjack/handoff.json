@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete, measured, and through two rounds of adversarial review. Everything is green: 145 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash. All are fixed, each with the test that would have caught it.",
+  "status": "Feature complete, measured, and through two rounds of adversarial review. Everything is green: 147 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash. All are fixed, each with the test that would have caught it.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -68,6 +68,9 @@
         "The negative-edge guard covered five presets, not the space a player can build. One deck plus re-split aces plus hit split aces plus early surrender is four toggles from the setup screen and genuinely favours the player by about a percent \u2014 the model is right about that and the screen says so rather than clamping it. The test now sweeps all 2,880 reachable combinations, asserting the itemisation still sums to the headline everywhere and that the arithmetic stays in a sane band.",
         "The stats drawer buried the action bar. Below 1280px the rail overlays, and on a phone in landscape it covered a third of the felt and the whole button row beneath it \u2014 the table was visible and Deal was not pressable. It now has a scrim that dismisses it on a tap anywhere else, scoped by the same media query as the rail so the tablet layout, where the rail is part of the page rather than over it, is not dimmed by a scrim with nothing to dismiss.",
         "Bust It's tolerance was never justified. It was asserted at 0.3 points and passed two runs by luck; a change to the RNG stream (the shoe now draws a seed for its own next shuffle) shifted every seeded measurement and it failed at 0.41 \u2014 well inside the noise it has always had. The bet pays 400:1 on an eight-card dealer bust and that tail dominates: its per-round standard deviation is about 2.5 units against the main game's 1.15, so half a million rounds place it to within roughly a percent. The test now computes its own three-sigma band from the run, and the published figure is pooled over two million rounds: 6.92%, not 6.71%."
+      ],
+      "defects4": [
+        "The edge model double-charged the soft-double restriction \u2014 the same mistake as the DAS double-count, in the same function, found by chasing down which preset kept drifting from its own measurement. A table that only doubles on 9-11 or 10-11 reads the restriction against the hand's total, and every soft total is thirteen or more, so it refuses every soft double already; the published cost of 'double 9-11 only' is quoted against a table that allowed soft doubling and therefore contains that loss. Charging both billed the player twice for one rule and made the European preset look 0.13 points worse than it is. With it fixed, every preset now sits within 0.093 points of the mean of two independent 800,000-round runs \u2014 European went from 0.22 out to the typical deviation. The setup screen also disables the soft-double toggle at a restricted table now, rather than offering a switch that does nothing."
       ]
     }
   },
@@ -84,7 +87,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 145 tests, about a second. Run this constantly.",
+    "test": "pnpm test \u2014 147 tests, about a second. Run this constantly.",
     "testStats": "pnpm run test:stats \u2014 28 tests, about six minutes. Dealer distributions, five presets, six rule wiring checks, six side bets, counting. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
@@ -125,7 +128,8 @@
     "The Super Sevens bonus card is drawn on the felt rather than discarded. It was simpler to consume it silently, but a card that leaves the shoe unseen is a card the counter would be counting behind the player's back \u2014 so it is stored on the wager and shown.",
     "The felt has two geometries, not one scale factor. A blackjack table needs about 520 units of depth for the dealer's cards, three printed lines, the players' cards, the circles, the side-bet spots and a nameplate \u2014 and a phone in landscape has roughly 290 pixels of height once the header and button bar have taken theirs, so scaling that shape left two thirds of an 844-pixel screen black. The shallow geometry drops to one printed line and moves the nameplate into the header's territory, buying back 150 units of depth; it also pulls the outside seats inward, because the shallow arc closes on the rail much faster and six side-bet spots under an outside seat would hang over it. Both are described by the same `FeltGeometry` fields, so nothing downstream branches: Surface measures the container, `geometryFor` picks one, and every coordinate follows. Phone landscape went from 61% of the width to 84%.",
     "The shoe carries the seed of its own next shuffle. A shoe that runs out mid-round has to reshuffle, and that needs randomness \u2014 but threading a generator through every function that deals a card would have changed five signatures and every test that calls them, to serve a case that fires once in thirteen thousand rounds. `ShoeState.seed` keeps the reshuffle deterministic and replayable while leaving `hit`, `double`, `split` and `dealerStep` pure functions of the table.",
-    "A tolerance that only holds on the seeds you happened to try is not a test. Where a measurement's band cannot be argued for from first principles, the test computes it from the run \u2014 Bust It does this \u2014 and where no feasible sample size can resolve the effect at all, the row is printed as a diagnostic and something else is asserted instead."
+    "A tolerance that only holds on the seeds you happened to try is not a test. Where a measurement's band cannot be argued for from first principles, the test computes it from the run \u2014 Bust It does this \u2014 and where no feasible sample size can resolve the effect at all, the row is printed as a diagnostic and something else is asserted instead.",
+    "A rule's published cost is quoted against a specific baseline, and the model has to know which. Double-after-split was credited on top of a baseline that already had it; soft doubling was charged on top of a restriction that already forbade it. Both looked like separate switches and were the same rule counted twice. Before adding a term, ask what the figure is a delta *from* \u2014 and prefer a check that the engine agrees the rule bites at all, which is what `agrees with the engine about which doubles are legal` does."
   ],
   "gotchas": [
     "deal() takes an Rng because a reshuffle happens there. It is the only action that does.",
@@ -151,7 +155,8 @@
     "Never call `countShoe` on a live table; call `countTable`. The difference is the dealer's hole card, and getting it wrong makes the trainer read cards the player cannot see.",
     "A finished round sits at phase SETTLE for the settlement hold with its stakes already returned but still displayed. Anything that refunds 'what is at risk' has to check `table.settled` first.",
     "Whether a split ace may be split again depends on how many hands the seat holds *now*, not how many it held when that hand was created. Deciding it at split time orphans hands that a later split makes unsplittable.",
-    "A mid-round reshuffle leaves the shoe smaller than decks x 52, because the cards on the felt are excluded from it. `isCompleteShoe` is therefore only meaningful on a shoe that was built between rounds."
+    "A mid-round reshuffle leaves the shoe smaller than decks x 52, because the cards on the felt are excluded from it. `isCompleteShoe` is therefore only meaningful on a shoe that was built between rounds.",
+    "`canDouble` reads a total restriction against the hand's *total*, soft or hard \u2014 so a 9-11 table refuses every soft double, and `doubleSoft` is inert there. The pricing model and the setup screen both depend on that; if it ever changes, all three have to change together."
   ],
   "verification": {
     "automated": [
@@ -221,7 +226,7 @@
       },
       "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.505% for the player at a true count of +2 or better against -2.721% at -2 or worse. That gap is the assertion.",
       "resplitAces": "+0.052% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
-      "watchThis": "European measured 0.347 points from the model against a 0.373 tolerance \u2014 the closest any preset has come to failing. On the previous seed it was 0.098 off, so the swing is about two standard errors and inside what this length can resolve. But if it fails on a future seed, suspect the ENHC chart deltas (five cells, in basic.ts) before suspecting the noise.",
+      "watchThis": "RESOLVED. European measuring 0.347 points from the model was not noise \u2014 it was the soft-double restriction being charged twice. Fixed; the model for that preset is now 0.60% and every preset sits within 0.093 of the mean of two independent runs. Left here as the record of what a preset drifting from its measurement turned out to mean the one time it was chased down.",
       "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing."
     }
   },

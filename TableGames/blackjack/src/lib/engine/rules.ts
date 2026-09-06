@@ -303,7 +303,23 @@ export function ruleEffects(rules: TableRules): RuleEffect[] {
   }
   if (rules.hitsSoft17 !== BASELINE.hitsSoft17) push('Dealer hits soft 17', RULE_EFFECTS.hitsSoft17);
   if (rules.double !== BASELINE.double) push(`Double on ${rules.double} only`, RULE_EFFECTS.double[rules.double]);
-  if (rules.doubleSoft !== BASELINE.doubleSoft) push('No soft doubling', RULE_EFFECTS.noDoubleSoft);
+  /*
+   * The soft-double switch only costs anything at a table that would otherwise
+   * allow it. A total restriction of 9-11 or 10-11 is read against the hand's
+   * total, and every soft total is thirteen or more, so those tables refuse
+   * every soft double already — and the published figure for "double 9-11
+   * only" is quoted against "double any two cards", which includes soft
+   * doubling, so it has that loss in it.
+   *
+   * Charging both double-counted one restriction and made the European preset
+   * look 0.13 points worse than it is. It is the same mistake as crediting
+   * double-after-split on top of a baseline that already had it, in the same
+   * function, found by chasing down which preset kept drifting from its
+   * measurement.
+   */
+  if (rules.doubleSoft !== BASELINE.doubleSoft && rules.double === 'ANY2') {
+    push('No soft doubling', RULE_EFFECTS.noDoubleSoft);
+  }
   if (rules.das !== BASELINE.das) push('No double after split', -RULE_EFFECTS.das);
   if (rules.resplitTo !== BASELINE.resplitTo) {
     push(`Split to ${rules.resplitTo + 1} hands`, RULE_EFFECTS.resplitTo[Math.min(3, rules.resplitTo)] ?? 0);

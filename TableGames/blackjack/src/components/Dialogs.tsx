@@ -180,7 +180,23 @@ function SetupBody({ onClose }: { onClose: () => void }) {
                 ]}
               />
             </div>
-            <Toggle checked={draft.doubleSoft} onChange={(v) => set('doubleSoft', v)} label="Double a soft total" />
+            {/*
+              A total restriction is read against the hand's total and every
+              soft total is thirteen or more, so a 9-11 or 10-11 table refuses
+              soft doubles whatever this says. Leaving it live would be a
+              switch that costs nothing and does nothing.
+            */}
+            <Toggle
+              checked={draft.doubleSoft && draft.double === 'ANY2'}
+              onChange={(v) => set('doubleSoft', v)}
+              disabled={draft.double !== 'ANY2'}
+              label="Double a soft total"
+              hint={
+                draft.double === 'ANY2'
+                  ? undefined
+                  : `Doubling on ${draft.double} already rules this out — a soft total is never 9, 10 or 11.`
+              }
+            />
             <Toggle
               checked={draft.das}
               onChange={(v) => set('das', v)}

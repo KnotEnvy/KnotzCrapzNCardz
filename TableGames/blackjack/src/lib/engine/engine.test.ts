@@ -17,7 +17,7 @@ import { createRng } from './rng';
 import { createShoe, isCompleteShoe, shuffle } from './shoe';
 import { abandonRound, createTable, deal, dealerPlayOut, double, hit, nextRound, setBet, setSideBet, split, stand, surrender, takeEvenMoney, takeInsurance, closeOffers, legalActions, recordDecision, resetHandIds } from './table';
 import { settle, settleHand } from './resolve';
-import { dealerShouldHit, handValue, isBlackjack, isPair, displayTotal } from './hand';
+import { canDouble, dealerShouldHit, handValue, isBlackjack, isPair, displayTotal } from './hand';
 import { fmt, winnings } from './money';
 import { RULE_PRESETS, defaultRules, estimateHouseEdge, presetById, ruleEffects, rulesShorthand } from './rules';
 import {
@@ -1206,6 +1206,48 @@ describe('rule sets', () => {
     const baseline = presetById('vegas-strip').rules;
     expect(ruleEffects(baseline)).toHaveLength(0);
     expect(estimateHouseEdge(baseline)).toBeCloseTo(0.4, 9);
+  });
+
+  /*
+   * A 9-11 table refuses every soft double already — soft totals start at
+   * thirteen — and the published cost of that restriction is quoted against a
+   * table that allowed soft doubling. Charging the soft-double penalty on top
+   * bills the player twice for one rule, which is what made the European
+   * preset drift furthest from its own measurement.
+   */
+  it('does not charge for soft doubling a restricted table already forbids', () => {
+    const base = defaultRules();
+    const any2 = { ...base, double: 'ANY2' as const };
+    const restricted = { ...base, double: '9-11' as const };
+
+    // With any two cards allowed, the switch is real and costs 0.13.
+    expect(
+      estimateHouseEdge({ ...any2, doubleSoft: false }) - estimateHouseEdge({ ...any2, doubleSoft: true }),
+    ).toBeCloseTo(0.13, 6);
+
+    // At 9-11 it changes nothing, because nothing soft could be doubled anyway.
+    expect(estimateHouseEdge({ ...restricted, doubleSoft: false })).toBeCloseTo(
+      estimateHouseEdge({ ...restricted, doubleSoft: true }),
+      9,
+    );
+    expect(
+      ruleEffects({ ...restricted, doubleSoft: false }).some((e) => e.label === 'No soft doubling'),
+    ).toBe(false);
+  });
+
+  it('agrees with the engine about which doubles are legal', () => {
+    // The model's claim above is only true because `canDouble` really does
+    // refuse every soft total at a restricted table. If that ever changes, the
+    // pricing has to change with it.
+    const restricted = { ...defaultRules(), double: '9-11' as const, doubleSoft: true };
+    for (const rank of [2, 3, 4, 5, 6, 7, 8, 9] as Rank[]) {
+      const hand = {
+        id: 'h', cards: [card(14), card(rank)], bet: dollars(10), baseBet: dollars(10),
+        splitDepth: 0, fromSplitAces: false, done: false, doubled: false,
+        surrendered: false, outcome: null, net: 0,
+      };
+      expect(canDouble(hand, restricted, dollars(1000)).allowed, `A,${rank}`).toBe(false);
+    }
   });
 
   it('prices a rule as a penalty when it is missing, not a bonus when present', () => {

@@ -149,7 +149,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 145 tests, about a second
+pnpm test            # the fast suite — 147 tests, about a second
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets
