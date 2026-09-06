@@ -209,8 +209,8 @@
           0.4
         ],
         "AtlanticCity": [
-          0.332,
-          0.35
+          0.321,
+          0.34
         ],
         "European": [
           0.383,
@@ -237,7 +237,7 @@
     "The bot takes insurance at a true count of +3 or better but never takes even money, which is the same bet \u2014 a counter holding a natural at +3 should.",
     "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
     "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
-    "The rule model is inside 0.22 points of the simulation on every preset on a single 800,000-round run, and inside 0.093 against the mean of two. The loosest is European at 0.217 against a 0.373 three-sigma tolerance. Atlantic City, which was the outlier at 0.143 while the soft-double restriction was being double-charged, now measures 0.332 against a model of 0.35. Nothing here is outside its band; the item is kept as the place to look first if a preset starts drifting again.",
+    "The rule model is inside 0.22 points of the simulation on every preset on a single 800,000-round run, and inside 0.093 against the mean of two. The loosest is European at 0.217 against a 0.373 three-sigma tolerance. Atlantic City, which was the outlier at 0.143 while the soft-double restriction was being double-charged, now measures 0.321 against a model of 0.34. Nothing here is outside its band; the item is kept as the place to look first if a preset starts drifting again.",
     "The shallow felt drops the insurance line and the dealer's rule from the print, because there is no depth for them. Both are still in the HUD and the help dialog, but a player on a phone reads them off a panel rather than off the felt.",
     "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
     "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
