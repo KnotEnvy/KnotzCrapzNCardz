@@ -163,6 +163,8 @@ function emptyStats(bankroll: number): SeatStats {
     splits: 0,
     wagered: 0,
     sideWagered: 0,
+    sideNet: 0,
+    insuranceNet: 0,
     net: 0,
     peakBankroll: bankroll,
     decisions: 0,
@@ -495,6 +497,7 @@ export function deal(table: TableState, rng: Rng): ActionResult {
 
     let bankroll = seat.bankroll - seat.pendingBet;
     let net = seat.stats.net;
+    let sideNet = seat.stats.sideNet;
     let sideWagered = seat.stats.sideWagered;
 
     const pendingSideBets = seat.pendingSideBets.map((sb) => {
@@ -508,6 +511,7 @@ export function deal(table: TableState, rng: Rng): ActionResult {
       const settled = result.net > 0 ? result.net : -sb.amount;
       if (result.net > 0) bankroll += result.net + sb.amount; // winnings plus the stake
       net += settled;
+      sideNet += settled;
       // Recorded now, while the cards it was graded on are still the hand.
       const jackpot =
         sb.kind === 'LUCKY_LADIES' ? luckyLadiesJackpotUpgrade(cards, sb.amount) || null : null;
@@ -527,6 +531,7 @@ export function deal(table: TableState, rng: Rng): ActionResult {
         wagered: seat.stats.wagered + seat.pendingBet,
         handsPlayed: seat.stats.handsPlayed + 1,
         sideWagered,
+        sideNet,
         net,
       },
     };

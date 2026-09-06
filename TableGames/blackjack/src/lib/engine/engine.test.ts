@@ -881,6 +881,45 @@ describe('side bets', () => {
     expect(settled.seats[0].pendingSideBets[0].net).toBe(dollars(10_000));
   });
 
+  /*
+   * The ledger has to be able to say where the money went. A hand that loses
+   * its wager and hits Perfect Pairs shows a positive session net beside a
+   * hundred-percent loss rate, and only the split figures make that legible.
+   */
+  it('books a side bet’s result apart from the hand’s', () => {
+    let t = withCards([[8, S], [10, H], [8, S], [9, C]], {
+      sideBets: { ...defaultRules().sideBets, PERFECT_PAIRS: true },
+    });
+    t = bet(t, dollars(10));
+    const withSide = setSideBet(t, 'A', 'PERFECT_PAIRS', dollars(10));
+    if (!withSide.ok) throw new Error(withSide.reason);
+    t = must(deal(withSide.table, rng()));
+    t = must(stand(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+    const stats = settled.seats[0].stats;
+
+    // A perfect pair pays 25:1; sixteen against nineteen loses.
+    expect(stats.sideNet).toBe(dollars(250));
+    expect(settled.seats[0].hands[0].net).toBe(-dollars(10));
+    expect(stats.net).toBe(dollars(250) - dollars(10));
+    expect(stats.insuranceNet).toBe(0);
+  });
+
+  it('books insurance apart from the hand too', () => {
+    let t = bet(withCards([[9, S], [14, H], [7, D], [13, C]]), dollars(10));
+    t = must(deal(t, rng()));
+    t = must(takeInsurance(t, 'A', dollars(5)));
+    t = must(closeOffers(t));
+    t = dealerPlayOut(t);
+    const { table: settled } = settle(t);
+    const stats = settled.seats[0].stats;
+    expect(stats.insuranceNet).toBe(dollars(10));
+    expect(stats.sideNet).toBe(0);
+    // Insurance won exactly what the hand lost, which is the whole point of it.
+    expect(stats.net).toBe(0);
+  });
+
   it('caps a side bet at the main wager', () => {
     let t = withCards([], { sideBets: { ...defaultRules().sideBets, PERFECT_PAIRS: true } });
     t = bet(t, dollars(10));

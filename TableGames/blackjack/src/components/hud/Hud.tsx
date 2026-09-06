@@ -139,6 +139,26 @@ function SessionPanel() {
       />
       <Stat label="Hands" value={agg.handsPlayed} />
       <Stat label="Wagered" value={fmt(agg.wagered + agg.sideWagered)} />
+      {/*
+        Broken out because the total on its own is unreadable on the hand that
+        matters: a wager lost and a side bet hit shows a positive net beside a
+        hundred-percent loss rate, and the player is left to work out which.
+      */}
+      {agg.sideWagered > 0 ? (
+        <Stat
+          label="— side bets"
+          value={fmtSigned(agg.sideNet)}
+          tone={agg.sideNet > 0 ? 'good' : agg.sideNet < 0 ? 'bad' : undefined}
+          title={`${fmt(agg.sideWagered)} wagered on side bets.`}
+        />
+      ) : null}
+      {agg.insuranceNet !== 0 ? (
+        <Stat
+          label="— insurance"
+          value={fmtSigned(agg.insuranceNet)}
+          tone={agg.insuranceNet > 0 ? 'good' : 'bad'}
+        />
+      ) : null}
       <Stat
         label="Measured edge"
         value={agg.handsPlayed >= 25 ? `${measured.toFixed(2)}%` : `needs ${25 - agg.handsPlayed} more`}
@@ -171,6 +191,8 @@ function aggregate(all: readonly SeatStats[]): SeatStats {
       splits: a.splits + s.splits,
       wagered: a.wagered + s.wagered,
       sideWagered: a.sideWagered + s.sideWagered,
+      sideNet: a.sideNet + s.sideNet,
+      insuranceNet: a.insuranceNet + s.insuranceNet,
       net: a.net + s.net,
       peakBankroll: Math.max(a.peakBankroll, s.peakBankroll),
       decisions: a.decisions + s.decisions,
@@ -178,8 +200,9 @@ function aggregate(all: readonly SeatStats[]): SeatStats {
     }),
     {
       handsPlayed: 0, wins: 0, losses: 0, pushes: 0, blackjacks: 0, busts: 0,
-      surrenders: 0, doubles: 0, splits: 0, wagered: 0, sideWagered: 0, net: 0,
-      peakBankroll: 0, decisions: 0, correctDecisions: 0,
+      surrenders: 0, doubles: 0, splits: 0, wagered: 0, sideWagered: 0,
+      sideNet: 0, insuranceNet: 0, net: 0, peakBankroll: 0,
+      decisions: 0, correctDecisions: 0,
     },
   );
 }

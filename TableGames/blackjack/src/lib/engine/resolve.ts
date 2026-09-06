@@ -154,6 +154,7 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
         insuranceNet = -seat.insurance;
       }
       net += insuranceNet;
+      stats.insuranceNet += insuranceNet;
       insuranceRecords.push({ seat: seat.id, amount: seat.insurance, net: insuranceNet });
       settlements.push({
         seat: seat.id,
@@ -204,6 +205,7 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
         settled = { ...sb, net: r.net > 0 ? r.net : -sb.amount, label: r.label };
         if (r.net > 0) bankroll += r.net + sb.amount;
         net += settled.net!;
+        stats.sideNet += settled.net!;
       } else if (sb.kind === 'LUCKY_LADIES' && dealerBJ && sb.jackpot) {
         // The 200:1 line was paid at the deal; two queens of hearts against a
         // dealer natural is the 1000:1 line, so the difference is paid now.
@@ -216,6 +218,7 @@ export function settle(table: TableState, trueCount = 0): SettleResult {
         };
         bankroll += sb.jackpot;
         net += sb.jackpot;
+        stats.sideNet += sb.jackpot;
       }
 
       if (settled.net !== null) {

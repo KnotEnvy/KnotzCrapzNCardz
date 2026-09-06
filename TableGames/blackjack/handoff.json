@@ -3,7 +3,7 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete, measured, and through one round of adversarial review. Everything is green: 127 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through a real optimisation pass (66x faster per round) and then a correctness pass: an independent judge graded the build against the craps table next door and found four rule defects, several false claims in the documentation, and a set of statistical tests too wide to fail. All of them are fixed, and the tests that would have caught each one are in the suite.",
+  "status": "Feature complete, measured, and through one round of adversarial review. Everything is green: 129 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through a real optimisation pass (66x faster per round) and then a correctness pass: an independent judge graded the build against the craps table next door and found four rule defects, several false claims in the documentation, and a set of statistical tests too wide to fail. All of them are fixed, and the tests that would have caught each one are in the suite.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
@@ -49,7 +49,8 @@
         "playRound folded insurance and side-bet results into net while leaving their stakes out of wagered, so the counting comparison measured an edge against the wrong denominator. Per-bet figures now come out of the settlement list, which already says which bet each movement belongs to.",
         "betRamp existed twice \u2014 once in counting.ts for the HUD and once in autoplay.ts for the bot \u2014 so the panel could advise one bet while the bot placed another.",
         "The persist merge refunded unresolved side bets but left resolved ones on the felt with their result, so a resumed session displayed a win it had already paid.",
-        "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced."
+        "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced.",
+        "The session panel reported one net figure, so a hand that lost its wager and hit a side bet showed a positive total beside a hundred-percent loss rate. SeatStats now books sideNet and insuranceNet apart from the whole, and the panel breaks them out."
       ]
     }
   },
@@ -66,7 +67,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 127 tests, under a second. Run this constantly.",
+    "test": "pnpm test \u2014 129 tests, under a second. Run this constantly.",
     "testStats": "pnpm run test:stats \u2014 26 tests, about four minutes. Distributions, five presets, five rule deltas, six side bets. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
     "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",

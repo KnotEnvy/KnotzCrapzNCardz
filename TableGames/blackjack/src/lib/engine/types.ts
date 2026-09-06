@@ -298,6 +298,18 @@ export interface SeatStats {
   wagered: number;
   /** Total side-bet cents wagered, kept separate — its edge is a different animal. */
   sideWagered: number;
+  /**
+   * Signed cents, split by which bet they came from.
+   *
+   * `net` is the whole session and is what the bankroll reflects. The other
+   * two are subsets of it, and they exist because a panel showing only the
+   * total cannot answer the question a player actually has after a hand that
+   * lost the wager and hit a side bet: where did the money go. They are also
+   * the honest way to show that the side bets are the losing half of a
+   * winning night, which is usually what they are.
+   */
+  sideNet: number;
+  insuranceNet: number;
   net: number;
   peakBankroll: number;
   /** Basic-strategy decisions made, and how many matched the chart. */
