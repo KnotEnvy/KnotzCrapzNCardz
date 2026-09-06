@@ -60,14 +60,24 @@ published for fifty years:
 | Dealer busts, six decks, S17 | 28.13% | 28.192% |
 | Dealer busts, H17 | 28.53% | 28.576% |
 | Player is dealt a natural | 4.77% | 4.749% |
-| Vegas Strip house edge | 0.54% | 0.40% (model) |
+| Vegas Strip house edge | 0.64% | 0.40% (model) |
 | Mimicking the dealer instead | 5.95% | 5.5% |
-| Flat bettor's hands at a true count of +2 or better | **+1.51% to the player** | |
-| the same hands at −2 or worse | −2.72% | |
+| Flat bettor's hands at a true count of +2 or better | **+1.45% to the player** | |
+| the same hands at −2 or worse | −2.80% | |
 
 That last pair is the whole case for counting, and it is measured from the
 player's own results rather than asserted: the same flat bet, the same chart,
 bucketed by what the discard tray was saying when the chips went out.
+
+Every edge here is expected loss per unit of the *initial* wager, which is
+what published blackjack figures mean and what the rule model quotes. It is
+not the same as loss per unit of action: basic strategy doubles and splits
+enough to put about 1.133 units on the felt for each unit bet, so dividing by
+the action gives a number roughly 12% smaller in relative terms. This suite
+divided by the action for five rounds of review while comparing the result to
+a model quoted per initial bet — the difference is 0.05 points on the default
+game, comfortably beneath a 0.38-point noise floor, which is exactly why it
+took that long to notice.
 
 The right-hand column of the first three rows is *exact*, not published. The
 dealer's finishing distribution off a fresh six-deck shoe is a finite sum, so

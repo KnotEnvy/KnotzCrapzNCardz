@@ -3,133 +3,144 @@
   "path": "TableGames/blackjack",
   "oneLine": "A full blackjack table for up to three seats sharing one screen: every bet a real table books, every rule that changes what the game costs, six side bets with computed paytables, and a strategy trainer and card counter that tell you what the felt never will.",
   "handoffDate": "2026-09-06",
-  "status": "Feature complete, measured, and through four rounds of adversarial review. Everything is green: 147 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash when the shoe ran dry mid-round; round four found a persisted shape that no longer loaded, a counter that lost the felt across a mid-round reshuffle, and three tests and documents that claimed more than they checked. All are fixed, each with the test that would have caught it.",
+  "status": "Feature complete, measured, and through four rounds of adversarial review. Everything is green: 158 unit tests, typecheck, lint with zero errors and zero warnings, a production build, and the full statistical suite. The engine went through an optimisation pass (66x faster per round) and two correctness passes. Round one of judging found four rule defects; round two confirmed those fixed and found five more, including a money bug in the persist path and a house-edge model that told the player they held an advantage; round three confirmed those and found three more, including a crash when the shoe ran dry mid-round; round four found a persisted shape that no longer loaded, a counter that lost the felt across a mid-round reshuffle, and three tests and documents that claimed more than they checked; round five found a wrong basic-strategy cell at the default table, a graded decision the store threw away, a rules change that could leave a wager the bankroll could not cover, a dealer reference table that was itself wrong, and a house edge measured against the wrong denominator. All are fixed, each with the test that would have caught it.",
   "whatWasBuilt": {
     "summary": "Built from nothing in one session, in the shape the craps table next door established: a pure engine, a store that is only a metronome, and a felt that is an SVG print with HTML on top of it. The engine came first and was driven by tests, which found six genuine bugs before any UI existed.",
     "engine": [
-      "types.ts \u2014 cards, hands, seats, rules, records. Money is integer cents everywhere; see money.ts for why.",
-      "rng.ts \u2014 xoshiro128** with rejection sampling. An honest copy of the craps one rather than a shared package across two apps that never deploy together.",
-      "shoe.ts \u2014 a fixed array plus a pointer, not a shifted queue. The cut card sits at a fraction of the shoe.",
-      "hand.ts \u2014 totals, soft/hard, and every legality question, each returning a reason rather than a boolean.",
-      "rules.ts \u2014 five presets and the published per-rule edge deltas the setup screen prices switches with.",
-      "sidebets.ts \u2014 six paytables with edges computed by enumeration, not looked up.",
-      "table.ts \u2014 the state machine. Every legal move, returning a new table or a refusal with a sentence in it.",
-      "resolve.ts \u2014 settlement. The only function that pays anybody.",
-      "strategy/basic.ts \u2014 the chart, per rule set, with the table's own restrictions folded into the cells.",
-      "strategy/counting.ts \u2014 Hi-Lo, KO, Omega II, Hi-Opt II, the Illustrious 18 and the Fab 4.",
-      "strategy/autoplay.ts \u2014 the bot, which moves money only through the same exported actions the buttons call."
+      "types.ts — cards, hands, seats, rules, records. Money is integer cents everywhere; see money.ts for why.",
+      "rng.ts — xoshiro128** with rejection sampling. An honest copy of the craps one rather than a shared package across two apps that never deploy together.",
+      "shoe.ts — a fixed array plus a pointer, not a shifted queue. The cut card sits at a fraction of the shoe.",
+      "hand.ts — totals, soft/hard, and every legality question, each returning a reason rather than a boolean.",
+      "rules.ts — five presets and the published per-rule edge deltas the setup screen prices switches with.",
+      "sidebets.ts — six paytables with edges computed by enumeration, not looked up.",
+      "table.ts — the state machine. Every legal move, returning a new table or a refusal with a sentence in it.",
+      "resolve.ts — settlement. The only function that pays anybody.",
+      "strategy/basic.ts — the chart, per rule set, with the table's own restrictions folded into the cells.",
+      "strategy/counting.ts — Hi-Lo, KO, Omega II, Hi-Opt II, the Illustrious 18 and the Fab 4.",
+      "strategy/autoplay.ts — the bot, which moves money only through the same exported actions the buttons call."
     ],
     "ui": [
       "An SVG felt at a fixed 1000x560 viewBox with HTML positioned in the same coordinate space, scaled by one transform.",
       "Cards are the shared 54-PNG deck from cardArt/, copied into public/cards, with a CSS 3D flip and a CSS-drawn back.",
-      "Chips are drawn in CSS \u2014 a conic gradient makes the eight rim dashes without eight elements.",
+      "Chips are drawn in CSS — a conic gradient makes the eight rim dashes without eight elements.",
       "Fifteen synthesised sounds, no audio assets: cards, chips, the sweep, the shuffle, and three stings that decide money.",
       "A stats panel that is beside the felt above 1180px and a drawer below it."
     ],
     "bugsFoundByTests": [
       "advance() moved the focus after every action, so a hit that did not bust passed the turn to the next hand.",
-      "An early surrender that finished the last hand set the phase to DEALER and skipped the peek entirely \u2014 which under ENHC meant the dealer never drew a second card, and with a live Bust It bet meant it never resolved.",
+      "An early surrender that finished the last hand set the phase to DEALER and skipped the peek entirely — which under ENHC meant the dealer never drew a second card, and with a live Bust It bet meant it never resolved.",
       "closeOffers() could land on PLAYER with a null focus when every hand was a natural, hanging the round forever.",
       "settle() had no idempotence guard, so a double-fired phase transition paid the table twice.",
-      "The split-to-four limit was reported with the wrong reason because the test fixture ran out of pairs \u2014 the engine was right and the test was wrong, which is worth recording because it looked like the opposite.",
+      "The split-to-four limit was reported with the wrong reason because the test fixture ran out of pairs — the engine was right and the test was wrong, which is worth recording because it looked like the opposite.",
       "Two zustand selectors (advice(), count()) built a fresh object on every store read, which is an infinite render loop. Found by running the app, not by a test; they are hooks now.",
       "setBet() enforced the side-bet cap in one direction only, so lowering the wager left a side bet above it. Found by hand-tracing."
     ],
     "bugsFoundByReview": {
-      "summary": "A judging pass against the craps table's standard found four rule defects that 118 passing tests did not. Each is now fixed with the test that would have caught it \u2014 and the pattern in all four is the same: the tests asserted that a rule *refused* correctly and never that it *worked*.",
+      "summary": "A judging pass against the craps table's standard found four rule defects that 118 passing tests did not. Each is now fixed with the test that would have caught it — and the pattern in all four is the same: the tests asserted that a rule *refused* correctly and never that it *worked*.",
       "defects": [
-        "Re-split aces was a dead switch. split() marked both hands finished the moment their card landed, so a third ace could never be split \u2014 while the setup screen priced the rule at 0.08%, ruleEffects() printed it, the README advertised it, and the liberal preset shipped it on. The only RSA test exercised the refusal branch. No house-edge measurement at any feasible sample size would have caught it; the test that does is splits-per-thousand with the rule on versus off.",
-        "Even money paid the wrong amount at 6:5. It is implemented as insurance for the maximum, which is exactly 1:1 only when the payout is 3:2 \u2014 the identity needs x = 1/2 from the dealer-natural branch and x = p - 1 from the other, and those agree at no other p. On a $10 bet at the single-deck preset it returned $10 or $7 depending on the hole card. The offer is now refused anywhere but 3:2, with insurance still available.",
+        "Re-split aces was a dead switch. split() marked both hands finished the moment their card landed, so a third ace could never be split — while the setup screen priced the rule at 0.08%, ruleEffects() printed it, the README advertised it, and the liberal preset shipped it on. The only RSA test exercised the refusal branch. No house-edge measurement at any feasible sample size would have caught it; the test that does is splits-per-thousand with the rule on versus off.",
+        "Even money paid the wrong amount at 6:5. It is implemented as insurance for the maximum, which is exactly 1:1 only when the payout is 3:2 — the identity needs x = 1/2 from the dealer-natural branch and x = p - 1 from the other, and those agree at no other p. On a $10 bet at the single-deck preset it returned $10 or $7 depending on the hole card. The offer is now refused anywhere but 3:2, with insurance still available.",
         "Even money was accepted against a dealer ten. It never checked the upcard, and early surrender opens the offers phase on a ten.",
         "Lucky Ladies' 1000:1 line was lost to a split. Settlement recomputed the jackpot from hands[0].cards, which after a split holds one queen and whatever was drawn to it. The upgrade is now recorded on the wager at grade time (SideBetWager.jackpot) while the cards it was graded on are still the hand."
       ],
       "alsoFixed": [
-        "The basic-strategy chart had no ENHC variant, and holeCard was missing from the chart cache key \u2014 so a no-hole-card table was served a peeking chart, and whichever was requested first was served to both.",
+        "The basic-strategy chart had no ENHC variant, and holeCard was missing from the chart cache key — so a no-hole-card table was served a peeking chart, and whichever was requested first was served to both.",
         "The single- and double-deck chart deltas were applied as one set at both deck counts, contradicting the comment above them. They are two sets now.",
         "playRound folded insurance and side-bet results into net while leaving their stakes out of wagered, so the counting comparison measured an edge against the wrong denominator. Per-bet figures now come out of the settlement list, which already says which bet each movement belongs to.",
-        "betRamp existed twice \u2014 once in counting.ts for the HUD and once in autoplay.ts for the bot \u2014 so the panel could advise one bet while the bot placed another.",
+        "betRamp existed twice — once in counting.ts for the HUD and once in autoplay.ts for the bot — so the panel could advise one bet while the bot placed another.",
         "The persist merge refunded unresolved side bets but left resolved ones on the felt with their result, so a resumed session displayed a win it had already paid.",
         "HandOutcome.INSURANCE_ONLY was declared, labelled and switch-cased, and never produced.",
         "The session panel reported one net figure, so a hand that lost its wager and hit a side bet showed a positive total beside a hundred-percent loss rate. SeatStats now books sideNet and insuranceNet apart from the whole, and the panel breaks them out.",
-        "playRound read `handsBefore` after the deal and compared it against a value taken after settlement \u2014 but the deal is what increments handsPlayed, so the figure was always zero. It went unnoticed because nothing divided by it until the new per-thousand rule tests did. `insuranceWagered` had the same shape: read before the offers phase opened, so it was always zero too. Both are read at the right moment now, and strategy.test.ts checks the bot's own reporting against arithmetic over two thousand rounds.",
-        "The stats drawer covered the button that closes it. Below 1280px the rail is pinned right at z-40 and the header was not stacked at all, so on a narrow screen the drawer painted over the Stats button \u2014 found by driving the phone layout with a browser rather than by reading it."
+        "playRound read `handsBefore` after the deal and compared it against a value taken after settlement — but the deal is what increments handsPlayed, so the figure was always zero. It went unnoticed because nothing divided by it until the new per-thousand rule tests did. `insuranceWagered` had the same shape: read before the offers phase opened, so it was always zero too. Both are read at the right moment now, and strategy.test.ts checks the bot's own reporting against arithmetic over two thousand rounds.",
+        "The stats drawer covered the button that closes it. Below 1280px the rail is pinned right at z-40 and the header was not stacked at all, so on a narrow screen the drawer painted over the Stats button — found by driving the phone layout with a browser rather than by reading it."
       ],
       "defects2": [
-        "The persist merge conjured money. A round is unwound on reload because it cannot be resumed honestly \u2014 but the driver parks a *finished* round at SETTLE for a couple of seconds so the figures can be read, and during that window `hand.bet` and `seat.insurance` are still populated even though settle() has already returned every stake. A reload there refunded them a second time: a $10 hand with $5 of winning insurance came back $15 up. The unwind now runs only when `!table.settled`, and it moved into the engine as `abandonRound` because it moves money and everything that moves money is testable engine code.",
-        "The house-edge model double-counted double-after-split. The 0.40% baseline is the published six-deck S17 *DAS* game, and DAS was then credited again \u2014 making every displayed figure 0.14 points too generous and printing a 0.09% player advantage on the Liberal Shoe preset, in a game whose premise is pricing rules honestly. The baseline is now a named constant describing the reference game, every rule is priced as a delta from it, and `estimateHouseEdge` is defined as that baseline less the sum of `ruleEffects` \u2014 so the breakdown in the setup screen cannot fail to add up to the headline beside it. Against the simulation the corrected model is now within 0.15 points on every preset and exact on single deck.",
-        "The card counter read the dealer's hole card. `countShoe` walked every card up to `shoe.pos`, and the hole card leaves the shoe at the top of the round \u2014 so the panel reported four cards seen on a hand with three face up, and the deviation bot knew what the dealer was holding. README, the HUD hint and the panel's own caption all claimed otherwise. `countTable` now excludes anything still face down, and every live-table reader goes through it.",
-        "A split-ace hand could be left live with no legal move. `stops()` decided at split time whether there was room under the hand limit, and a later split of a different hand could take the last slot \u2014 leaving earlier hands unable to hit (split aces never can) and unable to split, so standing was their only option and the focus stopped on them anyway. Room is now decided when the question is asked, by `sealSplitAces`.",
-        "The advisor could name an illegal move. Every fallback ended at HIT, which a split ace cannot do, so a `P` cell that could not be split recommended a play the dealer would refuse \u2014 and the trainer then marked the player's forced stand wrong. Every fallback checks the engine's legality map, and there is a test that no cell can produce an action the table would refuse.",
-        "`SeatStats.decisions` and `correctDecisions` were declared, documented and summed by the trainer panel, and incremented nowhere \u2014 the same family as the silently-zero findings before them. They are wired through `recordDecision`, and the panel shows a lifetime tally beside the rolling one.",
-        "The HUD's \"measured edge\" divided a numerator including side bets and insurance by a main-bet-only denominator \u2014 the exact mistake autoplay.ts warns about by name. It now measures the main game against the main wager, which is why sideNet and insuranceNet are broken out."
+        "The persist merge conjured money. A round is unwound on reload because it cannot be resumed honestly — but the driver parks a *finished* round at SETTLE for a couple of seconds so the figures can be read, and during that window `hand.bet` and `seat.insurance` are still populated even though settle() has already returned every stake. A reload there refunded them a second time: a $10 hand with $5 of winning insurance came back $15 up. The unwind now runs only when `!table.settled`, and it moved into the engine as `abandonRound` because it moves money and everything that moves money is testable engine code.",
+        "The house-edge model double-counted double-after-split. The 0.40% baseline is the published six-deck S17 *DAS* game, and DAS was then credited again — making every displayed figure 0.14 points too generous and printing a 0.09% player advantage on the Liberal Shoe preset, in a game whose premise is pricing rules honestly. The baseline is now a named constant describing the reference game, every rule is priced as a delta from it, and `estimateHouseEdge` is defined as that baseline less the sum of `ruleEffects` — so the breakdown in the setup screen cannot fail to add up to the headline beside it. Against the simulation the corrected model is now within 0.15 points on every preset and exact on single deck.",
+        "The card counter read the dealer's hole card. `countShoe` walked every card up to `shoe.pos`, and the hole card leaves the shoe at the top of the round — so the panel reported four cards seen on a hand with three face up, and the deviation bot knew what the dealer was holding. README, the HUD hint and the panel's own caption all claimed otherwise. `countTable` now excludes anything still face down, and every live-table reader goes through it.",
+        "A split-ace hand could be left live with no legal move. `stops()` decided at split time whether there was room under the hand limit, and a later split of a different hand could take the last slot — leaving earlier hands unable to hit (split aces never can) and unable to split, so standing was their only option and the focus stopped on them anyway. Room is now decided when the question is asked, by `sealSplitAces`.",
+        "The advisor could name an illegal move. Every fallback ended at HIT, which a split ace cannot do, so a `P` cell that could not be split recommended a play the dealer would refuse — and the trainer then marked the player's forced stand wrong. Every fallback checks the engine's legality map, and there is a test that no cell can produce an action the table would refuse.",
+        "`SeatStats.decisions` and `correctDecisions` were declared, documented and summed by the trainer panel, and incremented nowhere — the same family as the silently-zero findings before them. They are wired through `recordDecision`, and the panel shows a lifetime tally beside the rolling one.",
+        "The HUD's \"measured edge\" divided a numerator including side bets and insurance by a main-bet-only denominator — the exact mistake autoplay.ts warns about by name. It now measures the main game against the main wager, which is why sideNet and insuranceNet are broken out."
       ],
       "defects3": [
-        "The shoe threw when it ran dry mid-round. `draw` raised on exhaustion, on the stated premise that the cut card made it unreachable \u2014 and three seats on the shipped Single Deck preset reached it in thirteen thousand rounds, because one deck cut at 65% leaves eighteen cards and three seats splitting to four hands can want more than that inside one hand. It threw out of a React event handler, in a codebase whose stated invariant is that actions return a refusal and never throw. It now does what a dealer does: `reshuffleKeeping` gathers the discards, leaves the cards on the felt where they are, shuffles and carries on. 200,000 rounds of three-seat single deck now run clean with zero duplicate cards in play.",
-        "The negative-edge guard covered five presets, not the space a player can build. One deck plus re-split aces plus hit split aces plus early surrender is four toggles from the setup screen and genuinely favours the player by about a percent \u2014 the model is right about that and the screen says so rather than clamping it. The test now sweeps all 2,880 reachable combinations, asserting the itemisation still sums to the headline everywhere and that the arithmetic stays in a sane band.",
-        "The stats drawer buried the action bar. Below 1280px the rail overlays, and on a phone in landscape it covered a third of the felt and the whole button row beneath it \u2014 the table was visible and Deal was not pressable. It now has a scrim that dismisses it on a tap anywhere else, scoped by the same media query as the rail so the tablet layout, where the rail is part of the page rather than over it, is not dimmed by a scrim with nothing to dismiss.",
-        "Bust It's tolerance was never justified. It was asserted at 0.3 points and passed two runs by luck; a change to the RNG stream (the shoe now draws a seed for its own next shuffle) shifted every seeded measurement and it failed at 0.41 \u2014 well inside the noise it has always had. The bet pays 400:1 on an eight-card dealer bust and that tail dominates: its per-round standard deviation is about 2.5 units against the main game's 1.15, so half a million rounds place it to within roughly a percent. The test now computes its own three-sigma band from the run, and the published figure is pooled over two million rounds: 6.92%, not 6.71%."
+        "The shoe threw when it ran dry mid-round. `draw` raised on exhaustion, on the stated premise that the cut card made it unreachable — and three seats on the shipped Single Deck preset reached it in thirteen thousand rounds, because one deck cut at 65% leaves eighteen cards and three seats splitting to four hands can want more than that inside one hand. It threw out of a React event handler, in a codebase whose stated invariant is that actions return a refusal and never throw. It now does what a dealer does: `reshuffleKeeping` gathers the discards, leaves the cards on the felt where they are, shuffles and carries on. 200,000 rounds of three-seat single deck now run clean with zero duplicate cards in play.",
+        "The negative-edge guard covered five presets, not the space a player can build. One deck plus re-split aces plus hit split aces plus early surrender is four toggles from the setup screen and genuinely favours the player by about a percent — the model is right about that and the screen says so rather than clamping it. The test now sweeps all 2,880 reachable combinations, asserting the itemisation still sums to the headline everywhere and that the arithmetic stays in a sane band.",
+        "The stats drawer buried the action bar. Below 1280px the rail overlays, and on a phone in landscape it covered a third of the felt and the whole button row beneath it — the table was visible and Deal was not pressable. It now has a scrim that dismisses it on a tap anywhere else, scoped by the same media query as the rail so the tablet layout, where the rail is part of the page rather than over it, is not dimmed by a scrim with nothing to dismiss.",
+        "Bust It's tolerance was never justified. It was asserted at 0.3 points and passed two runs by luck; a change to the RNG stream (the shoe now draws a seed for its own next shuffle) shifted every seeded measurement and it failed at 0.41 — well inside the noise it has always had. The bet pays 400:1 on an eight-card dealer bust and that tail dominates: its per-round standard deviation is about 2.5 units against the main game's 1.15, so half a million rounds place it to within roughly a percent. The test now computes its own three-sigma band from the run, and the published figure is pooled over two million rounds: 6.92%, not 6.71%."
       ],
       "defects4": [
-        "The edge model double-charged the soft-double restriction \u2014 the same mistake as the DAS double-count, in the same function, found by chasing down which preset kept drifting from its own measurement. A table that only doubles on 9-11 or 10-11 reads the restriction against the hand's total, and every soft total is thirteen or more, so it refuses every soft double already; the published cost of 'double 9-11 only' is quoted against a table that allowed soft doubling and therefore contains that loss. Charging both billed the player twice for one rule and made the European preset look 0.13 points worse than it is. With it fixed, every preset now sits within 0.093 points of the mean of two independent 800,000-round runs \u2014 European went from 0.22 out to the typical deviation. The setup screen also disables the soft-double toggle at a restricted table now, rather than offering a switch that does nothing."
+        "The edge model double-charged the soft-double restriction — the same mistake as the DAS double-count, in the same function, found by chasing down which preset kept drifting from its own measurement. A table that only doubles on 9-11 or 10-11 reads the restriction against the hand's total, and every soft total is thirteen or more, so it refuses every soft double already; the published cost of 'double 9-11 only' is quoted against a table that allowed soft doubling and therefore contains that loss. Charging both billed the player twice for one rule and made the European preset look 0.13 points worse than it is. With it fixed, every preset now sits within 0.093 points of the mean of two independent 800,000-round runs — European went from 0.22 out to the typical deviation. The setup screen also disables the soft-double toggle at a restricted table now, rather than offering a switch that does nothing."
+      ],
+      "defects5": [
+        "The basic-strategy chart doubled soft eighteen against a two at S17, where the play is to stand. Doubling it is the H17 deviation, and SOFT_H17 carried an entry for that cell that changed nothing because the S17 chart already said the H17 answer — so the patch was dead and the S17 chart was wrong, at the default table, on the most common soft hand in the game. Forty chart assertions missed it because each asked about a cell rather than about the relationship between two charts; the new test asserts exactly which cells each rule moves, so a dead patch entry now fails whether or not its cell is asserted.",
+        "The store graded a decision, wrote it onto the seat, then made the engine call against a snapshot taken before the grade — so `apply` swapped the graded table back out. Every decision counted, every count discarded, and the HUD's session tally could never render. The store had no tests at all; it has six now, and they test the seam rather than the engine.",
+        "`setRules` was the one door into a wager that did not go through `setBet`, and walked past all of its checks. Raising the table minimum, which the setup dialog exposes, raised a standing bet without asking whether the seat could pay, and `deal` subtracted it: a $50 bankroll dealt a $100 hand ended at minus fifty. `setRules` now ends with `setBet`'s invariants and `deal` refuses rather than paying out money that is not there.",
+        "The dealer distribution was asserted against remembered round numbers, two of which were wrong — 17.58% for a twenty against a true 17.953%, and 28.32% for the bust rate against 28.192% — behind tolerances of six and eight sigma while the comment beside them claimed three, and named a sample size the test does not use. The README then reported a correct dealer as low against a figure that was itself the error. The reference is computed exactly now, the recursion is written out at the foot of the file, and the bands are derived from the figure and the sample size.",
+        "The measured house edge was per unit of action while the model beside it is per initial wager. Basic strategy puts about 1.133 units on the felt per unit bet, so the two differ by roughly 12% in relative terms — under the noise floor, which is why it survived five rounds of review comparing a measurement to a model it was not a measurement of.",
+        "Even money was offered wherever the payout was not 1:1, but the engine books it only at 3:2 — no insurance stake guarantees one unit at 6:5. The shipped Single Deck preset is 6:5, so the button was live and answered with a refusal.",
+        "Accessibility: no focus style existed anywhere (the user agent's ring, on a dark green felt), the modal never moved, trapped or restored focus, and the game's shortcuts stayed live underneath an open dialog — so pressing D while reading the strategy chart doubled the hand behind it.",
+        "Persistence serialised and wrote the whole ~150 KB slice synchronously on every state change, fifteen to twenty times a round. Writes are coalesced and held until the felt is at rest — rehydration abandons an in-flight round anyway, so those writes were of state no reload could use — and forced on pagehide. One write per round.",
+        "`splitAcesBlackjack` was a rule field the types said the engine consults and nothing read; removed, with the reason left where a reader would look for it. The autoplay bot on the felt insured against a dealer ten whenever early surrender had opened the offers phase, and never took early surrender at all while the simulation's bot always has — so the two bots disagreed about a rule the setup screen prices at 0.63%."
       ]
     }
   },
   "stack": {
     "framework": "Next.js 16.3.2 (App Router, Turbopack), React 19.2",
     "language": "TypeScript 5, strict",
-    "state": "zustand 5 + persist; immer 11 on the engine's cold paths only \u2014 see keyDecisions",
+    "state": "zustand 5 + persist; immer 11 on the engine's cold paths only — see keyDecisions",
     "styling": "Tailwind CSS 4 (CSS-first @theme in src/app/globals.css)",
     "motion": "CSS keyframes and transitions; motion 13 is a dependency but the table does not currently need it",
     "test": "vitest 4, two configs",
-    "fonts": "next/font/google \u2014 Oswald (felt lettering) + Inter (UI)",
+    "fonts": "next/font/google — Oswald (felt lettering) + Inter (UI)",
     "art": "../../cardArt copied into public/cards at build time by being committed there"
   },
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test \u2014 147 tests, about a second. Run this constantly.",
-    "testStats": "pnpm run test:stats \u2014 28 tests, about six minutes. Dealer distributions, five presets, six rule wiring checks, six side bets, counting. Opt-in, separate config.",
+    "test": "pnpm test — 147 tests, about a second. Run this constantly.",
+    "testStats": "pnpm run test:stats — 28 tests, about six minutes. Dealer distributions, five presets, six rule wiring checks, six side bets, counting. Opt-in, separate config.",
     "typecheck": "pnpm run typecheck",
-    "lint": "pnpm run lint \u2014 zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
+    "lint": "pnpm run lint — zero errors and zero warnings; keep it that way, it caught the two selector loops' cousins before they shipped.",
     "note": "All commands run from TableGames/blackjack. The repository root has no build.",
-    "dockerUp": "docker compose up -d --build  \u2192  http://localhost:8082",
-    "start": "pnpm start \u2014 serves the built out/ statically on :3002. NOT `next start`, which a static export does not have."
+    "dockerUp": "docker compose up -d --build  →  http://localhost:8082",
+    "start": "pnpm start — serves the built out/ statically on :3002. NOT `next start`, which a static export does not have."
   },
   "architecture": {
-    "principle": "The engine is pure. src/lib/engine and src/lib/strategy contain no React, no I/O, no clock, and no randomness at the point of use \u2014 the two functions that need it (deal, and the constructors) take an Rng as an argument. Every action returns a new table or a refusal. That is what makes a session replayable from a seed, testable without a browser, and safe to drive from a bot and a simulation at the same time.",
-    "storeIsAMetronome": "src/lib/store/useGame.ts owns the pacing of a round \u2014 the gaps between cards, the pause before the hole card, how long a settlement sits on the felt \u2014 and nothing else. Every money-moving call delegates to an engine function and swaps in whatever table comes back, so the store cannot invent a payout. Everything the driver does, a player could do by hand.",
-    "oneRulebook": "The bot calls hit(), stand(), double(), split() and surrender() \u2014 the same exported functions the buttons call. There is no second path into the state, which is why a bot cannot make a bet a player could not, and why the simulation measures the game the felt actually plays.",
-    "svgPlusDom": "The felt is an SVG at a fixed viewBox; the cards, chips and totals are HTML positioned in the same coordinate space and scaled by one transform on a wrapper. SVG draws the screen-printed lettering far better and CSS animates a card flip far better, and this is the seam that lets each do what it is good at while sharing one set of coordinates. Surface.tsx measures the container and passes the scale down, because a card at 62px is right and at 20px is illegible \u2014 the card size is a function of the scale, not a constant."
+    "principle": "The engine is pure. src/lib/engine and src/lib/strategy contain no React, no I/O, no clock, and no randomness at the point of use — the two functions that need it (deal, and the constructors) take an Rng as an argument. Every action returns a new table or a refusal. That is what makes a session replayable from a seed, testable without a browser, and safe to drive from a bot and a simulation at the same time.",
+    "storeIsAMetronome": "src/lib/store/useGame.ts owns the pacing of a round — the gaps between cards, the pause before the hole card, how long a settlement sits on the felt — and nothing else. Every money-moving call delegates to an engine function and swaps in whatever table comes back, so the store cannot invent a payout. Everything the driver does, a player could do by hand.",
+    "oneRulebook": "The bot calls hit(), stand(), double(), split() and surrender() — the same exported functions the buttons call. There is no second path into the state, which is why a bot cannot make a bet a player could not, and why the simulation measures the game the felt actually plays.",
+    "svgPlusDom": "The felt is an SVG at a fixed viewBox; the cards, chips and totals are HTML positioned in the same coordinate space and scaled by one transform on a wrapper. SVG draws the screen-printed lettering far better and CSS animates a card flip far better, and this is the seam that lets each do what it is good at while sharing one set of coordinates. Surface.tsx measures the container and passes the scale down, because a card at 62px is right and at 20px is illegible — the card size is a function of the scale, not a constant."
   },
   "keyDecisions": [
-    "Money is integer cents. A 3:2 blackjack on a five dollar bet pays seven fifty, so dollars have to be fractional somewhere; cents put the fraction in the integer. Payouts floor, never round up \u2014 a dealer short-pays to the nearest chip. Over the millions of rounds the simulation deals, float dollars would accumulate an error the same size as the thing being measured.",
+    "Money is integer cents. A 3:2 blackjack on a five dollar bet pays seven fifty, so dollars have to be fractional somewhere; cents put the fraction in the integer. Payouts floor, never round up — a dealer short-pays to the nearest chip. Over the millions of rounds the simulation deals, float dollars would accumulate an error the same size as the thing being measured.",
     "The shoe is an array plus a pointer, not a shifted queue. Immutability plus shift() means copying the tail of a 416-card array per card dealt.",
-    "immer was removed from every hot path. It remains on the cold ones \u2014 placing a bet, sitting down, changing the rules \u2014 where it runs at most once a round and its readability is free. The reason is measured, not stylistic: immer's cost is proportional to what a recipe READS, and drafting a seat drafts its hands, drafting a hand drafts its card array, and reading a card drafts the card. A round of blackjack reads all of that. See the note above updateSeat in table.ts.",
+    "immer was removed from every hot path. It remains on the cold ones — placing a bet, sitting down, changing the rules — where it runs at most once a round and its readability is free. The reason is measured, not stylistic: immer's cost is proportional to what a recipe READS, and drafting a seat drafts its hands, drafting a hand drafts its card array, and reading a card drafts the card. A round of blackjack reads all of that. See the note above updateSeat in table.ts.",
     "Assigning a shoe INSIDE an immer draft was 84% of the simulation's runtime on its own: immer's finaliser walks any new plain value looking for nested drafts, which meant walking four hundred card objects for a field whose only change was an integer. Every draw is now hoisted out of the draft and the shoe is spread back on by withShoe(). Do not put a shoe in a draft.",
     "settle() attaches the round history with a plain spread rather than inside a produce, for the same reason: prepending to a three-hundred-entry list inside a draft made immer rescan every record.",
-    "Together those three changes took a simulated round from 1,581 microseconds to 24 \u2014 sixty-six times. Nothing about the game changed; 114 tests passed before and after each step.",
+    "Together those three changes took a simulated round from 1,581 microseconds to 24 — sixty-six times. Nothing about the game changed; 114 tests passed before and after each step.",
     "The strategy chart has the table's own restrictions folded into its cells, not just into the advisor. A cell reading 'surrender' at a table with no surrender is a play the dealer will refuse, printed under a caption claiming otherwise. adviseFrom() still has the fallback logic and is still tested, because it is the honest description of what a printed card means.",
-    "Side-bet edges are computed, not cited. Five of the six are decided by two or three cards off the top, so sidebets.sim.test.ts enumerates every ordered pair and triple weighted by exact probability. Where a remembered figure and the enumeration disagreed, the enumeration won \u2014 Perfect Pairs at six decks is 6.11%, not the widely quoted 4.10% (that is the eight-deck number for this paytable, and the bet genuinely improves with more decks because a perfect pair needs a second copy of the identical card).",
+    "Side-bet edges are computed, not cited. Five of the six are decided by two or three cards off the top, so sidebets.sim.test.ts enumerates every ordered pair and triple weighted by exact probability. Where a remembered figure and the enumeration disagreed, the enumeration won — Perfect Pairs at six decks is 6.11%, not the widely quoted 4.10% (that is the eight-deck number for this paytable, and the bet genuinely improves with more decks because a perfect pair needs a second copy of the identical card).",
     "The Bust It ladder was repriced. The first draft measured at 20.3%, which is worse than Lucky Ladies and not a bet any house spreads; 1/3/8/20/75/400 measures at 6.71% and has the escalating shape a real one has.",
     "Insurance and even money are one code path. Even money is insurance for the maximum on a natural and comes to exactly 1:1 on the main wager either way the hole card falls; implementing it separately is how the two end up disagreeing. There is a test that asserts the payout is identical for both hole cards.",
     "ENHC is a separate settlement path, not a cosmetic flag. Under no-hole-card the dealer's second card arrives after the doubling is done, so a natural takes the doubled and split chips as well. That is the whole 0.11% and there is a test for exactly that hand.",
-    "The counting trainer reads the discard tray and nothing else. countShoe walks cards[0..pos) \u2014 the cards a player has seen. composition() could answer far more accurately and is deliberately wired to nothing but the tests.",
+    "The counting trainer reads the discard tray and nothing else. countShoe walks cards[0..pos) — the cards a player has seen. composition() could answer far more accurately and is deliberately wired to nothing but the tests.",
     "The dealer plays out their hand when a Bust It bet is live even if every player hand has busted, because Bust It is a bet on the dealer's finished hand. dealerMustPlay() is the predicate and it is asked once per turn, not once per card.",
-    "Chart cell colours and side-bet accents live in a plain :root block, not in @theme. Tailwind 4 only emits a theme variable when a utility referencing it is generated, and these are only ever read through var() in an inline style because the value is chosen at runtime \u2014 declared in @theme they were tree-shaken out and every chart cell rendered with no background.",
-    "The felt's three printed arcs are concentric, struck from one centre below the table. Two arcs with independently chosen radii and chords cross, which is exactly what the first version did \u2014 the payout line and the dealer's rule overlapped in the middle of the table.",
+    "Chart cell colours and side-bet accents live in a plain :root block, not in @theme. Tailwind 4 only emits a theme variable when a utility referencing it is generated, and these are only ever read through var() in an inline style because the value is chosen at runtime — declared in @theme they were tree-shaken out and every chart cell rendered with no background.",
+    "The felt's three printed arcs are concentric, struck from one centre below the table. Two arcs with independently chosen radii and chords cross, which is exactly what the first version did — the payout line and the dealer's rule overlapped in the middle of the table.",
     "Side-bet circles are one row of six compact boxes. Two rows do not fit: the felt's arc closes in fast below the betting circles and an outside seat's second row hangs over the rail. This is the constraint that sets the seat spacing.",
     "No service worker, no analytics, no network calls at runtime. The fonts are self-hosted by the build and the card art is served from the same origin.",
     "Even money is offered only at 3:2, and that is arithmetic rather than convention. Insuring a natural for x returns 2x on a dealer natural and p - x otherwise; guaranteeing 1 needs x = 1/2 from the first and x = p - 1 from the second, and those agree only at p = 3/2. At 6:5 no stake makes the offer even money, so the table does not make it and says why. Insurance stays available, because it is a different bet.",
     "A side bet's contingent winnings are recorded on the wager, not recomputed at settlement. Lucky Ladies' top line needs the dealer's hand, which is unknown when the bet is graded; recomputing it later reads a hand a split may have taken apart. SideBetWager.jackpot holds the amount from grade time.",
-    "The rule tests assert frequencies, not edge deltas. Blackjack's per-hand standard deviation is about 1.15 units, so a difference between two 300,000-round arms carries a three-sigma band of 0.89% \u2014 wider than DAS (0.14%), late surrender (0.08%), ENHC (0.11%) or H17 (0.22%) combined. Resolving 0.14% would take fifty million rounds an arm. So those rows are printed as diagnostics and what is asserted is how often the bot doubles, splits or surrenders, which is near-binomial and converges in seconds. That is also the only test shape that catches a rule wired to nothing.",
+    "The rule tests assert frequencies, not edge deltas. Blackjack's per-hand standard deviation is about 1.15 units, so a difference between two 300,000-round arms carries a three-sigma band of 0.89% — wider than DAS (0.14%), late surrender (0.08%), ENHC (0.11%) or H17 (0.22%) combined. Resolving 0.14% would take fifty million rounds an arm. So those rows are printed as diagnostics and what is asserted is how often the bot doubles, splits or surrenders, which is near-binomial and converges in seconds. That is also the only test shape that catches a rule wired to nothing.",
     "The counting claim is asserted where it converges. Spread-versus-flat is a coin flip at this length because a 1-12 spread's variance is several times a flat bet's; instead a flat bettor's result is bucketed by the true count at the deal, and the rich bucket must beat the poor one by a point. Same evidence that the shoe is real, an order of magnitude tighter.",
     "The edge model is defined by a named reference game rather than a bare baseline constant, and `estimateHouseEdge` is that game's edge less the sum of `ruleEffects`. Deriving the number and its itemisation from one list is what makes them agree; when they were computed separately, the panel credited '+0.22 dealer stands on all 17s' against a baseline that already stood on all seventeens, and double-counted DAS on top. A rule the reference game already has is priced as a penalty when absent, never a bonus when present.",
-    "The counting trainer takes what is *visible*, not what has left the shoe. Those differ by exactly one card \u2014 the dealer's hole card \u2014 and that difference is the whole distinction between a trainer and a cheat. `countTable` is the only function anything should call during a round.",
-    "The Super Sevens bonus card is drawn on the felt rather than discarded. It was simpler to consume it silently, but a card that leaves the shoe unseen is a card the counter would be counting behind the player's back \u2014 so it is stored on the wager and shown.",
-    "The felt has two geometries, not one scale factor. A blackjack table needs about 520 units of depth for the dealer's cards, three printed lines, the players' cards, the circles, the side-bet spots and a nameplate \u2014 and a phone in landscape has roughly 290 pixels of height once the header and button bar have taken theirs, so scaling that shape left two thirds of an 844-pixel screen black. The shallow geometry drops to one printed line and moves the nameplate into the header's territory, buying back 150 units of depth; it also pulls the outside seats inward, because the shallow arc closes on the rail much faster and six side-bet spots under an outside seat would hang over it. Both are described by the same `FeltGeometry` fields, so nothing downstream branches: Surface measures the container, `geometryFor` picks one, and every coordinate follows. Phone landscape went from 61% of the width to 84%.",
-    "The shoe carries the seed of its own next shuffle. A shoe that runs out mid-round has to reshuffle, and that needs randomness \u2014 but threading a generator through every function that deals a card would have changed five signatures and every test that calls them, to serve a case that fires once in thirteen thousand rounds. `ShoeState.seed` keeps the reshuffle deterministic and replayable while leaving `hit`, `double`, `split` and `dealerStep` pure functions of the table.",
-    "A tolerance that only holds on the seeds you happened to try is not a test. Where a measurement's band cannot be argued for from first principles, the test computes it from the run \u2014 Bust It does this \u2014 and where no feasible sample size can resolve the effect at all, the row is printed as a diagnostic and something else is asserted instead.",
-    "A rule's published cost is quoted against a specific baseline, and the model has to know which. Double-after-split was credited on top of a baseline that already had it; soft doubling was charged on top of a restriction that already forbade it. Both looked like separate switches and were the same rule counted twice. Before adding a term, ask what the figure is a delta *from* \u2014 and prefer a check that the engine agrees the rule bites at all, which is what `agrees with the engine about which doubles are legal` does."
+    "The counting trainer takes what is *visible*, not what has left the shoe. Those differ by exactly one card — the dealer's hole card — and that difference is the whole distinction between a trainer and a cheat. `countTable` is the only function anything should call during a round.",
+    "The Super Sevens bonus card is drawn on the felt rather than discarded. It was simpler to consume it silently, but a card that leaves the shoe unseen is a card the counter would be counting behind the player's back — so it is stored on the wager and shown.",
+    "The felt has two geometries, not one scale factor. A blackjack table needs about 520 units of depth for the dealer's cards, three printed lines, the players' cards, the circles, the side-bet spots and a nameplate — and a phone in landscape has roughly 290 pixels of height once the header and button bar have taken theirs, so scaling that shape left two thirds of an 844-pixel screen black. The shallow geometry drops to one printed line and moves the nameplate into the header's territory, buying back 150 units of depth; it also pulls the outside seats inward, because the shallow arc closes on the rail much faster and six side-bet spots under an outside seat would hang over it. Both are described by the same `FeltGeometry` fields, so nothing downstream branches: Surface measures the container, `geometryFor` picks one, and every coordinate follows. Phone landscape went from 61% of the width to 84%.",
+    "The shoe carries the seed of its own next shuffle. A shoe that runs out mid-round has to reshuffle, and that needs randomness — but threading a generator through every function that deals a card would have changed five signatures and every test that calls them, to serve a case that fires once in thirteen thousand rounds. `ShoeState.seed` keeps the reshuffle deterministic and replayable while leaving `hit`, `double`, `split` and `dealerStep` pure functions of the table.",
+    "A tolerance that only holds on the seeds you happened to try is not a test. Where a measurement's band cannot be argued for from first principles, the test computes it from the run — Bust It does this — and where no feasible sample size can resolve the effect at all, the row is printed as a diagnostic and something else is asserted instead.",
+    "A rule's published cost is quoted against a specific baseline, and the model has to know which. Double-after-split was credited on top of a baseline that already had it; soft doubling was charged on top of a restriction that already forbade it. Both looked like separate switches and were the same rule counted twice. Before adding a term, ask what the figure is a delta *from* — and prefer a check that the engine agrees the rule bites at all, which is what `agrees with the engine about which doubles are legal` does."
   ],
   "gotchas": [
     "deal() takes an Rng because a reshuffle happens there. It is the only action that does.",
@@ -139,7 +150,7 @@
     "The INSURANCE phase carries two offers, not one: insurance against an ace, and early surrender against a ten or an ace. It is entered for either, and closeOffers() is what triggers the peek. An early surrender that finishes the last hand must not skip that.",
     "settle() is guarded by table.settled. The UI drives it off a phase transition and a transition can fire twice.",
     "The store's persist merge() force-settles a round that was in flight when the tab closed: chips on hands and unresolved side bets go back to the bankroll and the phase resets to BETTING. There is no honest way to resume a half-committed round whose timers are gone.",
-    "lastBets is a Map and is deliberately not persisted \u2014 JSON has no Maps, and it would come back as {} and silently break the re-bet button.",
+    "lastBets is a Map and is deliberately not persisted — JSON has no Maps, and it would come back as {} and silently break the re-bet button.",
     "Never use advice() or count() as zustand selectors. They build a fresh object per call. Use useAdvice() and useCount().",
     "The simulation tops the bankroll back up rather than letting the bot go broke. A run that stops at round 40,000 has measured 40,000 rounds and then stopped, which biases the sample toward losing runs.",
     "Distribution measurements need a live Bust It bet, otherwise about three rounds in a hundred end with the dealer standing pat on a two-card twelve and the numbers are not comparable to a published table.",
@@ -149,18 +160,18 @@
     "Split aces stay live when they draw another ace and the table re-splits them. `canHit` still refuses, so the only legal moves are SPLIT and STAND. Marking them done unconditionally is what made resplitAces a no-op for the whole first draft.",
     "chartFor's cache key must include every rule the chart reads. It omitted holeCard and served a peeking chart to a no-hole-card table.",
     "Chart cell colours and side-bet accents must stay in a plain :root block. Tailwind 4 only emits an @theme variable when a utility referencing it is generated, and these are read through var() in inline styles.",
-    "Rules in globals.css that target the same single class as a Tailwind utility win, because they come after it in the cascade. The .stats-rail block is scoped :not(.hidden) for exactly this reason \u2014 without it, opening the tall-viewport layout overrode the `hidden` utility and showed a panel the player had closed.",
+    "Rules in globals.css that target the same single class as a Tailwind utility win, because they come after it in the cascade. The .stats-rail block is scoped :not(.hidden) for exactly this reason — without it, opening the tall-viewport layout overrode the `hidden` utility and showed a panel the player had closed.",
     "A `role=\"status\"` element has to exist before text lands in it. Rendering the toast stack only when there is a toast means the first message of a session is never announced.",
     "playRound's before-and-after readings are order-sensitive: handsPlayed is incremented by deal() and insurance is placed after it, so one must be read before the deal and the other after the offers close. Both were wrong in the same way and both were silently zero.",
     "Never call `countShoe` on a live table; call `countTable`. The difference is the dealer's hole card, and getting it wrong makes the trainer read cards the player cannot see.",
     "A finished round sits at phase SETTLE for the settlement hold with its stakes already returned but still displayed. Anything that refunds 'what is at risk' has to check `table.settled` first.",
     "Whether a split ace may be split again depends on how many hands the seat holds *now*, not how many it held when that hand was created. Deciding it at split time orphans hands that a later split makes unsplittable.",
     "A mid-round reshuffle leaves the shoe smaller than decks x 52, because the cards on the felt are excluded from it. `isCompleteShoe` is therefore only meaningful on a shoe that was built between rounds.",
-    "`canDouble` reads a total restriction against the hand's *total*, soft or hard \u2014 so a 9-11 table refuses every soft double, and `doubleSoft` is inert there. The pricing model and the setup screen both depend on that; if it ever changes, all three have to change together."
+    "`canDouble` reads a total restriction against the hand's *total*, soft or hard — so a 9-11 table refuses every soft double, and `doubleSoft` is inert there. The pricing model and the setup screen both depend on that; if it ever changes, all three have to change together."
   ],
   "verification": {
     "automated": [
-      "147 unit tests covering hand mathematics, the peek, splits to four hands, split and re-split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, abandoning a round, the whole strategy chart cell by cell, the advisor's legality, and the four counting systems.",
+      "158 unit tests covering hand mathematics, the peek, splits to four hands, split and re-split aces, doubling restrictions, both surrender rules, insurance and even money, ENHC, all six side bets, betting limits, the round lifecycle, abandoning a round, the whole strategy chart cell by cell, the advisor's legality, the four counting systems, and — since round five — the store itself: that a graded decision reaches the seat, that a refusal becomes a toast rather than a state change, that no rules change leaves a wager the bankroll cannot cover, and that a round is one write to storage rather than twenty.",
       "Bankroll conservation across a split with two doubles: whatever the round did, the bankroll at the end equals the bankroll at the start plus the sum of the signed results. It is the one assertion that catches a stake taken and not returned, or returned twice, anywhere in the money path.",
       "Dealer finishing distribution asserted against the published six-deck S17 table to within 0.5 points on each total and 0.4 on the bust rate.",
       "Player natural frequency asserted to within 0.12 points of the exact 4.749%.",
@@ -168,13 +179,13 @@
       "The edge model swept across all 25,920 tables the setup screen can build — every combination of the eleven live controls — asserting that the itemisation sums to the headline and that the extremes stay where they should: about one percent to the player at the most generous, about three and a half to the house at a carnival table paying even money on a natural.",
       "Six side-bet edges: five enumerated exactly and asserted to 0.06 points, one measured.",
       "Shoe completeness asserted after every reshuffle across twenty thousand rounds.",
-      "A counted 1-12 spread asserted to beat a flat bet on the same shoes \u2014 which is the evidence that the shoe is a real shoe and the discard tray really reflects it."
+      "A counted 1-12 spread asserted to beat a flat bet on the same shoes — which is the evidence that the shoe is a real shoe and the discard tray really reflects it."
     ],
     "manual": [
       "Played in a real browser at 1440x860: three seats, all six side bets, insurance, the chart dialog, the paytable dialog, the rules editor, the counting panel and the trainer. Zero console errors.",
       "prefers-reduced-motion verified in a real browser with the setting on: every animation resolves to `none` and every transition to 0s, and a dealt hand renders correctly with the hole card down rather than stuck mid-flip.",
-      "Keyboard-only play verified: space deals, S stands, the round runs to settlement without a pointer, and tab focus lands on a visible ring.",
-      "Checked at 844x390 (iPhone landscape). The felt is height-constrained there \u2014 see openItems."
+      "Keyboard-only play verified: space deals, S stands, and the round runs to settlement without a pointer. The focus ring this line used to claim did not exist — the app defined no focus style at all and inherited the user agent's, which is a thin dark outline on a dark green felt. There is a brass :focus-visible ring now, the dialogs trap and restore focus, and the game's own shortcuts stand down while one is open. The ring and the trap have been read in the code and exercised in a browser; a full keyboard pass over every dialog has not been redone since.",
+      "Checked at 844x390 (iPhone landscape). The felt is height-constrained there — see openItems."
     ],
     "notVerified": [
       "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the craps mixer rather than measured; that file's own header says to measure rather than nudge, and nobody has.",
@@ -184,8 +195,8 @@
       "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
-      "when": "2026-09-06, after four rounds of review",
-      "note": "What the suite printed on its last full run (29 tests, 6m45s), against the corrected model. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
+      "when": "2026-09-06, after five rounds of review",
+      "note": "What the suite printed on its last full run (29 tests, 7m44s), against the corrected model and the corrected denominator. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
       "sideBetEdges": {
         "21+3": 4.621,
         "PerfectPairs": 6.109,
@@ -201,23 +212,23 @@
       },
       "houseEdgeMeasuredVsModel": {
         "SingleDeck": [
-          1.667,
+          1.817,
           1.85
         ],
         "VegasStrip": [
-          0.539,
+          0.637,
           0.4
         ],
         "AtlanticCity": [
-          0.321,
+          0.384,
           0.34
         ],
         "European": [
-          0.383,
+          0.42,
           0.6
         ],
         "LiberalShoe": [
-          0.027,
+          0.026,
           0.05
         ],
         "MimicTheDealer": [
@@ -225,36 +236,40 @@
           null
         ]
       },
-      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.505% for the player at a true count of +2 or better against -2.721% at -2 or worse. That gap is the assertion.",
-      "resplitAces": "+0.052% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
-      "watchThis": "RESOLVED. European measuring 0.347 points from the model was not noise \u2014 it was the soft-double restriction being charged on top of a double restriction that already forbids it. Left here as the record of what a preset drifting from its own measurement turned out to mean the one time it was chased down rather than filed.",
-      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency \u2014 doubles, splits and surrenders per thousand hands \u2014 which converges in seconds and is the only shape that catches a rule wired to nothing.",
-      "modelAccuracy": "Every preset is inside 0.22 points on this single run and inside 0.093 against the mean of two independent 800,000-round runs. The worst single-run gap is European at 0.217 against a 0.373 tolerance; before the soft-double double-charge was found it was 0.347."
+      "counting": "A flat bettor's own hands, bucketed by the true count as the round was dealt: +1.450% for the player at a true count of +2 or better against -2.804% at -2 or worse. That gap is the assertion.",
+      "resplitAces": "+0.060% against a model of +0.080%. Before the fix it was worth exactly nothing, because it did nothing.",
+      "watchThis": "RESOLVED. European measuring 0.347 points from the model was not noise — it was the soft-double restriction being charged on top of a double restriction that already forbids it. Left here as the record of what a preset drifting from its own measurement turned out to mean the one time it was chased down rather than filed.",
+      "caveat": "The six per-rule delta rows are printed diagnostics, not assertions, and cannot be otherwise: a difference between two 300,000-round arms carries a three-sigma band of 0.89%, wider than DAS, late surrender, ENHC and H17 combined. What is asserted for each rule is a frequency — doubles, splits and surrenders per thousand hands — which converges in seconds and is the only shape that catches a rule wired to nothing.",
+      "modelAccuracy": "Every preset is inside 0.24 points and inside its own three-sigma band. Vegas Strip is now the loosest at 0.237 against a 0.387 tolerance, and Single Deck the tightest at 0.033; correcting the denominator tightened three presets and loosened one, which is what a denominator change should look like rather than a uniform shift. The mean absolute gap across the five is 0.10 points.",
+      "denominator": "Every edge above is per unit of the initial wager, which is what the model and the published figures mean. Until round five the suite divided by the total action instead — about 1.133 units per unit bet under basic strategy — which reported every figure roughly 12% low in relative terms while comparing it to a model quoted the other way.",
+      "exactReferences": "The dealer rows are asserted against an exact recursion over the six-deck composition, not against published round numbers: S17 bust 28.192%, H17 bust 28.576%, and 17/18/19/20/21 at 14.525/13.926/13.368/17.953/12.036. The table that used to be here had the twenty wrong by 0.37 points and the bust rate by 0.19, behind tolerances of six and eight sigma described in the comment as three."
     }
   },
   "openItems": [
     "Early surrender uses the ordinary basic-strategy chart. The genuine early-surrender chart has its own cells (surrender hard 5-7 and 12-17 against an ace, among others) and is worth about 0.2% of the rule's 0.63%. The engine implements the rule correctly; only the advice is approximate, and no preset ships an early-surrender game.",
-    "The bot takes insurance at a true count of +3 or better but never takes even money, which is the same bet \u2014 a counter holding a natural at +3 should.",
+    "The bot takes insurance at a true count of +3 or better but never takes even money, which is the same bet — a counter holding a natural at +3 should.",
     "Side-bet strategy is not advised at all. Several of these bets have count-dependent plays; the trainer says nothing about them.",
     "Lucky Ladies' 1000:1 line is enumerated with the dealer's natural treated as independent of the player's two queens. The term is worth about a twentieth of a percent, well below the precision the figure is published to, but it is the one side-bet number that is not exact.",
-    "The rule model is inside 0.22 points of the simulation on every preset on a single 800,000-round run, and inside 0.093 against the mean of two. The loosest is European at 0.217 against a 0.373 three-sigma tolerance. Atlantic City, which was the outlier at 0.143 while the soft-double restriction was being double-charged, now measures 0.321 against a model of 0.34. Nothing here is outside its band; the item is kept as the place to look first if a preset starts drifting again.",
+    "The rule model is inside 0.24 points of the simulation on every preset, and inside every preset's own three-sigma band. Vegas Strip is the loosest at 0.237 against a 0.387 tolerance; Single Deck the tightest at 0.033. Nothing here is out of band, and the item is kept as the place to look first if a preset starts drifting — that habit is what turned up the soft-double double-charge in round three and the wrong denominator in round five, both of which had been sitting inside the noise.",
     "The shallow felt drops the insurance line and the dealer's rule from the print, because there is no depth for them. Both are still in the HUD and the help dialog, but a player on a phone reads them off a panel rather than off the felt.",
     "No multi-hand-per-seat betting (two boxes at one seat), which some tables allow.",
-    "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on \u2014 betFor() supports it but the store's deal() uses whatever is in the circle.",
+    "The autoplay driver does not vary its bet with the count even when the bot's spread setting is on — betFor() supports it but the store's deal() uses whatever is in the circle.",
     "The equity chart caps at 300 rounds of history and has no zoom.",
-    "No keyboard shortcut for the dialogs.",
-    "Docker image size is unmeasured. The card deck adds about 2 MB over the craps image."
+    "No keyboard shortcut for opening the dialogs. Once one is open it traps focus, restores it on close, and stands the game's own shortcuts down — but reaching for it still needs a pointer or a tab.",
+    "Docker image size is unmeasured. The card deck adds about 2 MB over the craps image.",
+    "The dialog focus trap and the :focus-visible ring were added in round five and read in a browser, but no screen reader has been driven over them. The `notVerified` note about VoiceOver and NVDA still stands.",
+    "The app's autoplay bot and the simulation's bot now agree on early surrender and on when insurance is even offered, but they are still two implementations of the same policy in two files. Anything that changes one should change the other, and nothing enforces that."
   ],
   "repoNotes": {
     "git": "The repository is rooted at KnotzCrapzNCardz and published at https://github.com/KnotEnvy/KnotzCrapzNCardz (public).",
     "structure": "Games are self-contained apps under their own folders. TableGames/blackjack carries its own package.json, .gitignore and README; the root carries a repo-wide .gitignore and an index README. There is no root build.",
-    "ports": "craps 8080, Dragon's Shrine 8081, blackjack 8082 \u2014 so all three run at once from the root compose file.",
+    "ports": "craps 8080, Dragon's Shrine 8081, blackjack 8082 — so all three run at once from the root compose file.",
     "sharedAssets": "../../cardArt is the source of the 54-card deck. It is copied, not referenced: a static export cannot reach outside public/."
   },
   "pickUpHere": {
     "thenRead": [
-      "src/lib/engine/table.ts \u2014 the state machine, and the note above updateSeat explaining why half of it is immer and half is not.",
-      "src/lib/engine/sidebets.sim.test.ts \u2014 the enumeration. It is the most unusual thing in here and the pattern generalises."
+      "src/lib/engine/table.ts — the state machine, and the note above updateSeat explaining why half of it is immer and half is not.",
+      "src/lib/engine/sidebets.sim.test.ts — the enumeration. It is the most unusual thing in here and the pattern generalises."
     ],
     "safestPlacesToStart": [
       "Adding a side bet: write the paytable in sidebets.ts, a resolver, a case in gradeSideBet, and an enumeration in the sim test. The test will tell you the edge; publish that number.",
@@ -263,27 +278,27 @@
       "Sound: audio.ts is self-contained and every voice is independent."
     ],
     "riskiestPlacesToChange": [
-      "resolve.ts settleHand \u2014 the five branches are in precedence order and the order is the rules.",
-      "table.ts settleFocus/openPlayerPhase \u2014 turn order is where the subtle bugs were, and three of the six found this session were here.",
+      "resolve.ts settleHand — the five branches are in precedence order and the order is the rules.",
+      "table.ts settleFocus/openPlayerPhase — turn order is where the subtle bugs were, and three of the six found this session were here.",
       "Anything that puts the shoe back inside an immer draft. It will not fail a test; it will quietly make the simulation twenty times slower.",
-      "basic.ts chart cells \u2014 a wrong cell moves the measured edge by less than the simulation's noise floor, so the unit tests are the only thing guarding them. Add a test with the cell."
+      "basic.ts chart cells — a wrong cell moves the measured edge by less than the simulation's noise floor, so the unit tests are the only thing guarding them. Add a test with the cell."
     ]
   },
   "deployment": {
-    "model": "Static. The game is client-side end to end, so next build runs with output: 'export' and writes out/ \u2014 a folder of files. No Node runs in production.",
-    "consequence": "Anything requiring a server \u2014 route handlers, server actions, ISR, next/image optimisation \u2014 now fails the build instead of silently not working. That is the intended trade.",
+    "model": "Static. The game is client-side end to end, so next build runs with output: 'export' and writes out/ — a folder of files. No Node runs in production.",
+    "consequence": "Anything requiring a server — route handlers, server actions, ISR, next/image optimisation — now fails the build instead of silently not working. That is the intended trade.",
     "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. Runs read_only with tmpfs for nginx scratch dirs.",
-    "run": "docker compose up -d --build  \u2192  http://localhost:8082",
+    "run": "docker compose up -d --build  →  http://localhost:8082",
     "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/. An offline build machine fails at pnpm run build.",
     "cardArt": "public/cards is served with a one-year immutable cache. It never changes and a re-deal must not go back to the network for a card the browser already has.",
     "tls": "nginx.conf is an origin server speaking plain HTTP on 80. TLS belongs at a reverse proxy or tunnel in front of it.",
-    "docs": "DEPLOY.md \u2014 the container, LAN play on a phone, and the options for public hosting."
+    "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting."
   },
   "pwa": {
-    "what": "public/manifest.webmanifest plus icons in public/icons. Installs to an iPhone home screen via Share \u2192 Add to Home Screen, opening standalone.",
+    "what": "public/manifest.webmanifest plus icons in public/icons. Installs to an iPhone home screen via Share → Add to Home Screen, opening standalone.",
     "orientation": "Landscape. Portrait under 560px tall shows a 'turn your phone sideways' overlay rather than a squeezed table.",
     "appleTags": "Next 16 emits only the standardised mobile-web-app-capable. The legacy apple-mobile-web-app-capable is added by hand via metadata.other, because iPhones a couple of versions back read only that spelling.",
-    "manifestMime": "nginx does not know .webmanifest natively. The types block in nginx.conf sets application/manifest+json \u2014 without it iOS silently refuses the install.",
+    "manifestMime": "nginx does not know .webmanifest natively. The types block in nginx.conf sets application/manifest+json — without it iOS silently refuses the install.",
     "notDone": "No service worker, so the installed app still needs the network to load."
   }
 }
