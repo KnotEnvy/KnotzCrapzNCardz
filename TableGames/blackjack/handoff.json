@@ -109,14 +109,16 @@
     ],
     "manual": [
       "Played in a real browser at 1440x860: three seats, all six side bets, insurance, the chart dialog, the paytable dialog, the rules editor, the counting panel and the trainer. Zero console errors.",
-      "Checked at 844x390 (iPhone landscape). The felt is height-constrained there \u2014 see notVerified."
+      "prefers-reduced-motion verified in a real browser with the setting on: every animation resolves to `none` and every transition to 0s, and a dealt hand renders correctly with the hole card down rather than stuck mid-flip.",
+      "Keyboard-only play verified: space deals, S stands, the round runs to settlement without a pointer, and tab focus lands on a visible ring.",
+      "Checked at 844x390 (iPhone landscape). The felt is height-constrained there \u2014 see openItems."
     ],
     "notVerified": [
       "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the craps mixer rather than measured; that file's own header says to measure rather than nudge, and nobody has.",
-      "prefers-reduced-motion is implemented in globals.css but has not been exercised in a browser with the setting on.",
       "Touch interaction on a real phone. The layout was checked at phone dimensions in a desktop browser, which is not the same thing.",
-      "The PWA install path (Share \u2192 Add to Home Screen) has not been run on an actual iPhone.",
-      "Docker build and the nginx config are copied from craps with the paths and ports changed, and have not been built here."
+      "The PWA install path (Share -> Add to Home Screen) has not been run on an actual iPhone.",
+      "Docker build and the nginx config are adapted from craps with the paths, ports and a card-art cache rule changed, and have not been built here.",
+      "Screen readers. The controls carry roles and labels and the felt's decorative SVG is aria-hidden, but nothing has been driven with VoiceOver or NVDA."
     ],
     "lastRun": {
       "when": "2026-09-06",
