@@ -29,10 +29,17 @@ split aces, late surrender, early surrender. Every refused button prints the
 reason underneath it rather than sitting there dead — printed rather than
 hovered, because a tooltip on a disabled button reaches nobody at all: not a
 keyboard, not a phone, not a screen reader. It was a tooltip for five rounds
-of review. Each rule is also tested for doing something, not only for
-refusing correctly. Re-split aces
-spent this game's first draft as a switch that priced itself at 0.08% and did
-nothing at all.
+of review.
+
+Each rule is also tested for *doing* something, not only for refusing
+correctly, and that is not a stylistic preference. Re-split aces spent this
+game's first draft as a switch that priced itself at 0.08% and did nothing;
+the betting ramp spent seven rounds displayed beside a bot that flat-bet; the
+early-surrender chart spent one round being written and then silently
+overwritten by a later patch. A switch that prices something it does not
+implement is the defect this project has shipped most often, and every one of
+them was found by a test that asked whether the rule changed an outcome rather
+than whether the code ran.
 
 **Every rule that matters.** One to eight decks, penetration on a slider,
 dealer stands or hits soft 17, blackjack at 3:2 or 6:5, double after split,
@@ -46,7 +53,13 @@ is in the game, built for the rules currently in force rather than a generic
 one with footnotes.
 
 **A card counter.** Hi-Lo, Knock-Out, Omega II and Hi-Opt II, with the running
-count, the true count, the decks remaining and a betting ramp. It counts the
+count, the true count, the decks remaining and a betting ramp the autoplay bot
+will actually bet. Every published index — insurance at +3, the Illustrious 18,
+the ramp itself — is quoted in Hi-Lo true counts, so the panel converts: a
+Knock-Out shoe nobody has dealt from reads a running count of −20 and a Hi-Lo
+equivalent of zero, which is the honest translation. Feeding those indices a
+raw count from another system is worth a reported 10% player disadvantage on
+an untouched shoe, which is what it did before round six. It counts the
 cards that have been turned face up, and nothing else: not the shoe, and not
 the dealer's hole card, which leaves the shoe at the top of the round and is
 not seen until the end of it. (It counted the hole card once. Three separate
