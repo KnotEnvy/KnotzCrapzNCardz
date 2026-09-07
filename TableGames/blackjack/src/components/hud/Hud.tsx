@@ -228,6 +228,8 @@ function aggregate(all: readonly SeatStats[]): SeatStats {
  * ------------------------------------------------------------------ */
 
 function CountPanel() {
+  const bot = useGame((s) => s.bot);
+  const setBot = useGame((s) => s.setBot);
   const table = useGame((s) => s.table);
   const system = useGame((s) => s.prefs.countSystem);
   const setPref = useGame((s) => s.setPref);
@@ -313,6 +315,31 @@ function CountPanel() {
         Counted from the cards that have been turned face up — not the shoe, and not the dealer&rsquo;s
         hole card until they turn it.
       </p>
+
+      {/*
+        The two switches that make the count worth keeping.
+
+        Everything above this — the ramp, the edge, the index plays in the
+        chart dialog — described what a counter *would* do while the bot that
+        plays the game had them both hard off, because `setBot` existed and
+        nothing in the app called it. A betting ramp shown beside a bot that
+        flat-bets is the same defect as a rule switch priced at 0.08% that
+        does nothing, and this game has now shipped that defect twice.
+      */}
+      <div className="mt-2 border-t border-white/6 pt-1.5">
+        <Toggle
+          checked={bot.spread}
+          onChange={(v) => setBot('spread', v)}
+          label="Autoplay bets the ramp"
+          hint="Off, the bot plays whatever is in the circle. On, it bets the units shown above."
+        />
+        <Toggle
+          checked={bot.deviations}
+          onChange={(v) => setBot('deviations', v)}
+          label="Autoplay takes index plays"
+          hint="Insurance above +3, and the Illustrious 18 departures from the chart."
+        />
+      </div>
     </Panel>
   );
 }

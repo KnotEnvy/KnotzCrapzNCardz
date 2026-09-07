@@ -161,7 +161,7 @@ describe('the store', () => {
    * setting moved no chips. Same defect as a rule switch that prices
    * something it does not implement.
    */
-  it('lets the bot place its own bet when autoplay is on', () => {
+  it('lets the bot bet its own ramp when the spread is on', () => {
     reset();
     state().setSeatOccupied('A', true);
     state().setBet('A', dollars(5));
@@ -171,20 +171,56 @@ describe('the store', () => {
 
     // Whatever the ramp said, it is the bot's number and not the $5 that was
     // sitting in the circle.
-    const seat = seatOf(state().table, 'A');
-    const staked = seat.hands.reduce((n, h) => n + h.bet, 0);
+    const staked = seatOf(state().table, 'A').hands.reduce((n, h) => n + h.bet, 0);
     expect(staked).toBeGreaterThanOrEqual(dollars(25));
     expect(staked).not.toBe(dollars(5));
+
+    useGame.setState({ autoplay: false, bot: { ...state().bot, spread: false } });
+  });
+
+  /*
+   * A flat bot has no opinion about bet size. The first version of the ramp
+   * fix reset a standing wager to the bot's unit whenever autoplay was on,
+   * which swept away the player's chips — and `setBet` caps a side bet to the
+   * main wager, so it dragged those down too, silently, on a 300ms timer.
+   */
+  it('leaves the player’s chips alone when the bot is flat betting', () => {
+    reset();
+    state().setSeatOccupied('A', true);
+    state().setBet('A', dollars(100));
+    useGame.setState({ autoplay: true, bot: { ...state().bot, spread: false, unit: dollars(10) } });
+
+    state().deal();
+    expect(seatOf(state().table, 'A').hands[0].bet).toBe(dollars(100));
 
     useGame.setState({ autoplay: false });
   });
 
-  it('leaves the circle alone when the player is betting', () => {
+  it('never ramps past what the side bets leave in the bankroll', () => {
     reset();
+    const withSideBets = { ...defaultRules(), sideBets: { ...defaultRules().sideBets, LUCKY_LADIES: true } };
+    state().setRules(withSideBets);
     state().setSeatOccupied('A', true);
-    state().setBet('A', dollars(5));
+    state().setBet('A', dollars(50));
+    state().addSideChip('A', 'LUCKY_LADIES');
+    useGame.setState((s) => ({
+      autoplay: true,
+      bot: { ...s.bot, spread: true, unit: dollars(1000) },
+      table: {
+        ...s.table,
+        seats: s.table.seats.map((seat) => (seat.id === 'A' ? { ...seat, bankroll: dollars(200) } : seat)),
+      },
+    }));
+
     state().deal();
-    expect(seatOf(state().table, 'A').hands[0].bet).toBe(dollars(5));
+
+    const seat = seatOf(state().table, 'A');
+    const side = seat.hands.length > 0 ? seat.pendingSideBets.reduce((n, sb) => n + sb.amount, 0) : 0;
+    const main = seat.hands.reduce((n, h) => n + h.bet, 0);
+    expect(main + side, 'the round was dealt within the bankroll').toBeLessThanOrEqual(dollars(200));
+    expect(seat.bankroll).toBeGreaterThanOrEqual(0);
+
+    useGame.setState({ autoplay: false, bot: { ...state().bot, spread: false } });
   });
 
   it('does not persist the round in flight, and writes far less often than it sets', () => {

@@ -441,12 +441,17 @@ describe('chart integrity', () => {
     );
 
     /*
-     * The pair chart moves in exactly the cells whose hard total moved, and
-     * for exactly that reason: a pair is looked up in the pair chart and
-     * never reaches the hard entry that plainly applies to it. Three-three is
-     * a hard six, six-six a twelve, seven-seven a fourteen, eight-eight a
-     * sixteen. If a pair cell ever moves without its hard total moving, the
-     * two charts have stopped agreeing about the same hand.
+     * The pair chart moves in six cells, and each of them is a hand whose
+     * hard total is already in the early-surrender set: three-three is a hard
+     * six, six-six a twelve, seven-seven a fourteen, eight-eight a sixteen.
+     * They need their own lines because a pair is looked up in the pair chart
+     * and never reaches the hard entry that plainly applies to it.
+     *
+     * Two of them — 8,8 against a ten and against an ace — move here without
+     * their hard total moving in the *delta*, because late surrender already
+     * folds hard sixteen against both. The hard cell did not change; the pair
+     * cell did, because late surrender splits eight-eight there rather than
+     * folding it, and early surrender does not.
      */
     const pairsMoved: string[] = [];
     for (const pair of Object.keys(early.pairs).map(Number)) {
@@ -473,6 +478,55 @@ describe('chart integrity', () => {
     // the peek moves, in the set implemented here.
     for (const row of Object.keys(early.soft).map(Number)) {
       expect(early.soft[row], `soft ${row}`).toEqual(late.soft[row]);
+    }
+  });
+
+  /*
+   * An early-surrender cell has to survive every other patch.
+   *
+   * Every early-surrender test above was pinned to `defaultRules()` — six
+   * decks, peeking — which is why a 181-test green suite could not see that
+   * `EARLY_SURRENDER` was applied *before* the few-deck and no-hole-card sets
+   * and silently overwritten by both. At ENHC the chart surrendered hard
+   * sixteen against an ace while hitting eight-eight against an ace, which is
+   * the same hand, and surrendered the weaker seven-seven beside it. At one
+   * deck it surrendered hard fourteen against a ten while standing on
+   * seven-seven.
+   *
+   * The rule is not "a pair folds whenever its hard total does" — late
+   * surrender splits eight-eight against a nine rather than folding hard
+   * sixteen, and is right to. It is narrower and it is about ordering: at an
+   * early-surrender table, every cell `EARLY_SURRENDER` names is still a
+   * surrender cell after everything else has been applied. Asserted over the
+   * whole cross-product of deck count, hole-card rule and soft-17 rule,
+   * because the defect lived in a combination nothing tested.
+   */
+  it('keeps every early-surrender cell whatever else the table does', () => {
+    const foldsHard: Array<[number, number]> = [
+      [5, 11], [6, 11], [7, 11], [12, 11], [13, 11], [14, 11], [15, 11], [16, 11], [17, 11],
+      [14, 10], [15, 10], [16, 10],
+    ];
+    const foldsPair: Array<[number, number]> = [
+      [3, 11], [6, 11], [7, 11], [8, 11], [7, 10], [8, 10],
+    ];
+    const isFold = (code: Code) => code === 'R' || code === 'Rs' || code === 'Rp';
+
+    for (const decks of [1, 2, 4, 6, 8]) {
+      for (const holeCard of ['PEEK', 'ENHC'] as const) {
+        for (const hitsSoft17 of [false, true]) {
+          const c = chartFor({ ...rules, decks, holeCard, hitsSoft17, surrender: 'EARLY' });
+          const where = `${decks}d ${holeCard} ${hitsSoft17 ? 'H17' : 'S17'}`;
+
+          for (const [total, up] of foldsHard) {
+            const code = c.hard[total][UPCARDS.indexOf(up)];
+            expect(isFold(code), `${where}: hard ${total} v ${up} is ${code}`).toBe(true);
+          }
+          for (const [pair, up] of foldsPair) {
+            const code = c.pairs[pair][UPCARDS.indexOf(up)];
+            expect(isFold(code), `${where}: ${pair},${pair} v ${up} is ${code}`).toBe(true);
+          }
+        }
+      }
     }
   });
 

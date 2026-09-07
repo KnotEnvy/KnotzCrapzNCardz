@@ -346,7 +346,17 @@ function SetupBody({ onClose }: { onClose: () => void }) {
             >
               {table.phase === 'BETTING' ? 'Apply and reshuffle' : 'Finish the round first'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => applyPreset('vegas-strip')}>
+            {/*
+              Same guard as the button above it. This one changes the rules
+              too, so mid-round it answered with a refusal toast — on the one
+              screen whose neighbour disables itself and says why.
+            */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={table.phase !== 'BETTING'}
+              onClick={() => applyPreset('vegas-strip')}
+            >
               Back to the default game
             </Button>
           </div>
@@ -440,7 +450,14 @@ function ChartDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
           </div>
 
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-pit-400">
-            {(['H', 'S', 'D', 'Ds', 'P', 'Ph', 'R'] as Code[]).map((c) => (
+            {/*
+              Every code the chart can actually render. `Rs` and `Rp` were
+              missing, and their only explanation was a hover `title` on a
+              non-focusable span — so at an H17 late-surrender table, and at
+              every early-surrender table since the pair cells went in, the
+              grid showed a code the legend below it did not name.
+            */}
+            {(['H', 'S', 'D', 'Ds', 'P', 'Ph', 'R', 'Rs', 'Rp'] as Code[]).map((c) => (
               <span key={c} className="flex items-center gap-1.5">
                 <span
                   className="flex h-4 w-5 items-center justify-center rounded-[3px] text-[9px] font-semibold text-black/85"
@@ -457,8 +474,11 @@ function ChartDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
             A slash means the fallback: <span className="text-pit-200">D</span> is double if the table
             lets you and hit if it does not, <span className="text-pit-200">Ds</span> is double or
             stand, <span className="text-pit-200">Ph</span> is split only where doubling after a split
-            is allowed. The chart above already has this table&rsquo;s restrictions applied, so what it
-            shows is what the buttons will accept.
+            is allowed, <span className="text-pit-200">Rs</span> is surrender or stand and{' '}
+            <span className="text-pit-200">Rp</span> is surrender or split. The chart above already has
+            this table&rsquo;s restrictions applied, so what it shows is what the buttons will accept —
+            at a table with no surrender the two <span className="text-pit-200">R</span> codes collapse
+            into whatever their fallback was and never appear.
           </p>
         </>
       )}

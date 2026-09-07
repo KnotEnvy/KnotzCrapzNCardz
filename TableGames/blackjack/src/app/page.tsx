@@ -200,9 +200,18 @@ function Header() {
           const next: Record<string, string> = { RELAXED: 'NORMAL', NORMAL: 'FAST', FAST: 'RELAXED' };
           setPref('speed', next[prefs.speed] as typeof prefs.speed);
         }}
+        /*
+          A button with text content takes its accessible name from the
+          content, not from `title` — so an emoji-only button announces the
+          emoji and nothing else, and this one is a three-state cycle whose
+          current state was legible only to someone who could see it. The
+          mute button two rows up already had both; these two did not.
+        */
+        aria-label={`Dealing speed: ${prefs.speed.toLowerCase()}. Click to change.`}
         title="Dealing speed"
       >
         {prefs.speed === 'FAST' ? '⏩' : prefs.speed === 'RELAXED' ? '🐢' : '▶'}
+        <span className="sr-only">{prefs.speed.toLowerCase()}</span>
       </Button>
       <Button
         size="sm"
@@ -210,6 +219,7 @@ function Header() {
         onClick={() => {
           if (confirm('Start a new session? Bankrolls and statistics reset.')) newSession();
         }}
+        aria-label="New session"
         title="New session"
       >
         ↺

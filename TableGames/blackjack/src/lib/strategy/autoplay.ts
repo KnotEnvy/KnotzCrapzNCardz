@@ -2,9 +2,9 @@
  * The bot.
  *
  * One function that decides what a seat does next, and one that plays a whole
- * round out. It exists twice over: the app uses it for demo mode and for the
- * "play it for me" button, and the simulation suite uses it to deal several
- * hundred thousand hands and measure what the rules actually cost.
+ * round out. It exists twice over: the app uses it for autoplay and for the
+ * "play this hand for me" button, and the simulation suite uses it to deal
+ * several hundred thousand hands and measure what the rules actually cost.
  *
  * The important property is that it has no privileged access. It decides from
  * the cards on the felt and the count of what has already been discarded —

@@ -255,7 +255,7 @@ const EARLY_SURRENDER: Array<[('hard' | 'soft' | 'pair'), number, number, Code]>
   ['hard', 15, 11, 'R'],
   ['hard', 16, 11, 'R'],
   ['hard', 17, 11, 'R'],
-  // Against a ten: the three the late chart already surrenders one of.
+  // Against a ten: three cells, of which the late chart already surrenders two.
   ['hard', 14, 10, 'R'],
   ['hard', 15, 10, 'R'],
   ['hard', 16, 10, 'R'],
@@ -337,11 +337,29 @@ export function chartFor(rules: TableRules): Chart {
     pairs = patch(pairs, deltas.filter(([t]) => t === 'pair').map(([, r, u, c]) => [r, u, c]));
   };
 
-  if (rules.surrender === 'EARLY') apply(EARLY_SURRENDER);
   if (rules.decks <= 2) apply(FEW_DECK_ANY);
   if (rules.decks === 1) apply(FEW_DECK_ONE);
-  // Last, because a no-hole-card table overrides a few-deck double.
+  // A no-hole-card table overrides a few-deck double.
   if (rules.holeCard === 'ENHC') apply(ENHC);
+  /*
+   * Early surrender goes last, and the ordering is the whole of a defect.
+   *
+   * It used to be applied first, and the two sets above then overwrote it:
+   * `FEW_DECK_ONE` stands 7,7 against a ten and `ENHC` hits 8,8 against a ten
+   * and an ace, both written for a chart with no surrender in it. The result
+   * was a chart that contradicted itself on one screen — at ENHC it
+   * surrendered hard sixteen against an ace while *hitting* eight-eight
+   * against an ace, which is the same hand, and surrendered the weaker 7,7
+   * beside it. Exactly the "a pair never reaches the hard chart" trap the
+   * pair cells were added to close, reopened one line later.
+   *
+   * Last is also right on the merits rather than only convenient. Every one
+   * of those overridden cells is a *don't commit a second chip* rule — do not
+   * split into a shoe that might hold a natural, do not split at one deck —
+   * and surrendering commits no chips at all. A rule about how to play a hand
+   * cannot outrank the decision not to play it.
+   */
+  if (rules.surrender === 'EARLY') apply(EARLY_SURRENDER);
 
   const chart = restrict({ hard, soft, pairs }, rules);
   chartCache.set(key, chart);

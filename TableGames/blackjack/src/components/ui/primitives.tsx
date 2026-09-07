@@ -176,9 +176,28 @@ export function Stat({
   tone?: 'good' | 'bad' | 'flat';
   title?: string;
 }) {
+  /*
+   * The explanation is spoken as well as hovered.
+   *
+   * `title` on a bare `<div>` is a mouse-only affordance: no tab stop, no
+   * touch, nothing for a screen reader. For most of this panel that would be
+   * a nicety, but for five of these stats the tooltip is the *only* place the
+   * number is explained at all — what "Measured edge" is measured against,
+   * that the house edge is an estimate to a tenth of a point, what the bare
+   * string "BC 0.97" means. This project has now spent four rounds of review
+   * finding the same class of defect in one component at a time, so: the text
+   * stays as `title` for the hover and is repeated to assistive technology,
+   * where before it reached nobody.
+   *
+   * Not a tab stop. Adding one per stat would put a dozen stops through a
+   * read-only panel between the player and the buttons they actually need.
+   */
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5" title={title}>
-      <span className="truncate text-[11px] text-pit-400">{label}</span>
+      <span className="truncate text-[11px] text-pit-400">
+        {label}
+        {title ? <span className="sr-only">. {title}</span> : null}
+      </span>
       <span
         className={cn(
           'font-mono text-xs tabular-nums',

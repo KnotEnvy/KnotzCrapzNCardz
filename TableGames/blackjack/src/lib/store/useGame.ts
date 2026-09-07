@@ -530,24 +530,38 @@ export const useGame = create<GameStore>()(
           if (get().busy) return;
 
           /*
-           * When the bot is playing, the bot bets.
+           * When the bot is ramping, the bot bets.
            *
-           * `betFor` has always known how to ramp with the count, and the
-           * counting panel has always shown what it would bet — but the
+           * `betFor` has always known how to ramp with the count and the
+           * counting panel has always shown what it would bet, but the
            * autoplay loop called `deal()`, which books whatever is already in
-           * the circle, so the ramp was advice the bot itself never took. A
-           * spread setting that moves no chips is the same defect as the
-           * re-split-aces switch that priced a rule it did not implement.
+           * the circle — so the ramp was advice the bot itself never took.
+           *
+           * Gated on the spread switch rather than on autoplay, and that is
+           * the point: a flat bot has no opinion about bet size, so it plays
+           * the chips the player put out rather than sweeping them away and
+           * replacing them with its own unit. The first version of this fix
+           * did sweep them away — it reset a hundred-dollar wager to ten and
+           * dragged a fifty-dollar side bet down with it, silently, on a
+           * three-hundred-millisecond timer.
+           *
+           * The side bets are what make the arithmetic fiddly: `setBet`
+           * refuses a wager the seat cannot cover *including* what is already
+           * on the side-bet spots, so the ramp is clamped against what is
+           * actually free. If the engine still refuses, the existing chips
+           * stand — a refusal here would strand the autoplay loop with no
+           * round and nothing said.
            */
-          if (get().autoplay) {
+          if (get().autoplay && get().bot.spread) {
             const bot = get().bot;
             for (const seat of get().table.seats) {
               if (!seat.occupied) continue;
-              const want = betFor(get().table, seat.id, bot);
-              if (want !== seat.pendingBet) {
-                const res = setBetIn(get().table, seat.id, want);
-                if (res.ok) set({ table: res.table });
-              }
+              const side = seat.pendingSideBets.reduce((n, sb) => n + sb.amount, 0);
+              const room = seat.bankroll - side;
+              const want = Math.min(betFor(get().table, seat.id, bot), room);
+              if (want === seat.pendingBet || want < get().table.rules.minBet) continue;
+              const res = setBetIn(get().table, seat.id, want);
+              if (res.ok) set({ table: res.table });
             }
           }
 

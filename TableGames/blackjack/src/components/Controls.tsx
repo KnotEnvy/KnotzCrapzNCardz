@@ -18,7 +18,7 @@ import { Button, cn, Meter } from '@/components/ui/primitives';
 import { Chip, DENOMINATIONS } from '@/components/table/Chip';
 import { fmt } from '@/lib/engine/money';
 import { maxInsurance } from '@/lib/engine/rules';
-import { legalActions, seatOf } from '@/lib/engine/table';
+import { DEFAULT_BANKROLL, legalActions, seatOf } from '@/lib/engine/table';
 import { handValue } from '@/lib/engine/hand';
 import { insuranceIsGood } from '@/lib/strategy/counting';
 import type { Action } from '@/lib/engine/types';
@@ -48,6 +48,7 @@ function BettingBar() {
   const setChip = useGame((s) => s.setChip);
   const clearBet = useGame((s) => s.clearBet);
   const rebet = useGame((s) => s.rebet);
+  const rebuy = useGame((s) => s.rebuy);
   const deal = useGame((s) => s.deal);
   const lastBets = useGame((s) => s.lastBets);
 
@@ -57,6 +58,15 @@ function BettingBar() {
   );
   const canDeal = table.seats.some((s) => s.occupied && s.pendingBet > 0);
   const bankroll = table.seats.filter((s) => s.occupied).reduce((n, s) => n + s.bankroll, 0);
+
+  /*
+   * A seat that cannot make the table minimum is out of the game, and until
+   * now the only way back in was "New session" — which wipes every seat's
+   * bankroll and the whole statistics panel with it. `rebuy` has been in the
+   * engine, tested, since the first draft, with nothing calling it. A casino
+   * game whose answer to going broke is to erase the evidence is not one.
+   */
+  const broke = table.seats.filter((s) => s.occupied && s.bankroll < table.rules.minBet);
 
   return (
     <div className="flex w-full max-w-4xl flex-wrap items-center justify-center gap-x-4 gap-y-2">
@@ -85,9 +95,28 @@ function BettingBar() {
           {total > 0 ? <span className="ml-1.5 font-mono text-[11px] opacity-70">{fmt(total)}</span> : null}
         </Button>
       </div>
+
+      {broke.length > 0 ? (
+        <div className="flex w-full flex-wrap items-center justify-center gap-2">
+          {broke.map((seat) => (
+            <Button
+              key={seat.id}
+              variant="danger"
+              size="sm"
+              onClick={() => rebuy(seat.id, REBUY)}
+              title={`${seat.name} has ${fmt(seat.bankroll)} and the table minimum is ${fmt(table.rules.minBet)}.`}
+            >
+              {broke.length > 1 ? `${seat.name}: ` : ''}Rebuy {fmt(REBUY)}
+            </Button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
+
+/** What a rebuy buys: the same stake every seat starts a session with. */
+const REBUY = DEFAULT_BANKROLL;
 
 /* ------------------------------------------------------------------ *
  * Insurance
@@ -230,6 +259,7 @@ function ActionBar() {
   const hints = useGame((s) => s.prefs.hints);
   const advice = useAdvice();
   const busy = useGame((s) => s.busy);
+  const playForMe = useGame((s) => s.playForMe);
 
   const legal = React.useMemo(() => legalActions(table), [table]);
 
@@ -307,6 +337,21 @@ function ActionBar() {
         behind them have not changed. Hiding it there left the buttons'
         `aria-describedby` pointing at nothing.
       */}
+      {/*
+        One hand, played by the chart.
+
+        `playForMe` has been in the store since the first draft with nothing
+        calling it, while `autoplay.ts`'s own header claimed the app used it
+        for "the play it for me button". It is also the gentlest form of the
+        trainer: a player who does not know the answer can watch the chart
+        give it rather than guessing and being marked wrong.
+      */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={playForMe} disabled={busy}>
+          Play this hand for me
+        </Button>
+      </div>
+
       {refusals.length > 0 ? (
         <p className="max-w-xl text-center text-[10px] leading-tight text-pit-500">
           {refusals.map(({ action, reason }) => (
@@ -425,8 +470,6 @@ export function useKeyboard(): void {
        * Chart, Paytables or Help — the player reading the strategy chart to
        * decide what to do would double down by pressing D on it.
        */
-      if (dialog) return;
-
       /*
        * The dialogs get keys of their own.
        *
@@ -437,6 +480,12 @@ export function useKeyboard(): void {
        * rest of it. `?` for help is conventional, `,` for settings is what
        * every desktop app uses, and the other two are the first letter of
        * what they open. None of them collide with a table action.
+       *
+       * Above the `dialog` guard rather than below it, so one dialog can be
+       * swapped for another without closing the first — reading the chart and
+       * wanting the paytable beside it is the obvious thing to want, and
+       * Escape-then-key is a strange toll to charge for keys that exist to
+       * avoid the pointer. Pressing a dialog's own key again closes it.
        */
       const dialogKey: Record<string, GameStore['dialog']> = {
         '?': 'help',
@@ -448,9 +497,11 @@ export function useKeyboard(): void {
       const wanted = dialogKey[e.key] ?? dialogKey[key];
       if (wanted) {
         e.preventDefault();
-        useGame.getState().openDialog(wanted);
+        useGame.getState().openDialog(wanted === dialog ? null : wanted);
         return;
       }
+
+      if (dialog) return;
 
       if (table.phase === 'BETTING') {
         if (key === ' ' || key === 'enter') {
