@@ -158,7 +158,10 @@ the figures are on the chips.
 ## Playing it
 
 Space deals, and then stands. `H` `S` `D` `P` `R` are hit, stand, double, split
-and surrender; `N` declines insurance, `I` takes it, `E` takes even money. A
+and surrender; `N` declines insurance, `I` takes it, `E` takes even money. The
+dialogs have keys too — `C` for the strategy chart, `B` for the side bets, `,`
+for the table setup, `?` for help, Escape to close — so the parts of the game
+that explain the rest of it are reachable without a pointer as well. A
 blackjack session is a hundred hands an hour and reaching for a mouse between
 every one of them is what makes it feel like work.
 
@@ -203,7 +206,7 @@ second path into the state.
 ## Working on it
 
 ```bash
-pnpm test            # the fast suite — 179 tests, about two seconds
+pnpm test            # the fast suite — 181 tests, about two seconds
 pnpm run typecheck
 pnpm run lint        # zero errors, zero warnings; keep it that way
 pnpm run test:stats  # the long measurements: house edge, distributions, side bets

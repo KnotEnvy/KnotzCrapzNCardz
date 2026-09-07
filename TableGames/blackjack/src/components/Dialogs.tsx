@@ -615,6 +615,11 @@ function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               ['N', 'Decline insurance'],
               ['I', 'Take insurance'],
               ['E', 'Take even money'],
+              ['C', 'Strategy chart'],
+              ['B', 'Side bets'],
+              [',', 'Table setup'],
+              ['?', 'This dialog'],
+              ['Esc', 'Close a dialog'],
             ].map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
                 <kbd className="rounded bg-pit-800 px-1.5 py-0.5 font-mono text-[10px] text-pit-200">{k}</kbd>

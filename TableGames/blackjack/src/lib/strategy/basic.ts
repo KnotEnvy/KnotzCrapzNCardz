@@ -220,16 +220,29 @@ const FEW_DECK_ONE: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = 
  * and only against those two: everything else on the chart is unchanged,
  * because nothing else changes when the peek moves.
  *
- * These are the hard-total cells of the standard Atlantic City 1978 set,
- * which is the table early surrender is written for. The pair cells of that
- * set (3,3 and 6,6 and 7,7 and 8,8 against an ace, 7,7 and 8,8 against a ten)
- * are deliberately **not** here — they are the part of the published chart I
- * am least able to check, and a chart that grades a player has no business
- * carrying a cell nobody has verified. `openItems` says so, including the
- * inconsistency the omission leaves behind: `PAIRS_H17` already surrenders
- * 8,8 against an ace, so an early-surrender table advises that one hand
- * differently depending on the dealer's soft-17 rule. What is here is
- * the bulk of the rule and it is unambiguous.
+ * The arithmetic, for the ace, is the whole rule in three lines. Surrendering
+ * is worth -0.5 flat. Playing is worth `p·(-1) + (1-p)·EV`, where `p` is the
+ * chance the hole card is a ten — about 0.31 at six decks — and `EV` is what
+ * the hand is worth once the dealer has *not* got a natural. Setting those
+ * equal puts the surrender threshold at EV < -0.276 rather than late
+ * surrender's -0.5, which is why so many more cells qualify. Against a ten
+ * the hole card is an ace only 0.077 of the time and the threshold moves to
+ * -0.458: barely past late surrender, which is why only one cell is added
+ * there.
+ *
+ * **The pair cells are the same cells.** A pair routes through the pair chart
+ * before it ever reaches the hard chart, so `8,8` against an ace never sees
+ * the hard-16 entry below however clearly that entry applies to it — and
+ * eight-eight against an ace is hard sixteen. Every pair listed here has a
+ * hard total already in the hard list: 3,3 is six, 6,6 is twelve, 7,7 is
+ * fourteen, 8,8 is sixteen. They are separate lines only because the lookup
+ * is, which is exactly why they went missing when the hard cells went in.
+ *
+ * Fixing them also settles an inconsistency worth naming: `PAIRS_H17`
+ * surrenders 8,8 against an ace, so before this an early-surrender table
+ * advised that one hand differently depending on the dealer's soft-17 rule —
+ * a rule that has nothing to do with when the peek happens. Setting the cell
+ * here for both makes the two agree.
  */
 const EARLY_SURRENDER: Array<[('hard' | 'soft' | 'pair'), number, number, Code]> = [
   // Against an ace: the stiffs, and the three totals that cannot make a hand.
@@ -246,6 +259,19 @@ const EARLY_SURRENDER: Array<[('hard' | 'soft' | 'pair'), number, number, Code]>
   ['hard', 14, 10, 'R'],
   ['hard', 15, 10, 'R'],
   ['hard', 16, 10, 'R'],
+
+  /*
+   * The same totals again, for the hands that reach the pair chart instead.
+   * `Rp` where the hand would otherwise be split, `R` where it would be hit —
+   * the fallback matters, because `restrict` collapses these back to it at a
+   * table that books no surrender at all.
+   */
+  ['pair', 3, 11, 'R'], // three-three is a hard six
+  ['pair', 6, 11, 'R'], // six-six, a hard twelve
+  ['pair', 7, 11, 'R'], // seven-seven, a hard fourteen
+  ['pair', 8, 11, 'Rp'], // eight-eight, a hard sixteen — split if it cannot fold
+  ['pair', 7, 10, 'R'],
+  ['pair', 8, 10, 'Rp'],
 ];
 
 /* ------------------------------------------------------------------ *

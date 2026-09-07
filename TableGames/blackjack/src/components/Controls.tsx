@@ -22,7 +22,7 @@ import { legalActions, seatOf } from '@/lib/engine/table';
 import { handValue } from '@/lib/engine/hand';
 import { insuranceIsGood } from '@/lib/strategy/counting';
 import type { Action } from '@/lib/engine/types';
-import { useAdvice, useCount, useGame } from '@/lib/store/useGame';
+import { useAdvice, useCount, useGame, type GameStore } from '@/lib/store/useGame';
 
 export function Controls() {
   const table = useGame((s) => s.table);
@@ -426,6 +426,31 @@ export function useKeyboard(): void {
        * decide what to do would double down by pressing D on it.
        */
       if (dialog) return;
+
+      /*
+       * The dialogs get keys of their own.
+       *
+       * `handoff.json` carried "no keyboard shortcut for the dialogs" as an
+       * open item through five rounds while the felt itself was fully
+       * playable from the keyboard — so the one part of the game a player
+       * could not reach without a pointer was the part that explains the
+       * rest of it. `?` for help is conventional, `,` for settings is what
+       * every desktop app uses, and the other two are the first letter of
+       * what they open. None of them collide with a table action.
+       */
+      const dialogKey: Record<string, GameStore['dialog']> = {
+        '?': 'help',
+        ',': 'setup',
+        c: 'chart',
+        b: 'sidebets',
+      };
+      // `?` arrives as itself rather than lower-cased from a shifted slash.
+      const wanted = dialogKey[e.key] ?? dialogKey[key];
+      if (wanted) {
+        e.preventDefault();
+        useGame.getState().openDialog(wanted);
+        return;
+      }
 
       if (table.phase === 'BETTING') {
         if (key === ' ' || key === 'enter') {

@@ -440,13 +440,39 @@ describe('chart integrity', () => {
       ].sort(),
     );
 
-    // The soft and pair charts are untouched: nothing about a soft total or a
-    // pair changes when the peek moves, in the set implemented here.
+    /*
+     * The pair chart moves in exactly the cells whose hard total moved, and
+     * for exactly that reason: a pair is looked up in the pair chart and
+     * never reaches the hard entry that plainly applies to it. Three-three is
+     * a hard six, six-six a twelve, seven-seven a fourteen, eight-eight a
+     * sixteen. If a pair cell ever moves without its hard total moving, the
+     * two charts have stopped agreeing about the same hand.
+     */
+    const pairsMoved: string[] = [];
+    for (const pair of Object.keys(early.pairs).map(Number)) {
+      for (const up of UPCARDS) {
+        const i = UPCARDS.indexOf(up);
+        if (early.pairs[pair][i] !== late.pairs[pair][i]) pairsMoved.push(`${pair}v${up}`);
+      }
+    }
+    expect(pairsMoved.sort()).toEqual(
+      ['3v11', '6v11', '7v11', '8v11', '7v10', '8v10'].sort(),
+    );
+
+    // Eight-eight against an ace folds rather than splits, and it does so
+    // whatever the dealer's soft-17 rule is — `PAIRS_H17` surrenders that
+    // hand too, so before the pair cells went in an early-surrender table
+    // advised it differently depending on a rule with nothing to do with
+    // when the peek happens.
+    for (const h17 of [false, true]) {
+      const c = chartFor({ ...rules, surrender: 'EARLY', hitsSoft17: h17 });
+      expect(c.pairs[8][UPCARDS.indexOf(11)], `8,8 v A at ${h17 ? 'H17' : 'S17'}`).toBe('Rp');
+    }
+
+    // The soft chart is untouched: nothing about a soft total changes when
+    // the peek moves, in the set implemented here.
     for (const row of Object.keys(early.soft).map(Number)) {
       expect(early.soft[row], `soft ${row}`).toEqual(late.soft[row]);
-    }
-    for (const row of Object.keys(early.pairs).map(Number)) {
-      expect(early.pairs[row], `pair ${row}`).toEqual(late.pairs[row]);
     }
   });
 

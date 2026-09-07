@@ -154,6 +154,39 @@ describe('the store', () => {
     expect(seat.pendingBet).toBeLessThanOrEqual(seat.bankroll);
   });
 
+  /*
+   * `betFor` has always known how to ramp with the count and the counting
+   * panel has always shown what it would bet, but the autoplay loop called
+   * `deal()`, which books whatever is already in the circle — so the spread
+   * setting moved no chips. Same defect as a rule switch that prices
+   * something it does not implement.
+   */
+  it('lets the bot place its own bet when autoplay is on', () => {
+    reset();
+    state().setSeatOccupied('A', true);
+    state().setBet('A', dollars(5));
+    useGame.setState({ autoplay: true, bot: { ...state().bot, spread: true, unit: dollars(25) } });
+
+    state().deal();
+
+    // Whatever the ramp said, it is the bot's number and not the $5 that was
+    // sitting in the circle.
+    const seat = seatOf(state().table, 'A');
+    const staked = seat.hands.reduce((n, h) => n + h.bet, 0);
+    expect(staked).toBeGreaterThanOrEqual(dollars(25));
+    expect(staked).not.toBe(dollars(5));
+
+    useGame.setState({ autoplay: false });
+  });
+
+  it('leaves the circle alone when the player is betting', () => {
+    reset();
+    state().setSeatOccupied('A', true);
+    state().setBet('A', dollars(5));
+    state().deal();
+    expect(seatOf(state().table, 'A').hands[0].bet).toBe(dollars(5));
+  });
+
   it('does not persist the round in flight, and writes far less often than it sets', () => {
     /*
      * Writes are coalesced. The persist middleware wraps `setState`, and a

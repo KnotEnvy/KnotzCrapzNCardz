@@ -79,8 +79,9 @@ import type {
   TableState,
 } from '@/lib/engine/types';
 import { isAce } from '@/lib/engine/types';
+import { isBlackjack as isBlackjackHand } from '@/lib/engine/hand';
 import { advise, type Advice } from '@/lib/strategy/basic';
-import { decide, DEFAULT_BOT, type BotConfig } from '@/lib/strategy/autoplay';
+import { betFor, decide, DEFAULT_BOT, type BotConfig } from '@/lib/strategy/autoplay';
 import { countTable, insuranceIsGood, type CountSystem } from '@/lib/strategy/counting';
 
 /* ------------------------------------------------------------------ *
@@ -526,8 +527,31 @@ export const useGame = create<GameStore>()(
 
         deal() {
           initAudio();
-          const { table } = get();
           if (get().busy) return;
+
+          /*
+           * When the bot is playing, the bot bets.
+           *
+           * `betFor` has always known how to ramp with the count, and the
+           * counting panel has always shown what it would bet — but the
+           * autoplay loop called `deal()`, which books whatever is already in
+           * the circle, so the ramp was advice the bot itself never took. A
+           * spread setting that moves no chips is the same defect as the
+           * re-split-aces switch that priced a rule it did not implement.
+           */
+          if (get().autoplay) {
+            const bot = get().bot;
+            for (const seat of get().table.seats) {
+              if (!seat.occupied) continue;
+              const want = betFor(get().table, seat.id, bot);
+              if (want !== seat.pendingBet) {
+                const res = setBetIn(get().table, seat.id, want);
+                if (res.ok) set({ table: res.table });
+              }
+            }
+          }
+
+          const { table } = get();
 
           const bets = new Map<SeatId, { main: number; side: SideBetWager[] }>();
           for (const s of table.seats) {
@@ -574,7 +598,23 @@ export const useGame = create<GameStore>()(
               const count = countTable(after, get().prefs.countSystem);
               if (insurable && get().bot.deviations && insuranceIsGood(count.hiLo)) {
                 for (const s of after.seats) {
-                  if (s.hands.length > 0) get().takeInsurance(s.id, Math.floor(s.hands[0].bet / 2));
+                  const hand = s.hands[0];
+                  if (!hand) continue;
+                  /*
+                   * Even money where the hand is a natural, insurance where it
+                   * is not. They are arithmetically the same bet — insuring a
+                   * natural for half the wager guarantees exactly one unit —
+                   * but the bot only ever took the second, so a counter
+                   * holding a natural at a good count declined the offer the
+                   * felt was actually making it. Even money is a 3:2 offer
+                   * and the engine refuses it otherwise, so the fallback is
+                   * not optional.
+                   */
+                  if (isBlackjackHand(hand.cards) && after.rules.blackjackPays === '3:2') {
+                    get().takeEvenMoney(s.id);
+                  } else {
+                    get().takeInsurance(s.id, Math.floor(hand.bet / 2));
+                  }
                 }
               }
               /*
