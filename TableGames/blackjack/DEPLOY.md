@@ -173,8 +173,15 @@ accident. Each is commented in place, but in short:
   headers.
 
 The image also pre-gzips its output at build time and serves that with
-`gzip_static`, which takes the main bundle from **4.0 MB to 1.4 MB** without
-nginx recompressing it on every request.
+`gzip_static`, so nginx never recompresses the same bundle on every request.
+Measured inside the built image: the JavaScript, CSS and HTML together are
+**831 KB, and 246 KB gzipped**. The card deck is deliberately not in that
+figure — a PNG is already compressed, so `gzip_types` omits `image/png` and
+the 54 cards are served as-is.
+
+The whole served folder is 3.7 MB: 2.0 MB of card art and 1.4 MB of game.
+The finished image is **99.5 MB**, almost all of which is the
+`nginx:1.29-alpine` base; the game itself adds 3.9 MB on top of it.
 
 ---
 

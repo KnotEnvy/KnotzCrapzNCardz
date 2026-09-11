@@ -83,7 +83,8 @@ the root file can start it.
 That is also what makes them playable on a phone: the same address on your
 network installs to a home screen as an app. Each game's `DEPLOY.md` —
 [craps](TableGames/craps/DEPLOY.md),
-[Dragon's Shrine](SlotsGames/DragonsShrine/DEPLOY.md) — covers the container,
+[Dragon's Shrine](SlotsGames/DragonsShrine/DEPLOY.md),
+[blackjack](TableGames/blackjack/DEPLOY.md) — covers the container,
 getting it onto the public internet, and the trade-offs between the ways of
 doing that.
 
