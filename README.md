@@ -60,6 +60,7 @@ the root builds and runs all of them together:
 
 ```bash
 docker compose up -d --build            # craps :8080, Dragon's Shrine :8081, blackjack :8082, three card poker :8083
+docker compose ps                       # what is up, and is it healthy
 docker compose logs -f
 docker compose down
 ```
@@ -68,27 +69,27 @@ They deliberately take different host ports, so all four can run at once — the
 arcade is four independent containers that happen to be started by one file,
 not a shared server.
 
-To run only one game, use its own compose file instead. Those still work
-standalone and take the same ports:
+To run only one game, use its own compose file:
 
 ```bash
-cd TableGames/craps
-docker compose up -d --build            # http://localhost:8080
-
-cd SlotsGames/DragonsShrine
-docker compose up -d --build            # http://localhost:8081
-
-cd TableGames/blackjack
-docker compose up -d --build            # http://localhost:8082
-
 cd TableGames/three-card-poker
 docker compose up -d --build            # http://localhost:8083
+docker compose down
 ```
 
-Pick one way or the other for a given game, not both at once. Container names
-are pinned so they stay predictable, and Docker will not give the same name to
-two containers, so a game started from its own folder has to come down before
-the root file can start it.
+**Both of those are the same stack.** The root file does not describe the games;
+it `include`s each game's own compose file, so every service is defined exactly
+once, next to the Dockerfile it builds. And every one of those files pins the
+same project name, so starting a game from its folder joins the arcade rather
+than standing up a rival project beside it: `docker compose ps` from the root
+lists it either way, and bringing it up from one place after the other simply
+updates that one service.
+
+That was not true before. The root file used to repeat all four service
+definitions, which meant every port and hardening flag existed in two places
+and could disagree — and because a compose project is named for the directory
+it was started from, the two ways of starting a game fought over the container
+name and Docker refused with an error that said nothing about why.
 
 That is also what makes them playable on a phone: the same address on your
 network installs to a home screen as an app. Each game's `DEPLOY.md` —
@@ -115,7 +116,7 @@ TableGames/three-card-poker/  Knotz Three Card Poker — the blackjack stack, a 
   Dockerfile              same shape again
   DEPLOY.md               running it, and putting it on the web
 cardArt/                  a full 52-card PNG deck, shared by the card games
-docker-compose.yml        builds and runs every game at once
+docker-compose.yml        the arcade: a list of the games' own compose files
 crapsPlan.md              the original specification for craps
 ```
 

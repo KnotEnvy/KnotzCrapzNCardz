@@ -9,6 +9,16 @@
 #
 # 8083 rather than 8080: craps takes 8080, Dragon's Shrine 8081 and blackjack
 # 8082, so every table can run at once from the repository root's file.
+#
+# This file is the only definition of the three card poker container. The
+# arcade's compose file at the repository root `include`s it rather than
+# repeating it, so there is nothing here to keep in sync with anything there.
+
+# Named for the arcade rather than for this folder, which is what lets the two
+# ways of starting the game be the same stack: up from here joins the arcade's
+# project and updates this one service, instead of building a rival project
+# that wants a container name the arcade has already taken.
+name: knotzcrapzncardz
 
 services:
   three-card-poker:

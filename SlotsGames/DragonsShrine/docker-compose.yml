@@ -6,6 +6,16 @@
 #
 # The game then answers on http://localhost:8081, and on http://<this
 # machine's LAN IP>:8081 from any phone or laptop on the same network.
+#
+# This file is the only definition of the Dragon's Shrine container. The
+# arcade's compose file at the repository root `include`s it rather than
+# repeating it, so there is nothing here to keep in sync with anything there.
+
+# Named for the arcade rather than for this folder, which is what lets the two
+# ways of starting the game be the same stack: up from here joins the arcade's
+# project and updates this one service, instead of building a rival project
+# that wants a container name the arcade has already taken.
+name: knotzcrapzncardz
 
 services:
   dragons-shrine:

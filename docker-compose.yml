@@ -2,123 +2,47 @@
 #
 #   docker compose up -d --build     build and run every game
 #   docker compose logs -f           watch them
+#   docker compose ps                what is up, and is it healthy
 #   docker compose down              stop them
 #
 # Craps answers on http://localhost:8080, Dragon's Shrine on
 # http://localhost:8081, Blackjack on http://localhost:8082 and Three Card
-# Poker on http://localhost:8083 -- the same ports the per-game files use, so a
-# bookmark or a home-screen install does not care which of the two ways you
-# started it.
+# Poker on http://localhost:8083.
 #
-# The per-game files under each game's folder still stand on their own. What
-# cannot happen is both ways at once: the container names are pinned so they
-# stay predictable, and Docker will not give the same name to two containers.
-# Bring an individually-started game down before coming up from here.
+# ---------------------------------------------------------------------------
+# Why this file is nothing but a list
 #
-# The service blocks are near-identical and deliberately not folded into a
-# YAML anchor. They match today because every game happens to be a static
-# site; the first one that wants a volume, an environment variable or a
-# different base image would have to be pulled back out again, and an anchor
-# that fits until it doesn't is not worth the indirection.
+# Each game already describes how it is built and run, in a compose file next
+# to its own Dockerfile, because each one has to stand on its own: a game is
+# developed, built and play-tested from its own folder long before it is worth
+# starting the whole arcade. This file used to *repeat* all four of those
+# definitions so the stack could start them together, which meant every port,
+# health check and hardening flag existed in two places and was one edit away
+# from disagreeing — and a service that drifts here fails only when someone
+# starts the arcade the other way, which is the last thing anybody tries.
+#
+# `include` removes the second copy. Each game is defined exactly once, in its
+# own folder, and the arcade is the list of games in it. Relative paths inside
+# an included file resolve against that file's own directory, so each build
+# context stays `.` and keeps working from either end.
+#
+# The other half of the fix is `name`, below, which is repeated in all four
+# game files. A compose project is named for the directory it was started from
+# unless it says otherwise, so starting a game from its own folder used to
+# build a *second* project that wanted the same container name as this one —
+# and Docker refuses, with an error about a name already in use that says
+# nothing about which of the two ways you started it. Pinning the same project
+# name everywhere means both ways are the same stack: starting a game from its
+# folder now joins this one and updates that service in place, and `ps` from
+# the root lists it whichever way it was started.
+# ---------------------------------------------------------------------------
 
-services:
-  craps:
-    build:
-      context: ./TableGames/craps
-      dockerfile: Dockerfile
-    image: knotz-craps:latest
-    container_name: knotz-craps
-    restart: unless-stopped
-    ports:
-      # Host 8080 rather than 80: on Windows, 80 is often already taken, and
-      # nothing here needs a privileged port. Change the left number freely.
-      - "8080:80"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    # The container serves files and holds no state, so it has no business
-    # writing to its own filesystem outside of nginx's scratch directories.
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-    security_opt:
-      - no-new-privileges:true
+name: knotzcrapzncardz
 
-  dragons-shrine:
-    build:
-      context: ./SlotsGames/DragonsShrine
-      dockerfile: Dockerfile
-    image: dragons-shrine:latest
-    container_name: dragons-shrine
-    restart: unless-stopped
-    ports:
-      # Host 8081 rather than 8080, so this and the craps table can run side by
-      # side on one machine. Change the left number freely.
-      - "8081:80"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    # Same reasoning as above: static files, no state, no reason to be writable.
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-    security_opt:
-      - no-new-privileges:true
-
-  blackjack:
-    build:
-      context: ./TableGames/blackjack
-      dockerfile: Dockerfile
-    image: knotz-blackjack:latest
-    container_name: knotz-blackjack
-    restart: unless-stopped
-    ports:
-      # Host 8082, so every table can run side by side on one machine.
-      # Change the left number freely.
-      - "8082:80"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    # The container serves files and holds no state, so it has no business
-    # writing to its own filesystem outside of nginx's scratch directories.
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-    security_opt:
-      - no-new-privileges:true
-
-  three-card-poker:
-    build:
-      context: ./TableGames/three-card-poker
-      dockerfile: Dockerfile
-    image: knotz-three-card-poker:latest
-    container_name: knotz-three-card-poker
-    restart: unless-stopped
-    ports:
-      # Host 8083, beside blackjack's 8082. Change the left number freely.
-      - "8083:80"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    # Same reasoning as above: static files, no state, no reason to be writable.
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-    security_opt:
-      - no-new-privileges:true
+include:
+  # Table games
+  - path: TableGames/craps/docker-compose.yml
+  - path: TableGames/blackjack/docker-compose.yml
+  - path: TableGames/three-card-poker/docker-compose.yml
+  # Slots
+  - path: SlotsGames/DragonsShrine/docker-compose.yml
