@@ -193,9 +193,12 @@ body {
   border-radius: 6%;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  /* Two shadows: the contact edge where the card touches the cloth, and the
+     soft pool the lamp throws under it. The blue in both is the cloth's, not
+     black — a neutral shadow on a sapphire table reads as a hole cut in it. */
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.5),
-    0 6px 14px -6px rgba(0, 0, 0, 0.75);
+    0 1px 2px rgba(2, 10, 20, 0.55),
+    0 7px 16px -7px rgba(1, 8, 18, 0.85);
 }
 
 .card3d__face {
@@ -203,6 +206,24 @@ body {
   background-size: cover;
   background-position: center;
   border: 1px solid rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+/*
+ * The gloss on a card's coating.
+ *
+ * Real playing cards are varnished, and the one thing that reads as varnish is
+ * a single soft band of the room reflected off the top-left corner. Kept under
+ * a fifth of full white: this sits over the card art, and anything stronger
+ * washes out the pips it is supposed to be lying on top of.
+ */
+.card3d__face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(147deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 24%, transparent 44%);
 }
 
 /*
@@ -272,47 +293,20 @@ body {
  * Chips
  * ------------------------------------------------------------------ */
 
-.chip {
+/*
+ * The chips themselves are SVG now — moulding, inlay, edge spots and side
+ * walls are all drawn in `Chip.tsx`, because a chip seen from a seat at the
+ * table is mostly the *side* of the chips under the top one, and that is not
+ * something a single CSS disc can show. What is left here is the shadow the
+ * chip throws, which belongs to the page rather than to the drawing.
+ */
+.chip-face {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
   border-radius: 9999px;
-  background:
-    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.35), transparent 45%),
-    var(--chip-face);
-  box-shadow:
-    0 0 0 2px var(--chip-edge) inset,
-    0 0 0 5px color-mix(in srgb, var(--chip-face) 80%, #000) inset,
-    0 2px 5px rgba(0, 0, 0, 0.55);
-  position: relative;
 }
 
-/* The eight dashes around a clay chip's rim, drawn with a conic gradient
-   rather than eight elements. */
-.chip::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: 9999px;
-  background: conic-gradient(
-    from 0deg,
-    var(--chip-edge) 0 6deg,
-    transparent 6deg 39deg,
-    var(--chip-edge) 39deg 45deg,
-    transparent 45deg 84deg,
-    var(--chip-edge) 84deg 90deg,
-    transparent 90deg 129deg,
-    var(--chip-edge) 129deg 135deg,
-    transparent 135deg 174deg,
-    var(--chip-edge) 174deg 180deg,
-    transparent 180deg 219deg,
-    var(--chip-edge) 219deg 225deg,
-    transparent 225deg 264deg,
-    var(--chip-edge) 264deg 270deg,
-    transparent 270deg 309deg,
-    var(--chip-edge) 309deg 315deg,
-    transparent 315deg 354deg,
-    var(--chip-edge) 354deg 360deg
-  );
-  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
-  mask: radial-gradient(circle, transparent 62%, #000 63%);
+.chip-face--on {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 4px rgba(240, 212, 132, 0.45));
 }
 
 /* ------------------------------------------------------------------ *
@@ -409,22 +403,393 @@ body {
   animation: machine-busy 380ms ease-in-out infinite;
 }
 
+/* ------------------------------------------------------------------ *
+ * The table reacting
+ *
+ * Every effect the felt plays when a round settles is a keyframe here, driven
+ * by custom properties that `Fx.tsx` sets per element. There is no animation
+ * library in this game, and there does not need to be: nothing below is doing
+ * anything a compositor cannot do on its own, and adding four hundred kilobytes
+ * of runtime to move a chip across a table would be the single largest thing in
+ * the bundle.
+ *
+ * Two conventions run through all of it. `backwards` on every animation, so an
+ * effect with a delay holds its first frame instead of flashing at full
+ * strength and then starting; and the independent `scale` / `translate`
+ * properties rather than `transform`, so an element can be centred and
+ * animated at the same time without one silently replacing the other.
+ * ------------------------------------------------------------------ */
+
+/*
+ * The lamp over the table, swaying. A few units of drift at a few percent of
+ * opacity over nineteen seconds: not consciously visible, and the difference
+ * between a table and a paused screenshot of one.
+ */
+@keyframes lamp-sway {
+  0%,
+  100% {
+    transform: translateX(-9px);
+    opacity: 0.86;
+  }
+  50% {
+    transform: translateX(9px);
+    opacity: 1;
+  }
+}
+
+.lamp-sway {
+  /* Without these, a `px` translate on an SVG group is measured against the
+     element's own bounding box instead of the user-unit grid. */
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: lamp-sway 19s ease-in-out infinite;
+}
+
+/*
+ * A resolved bet's spot lighting up.
+ *
+ * Win and loss are deliberately opposite gestures rather than the same flash in
+ * two colours. A win is light *arriving*: it blooms wide, holds while the payoff
+ * is counted, and eases away over more than a second. A loss is light being
+ * *taken*: one hard frame, then it drains and the spot is empty. You can tell
+ * which happened from the corner of your eye without reading the colour — which
+ * is the point, and is also what keeps the two legible to a player who cannot
+ * tell red from green.
+ */
+@keyframes fx-flash-win {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  46% {
+    opacity: 0.82;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fx-flash-win {
+  animation: fx-flash-win 1.15s ease-out backwards;
+}
+
+@keyframes fx-flash-lose {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fx-flash-lose {
+  animation: fx-flash-lose 0.52s ease-in backwards;
+}
+
+/* Light over the whole cloth, for the hands that have earned one. */
+@keyframes fx-wash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fx-wash {
+  animation: fx-wash 1.25s ease-out backwards;
+}
+
+/*
+ * The qualifier line answering its own question.
+ *
+ * Drawn as a second copy of the same lettering directly over the printed one,
+ * which is why it can go *cold*: at full opacity it covers the gold underneath
+ * completely, so the line reads slate for a moment and then fades back to the
+ * print. Anything less than complete coverage would have muddied the two.
+ */
+@keyframes fx-qualifier {
+  0% {
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fx-qualifier {
+  animation: fx-qualifier 2.1s ease-out backwards;
+}
+
+.fx-qualifier--yes {
+  fill: #fff1c2;
+  filter: drop-shadow(0 0 7px rgba(242, 193, 78, 0.85));
+}
+
+.fx-qualifier--no {
+  fill: #55708c;
+  filter: drop-shadow(0 0 4px rgba(3, 14, 28, 0.95));
+}
+
+/*
+ * Money crossing the felt.
+ *
+ * A payoff is tossed and a loss is raked, and the two read completely
+ * differently: one arcs over the layout and one slides flat across it. The toss
+ * is two elements because an arc is two eases — the horizontal carries straight
+ * through while the vertical rises and falls, and one element cannot hold two
+ * timing functions on one transform.
+ */
+@keyframes fx-toss {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  76% {
+    opacity: 1;
+  }
+  100% {
+    translate: var(--fx-dx) 0;
+    opacity: 0;
+  }
+}
+
+.fx-toss {
+  animation: fx-toss 900ms cubic-bezier(0.35, 0.1, 0.3, 1) backwards;
+  animation-delay: var(--fx-delay, 0ms);
+}
+
+@keyframes fx-toss-lift {
+  0% {
+    translate: 0 0;
+    scale: 0.7;
+  }
+  44% {
+    translate: 0 calc(var(--fx-dy) * 0.3 - 44px);
+    scale: 1.12;
+  }
+  100% {
+    translate: 0 var(--fx-dy);
+    scale: 0.85;
+  }
+}
+
+.fx-toss__lift {
+  animation: fx-toss-lift 900ms cubic-bezier(0.3, 0.55, 0.35, 1) backwards;
+  animation-delay: var(--fx-delay, 0ms);
+}
+
+@keyframes fx-rake {
+  0% {
+    translate: 0 0;
+    scale: 0.85;
+    opacity: 0;
+  }
+  16% {
+    opacity: 0.95;
+  }
+  100% {
+    translate: var(--fx-dx) var(--fx-dy);
+    scale: 0.55;
+    opacity: 0;
+  }
+}
+
+.fx-rake {
+  animation: fx-rake 680ms cubic-bezier(0.5, 0, 0.75, 0.4) backwards;
+  animation-delay: var(--fx-delay, 0ms);
+}
+
+/*
+ * The moment a hand turns out to be worth something.
+ *
+ * The one effect here that is allowed to be loud, because it fires only on a
+ * hand that pays a bonus and at most once a round per seat.
+ */
+@keyframes fx-burst-core {
+  0% {
+    scale: 0.25;
+    opacity: 0;
+  }
+  20% {
+    scale: 1;
+    opacity: 0.85;
+  }
+  100% {
+    scale: 2.1;
+    opacity: 0;
+  }
+}
+
+.fx-burst-core {
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  /* The hot part has to stay small. A wide, soft ball of light at low opacity
+     is a lens flare, not a burst — it was the first thing wrong with this — so
+     the white core is a fifth of the radius and everything past half of it is
+     already gone. What makes it read as an explosion is the rings travelling
+     out of it, not the size of the glow itself. */
+  background: radial-gradient(circle, #fff 0%, var(--fx-ink) 21%, transparent 56%);
+  animation: fx-burst-core 820ms ease-out backwards;
+}
+
+/* Two rings, offset in time, so the shock has a leading and a trailing edge
+   instead of being one expanding circle. */
+@keyframes fx-burst-ring {
+  0% {
+    scale: 0.3;
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    scale: 3.2;
+    opacity: 0;
+  }
+}
+
+.fx-burst-ring {
+  border-radius: 9999px;
+  border-style: solid;
+  border-color: var(--fx-ink);
+  transform: translate(-50%, -50%);
+  animation: fx-burst-ring 950ms ease-out backwards;
+}
+
+@keyframes fx-burst-spark {
+  0% {
+    translate: 10px 0;
+    scale: 0.4 1;
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    translate: var(--fx-reach) 0;
+    scale: 0.2 1;
+    opacity: 0;
+  }
+}
+
+.fx-burst-spark {
+  position: absolute;
+  top: -1.4px;
+  width: 13px;
+  height: 2.8px;
+  border-radius: 2px;
+  background: var(--fx-ink);
+  animation: fx-burst-spark 720ms ease-out backwards;
+}
+
+@keyframes fx-burst-label {
+  0% {
+    opacity: 0;
+    translate: -50% 10px;
+    scale: 0.86;
+  }
+  14% {
+    opacity: 1;
+    translate: -50% 0;
+    scale: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: -50% -18px;
+  }
+}
+
+.fx-burst-label {
+  position: absolute;
+  left: 0;
+  top: -52px;
+  translate: -50% 0;
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid rgba(242, 193, 78, 0.5);
+  background: rgba(6, 10, 18, 0.82);
+  padding: 2px 10px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-brass-300);
+  animation: fx-burst-label 1700ms ease-out backwards;
+}
+
+.fx-burst-label--loud {
+  border-color: rgba(255, 233, 163, 0.8);
+  color: #fff1c2;
+  box-shadow: 0 0 14px rgba(242, 193, 78, 0.45);
+}
+
 /*
  * Everything above is decoration on top of a game that is fully playable
  * without it. A player who has asked their operating system to stop moving
  * things gets the game and not the motion — cards appear where they land, and
  * a turned hand is simply face up.
+ *
+ * The effects split three ways here rather than all being switched off
+ * together, because they are not all the same kind of thing.
  */
 @media (prefers-reduced-motion: reduce) {
+  /* Motion that decorates something already on screen: stop it where it is. */
   .card3d__inner,
   .card-dealt,
   .focus-ring,
   .settle-chip,
   .sweep-in,
   .hand-folded,
-  .machine-busy {
+  .machine-busy,
+  .lamp-sway {
     animation: none !important;
     transition: none !important;
+  }
+
+  /*
+   * Motion that *is* the effect: a chip crossing the table and a burst going
+   * off are nothing but travel, so they go away rather than degrade. Every
+   * one of them is saying something the settlement figures and the spot
+   * flashes below already say in place.
+   */
+  .fx-toss,
+  .fx-rake,
+  .fx-burst-core,
+  .fx-burst-ring,
+  .fx-burst-spark {
+    display: none !important;
+  }
+
+  /*
+   * Information carried as light: kept, because a flash that says which bets
+   * resolved and a line that says whether the dealer played are the table
+   * talking, not the table showing off. They are opacity alone and move
+   * nothing across the screen, so they already satisfy the request.
+   */
+  .fx-burst-label {
+    animation-name: fx-qualifier !important;
+    translate: -50% 0 !important;
   }
 }
 
@@ -468,6 +833,46 @@ body {
     width: 44px;
     height: 44px;
     transform: translate(-50%, -50%);
+  }
+}
+
+/*
+ * A spot answering the pointer.
+ *
+ * The hit areas are transparent HTML sitting over printed SVG, so until now
+ * hovering one did nothing you could see — the felt was the only surface in
+ * the arcade that did not react to being pointed at, and on a table where
+ * every bet is placed by clicking a shape, that is the interaction.
+ *
+ * A soft glow rather than an outline, because the three spots are three
+ * different shapes: a ring would have to be a circle on the Pair Plus, a
+ * diamond on the Ante and a box on the Play, and a round one drawn over a
+ * diamond looks like a mistake. Light has no shape to get wrong.
+ */
+.spot-hit::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(242, 193, 78, 0.3), rgba(242, 193, 78, 0.1) 45%, transparent 70%);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  pointer-events: none;
+}
+
+.spot-hit:hover::before,
+.spot-hit:focus-visible::before {
+  opacity: 1;
+}
+
+.spot-hit:active::before {
+  opacity: 1;
+  background: radial-gradient(circle, rgba(255, 241, 194, 0.45), rgba(242, 193, 78, 0.16) 45%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spot-hit::before {
+    transition: none;
   }
 }
 

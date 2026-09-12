@@ -167,9 +167,43 @@ src/lib/strategy/
   strategy.ts       the exact play-or-fold answer, and grading against it
   autoplay.ts       the bot — plays through the same functions the buttons do
 src/lib/store/      zustand; owns pacing, never owns rules
-src/components/     the felt, the cards, the chips, the panels, the dialogs
+src/components/table/
+  layout.ts         every coordinate on the table, and nothing else
+  Bed.tsx           the furniture: rail, bumper, cloth, and the lamp over it
+  Felt.tsx          the print: the arcs, the paytables, the spots
+  Fx.tsx            what the table does when a round settles
+  Surface.tsx       the React layout, and the rule about which cards are face up
+  Card.tsx  Chip.tsx  Shuffler.tsx
+src/components/     the panels, the controls and the dialogs
 tools/icons.mjs     the app icon and favicon, from analytic shapes
 ```
+
+### How the table is drawn
+
+One SVG holds the furniture, the print and the effects that belong *on* the
+cloth; the cards, the chips and the money in flight are HTML positioned in the
+same coordinate space on a layer above it. SVG for what is printed, DOM for what
+moves — because a card flip is a CSS 3D transform and an SVG one is not.
+
+Four files, and the split is what keeps a flash landing exactly on the spot it
+is lighting: `layout.ts` owns every coordinate, and the other three ask it.
+The playing surface is `0 … 1000` by `0 … 560` and the rail is drawn in a margin
+*outside* that, so the table grew a rail without a single printed coordinate
+moving.
+
+Everything that moves is a CSS keyframe. There is no animation library here and
+there does not need to be — see [DEPLOY.md](DEPLOY.md) for what that is worth in
+kilobytes. Motion that decorates something already on screen stops under
+`prefers-reduced-motion`; motion that *is* the effect, like a chip crossing the
+felt, goes away entirely; and light that carries information — which bets
+resolved, whether the dealer played — is kept, because it is opacity alone and
+moves nothing across the screen.
+
+The one effect here that no other table in the arcade has is the simplest: the
+qualifier line answers its own question. The single fact that decides every Ante
+and every Play is whether the dealer reached queen high, the felt already has
+that rule printed across it in gold, and when the dealer's hand turns over the
+line lights if they played and goes cold if they did not.
 
 It is the blackjack table's architecture, deliberately, and much of its chrome
 is a copy of that table's rather than a rewrite: the store's pacing and

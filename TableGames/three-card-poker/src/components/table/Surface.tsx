@@ -25,7 +25,9 @@ import * as React from 'react';
 import { cn } from '@/components/ui/primitives';
 import { HandFan } from './Card';
 import { ChipStack } from './Chip';
-import { Felt, geometryFor, spotCentre, type FeltGeometry, type SpotName } from './Felt';
+import { Felt } from './Felt';
+import { deriveFx, FxOverlay } from './Fx';
+import { geometryFor, spotCentre, type FeltGeometry, type SpotName } from './layout';
 import { Shuffler } from './Shuffler';
 import { fmt, fmtSigned } from '@/lib/engine/money';
 import { evaluate3, handName, qualifies } from '@/lib/engine/poker';
@@ -37,7 +39,11 @@ import { seatDealDelay, seatRevealDelay, useGame, type Speed } from '@/lib/store
  * Scaling
  * ------------------------------------------------------------------ */
 
-function useFelt(ref: React.RefObject<HTMLDivElement | null>): { g: FeltGeometry; scale: number } {
+function useFelt(ref: React.RefObject<HTMLDivElement | null>): {
+  g: FeltGeometry;
+  scale: number;
+  outer: { w: number; h: number };
+} {
   const [box, setBox] = React.useState({ width: 0, height: 0 });
 
   React.useEffect(() => {
@@ -55,8 +61,11 @@ function useFelt(ref: React.RefObject<HTMLDivElement | null>): { g: FeltGeometry
 
   return React.useMemo(() => {
     const g = geometryFor(box.width, box.height);
-    const scale = box.width === 0 ? 1 : Math.min(box.width / g.w, box.height / g.h);
-    return { g, scale };
+    // The table is wider and deeper than its playing surface by the rail on
+    // every side, and it is the whole table that has to fit the container.
+    const outer = { w: g.w + g.rail * 2, h: g.h + g.rail * 2 };
+    const scale = box.width === 0 ? 1 : Math.min(box.width / outer.w, box.height / outer.h);
+    return { g, scale, outer };
   }, [box]);
 }
 
@@ -81,7 +90,7 @@ export function Surface({
   className?: string;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  const { g, scale } = useFelt(ref);
+  const { g, scale, outer } = useFelt(ref);
   const speed = useGame((s) => s.prefs.speed);
 
   /*
@@ -94,15 +103,40 @@ export function Surface({
     [table.seats],
   );
 
+  /** Which seats are holding cards, so the cloth can carry their shadow. */
+  const dealtSeats = React.useMemo(
+    () => table.seats.map((s, i) => (s.cards.length === 3 ? i : -1)).filter((i) => i >= 0),
+    [table.seats],
+  );
+
+  /** What the felt should be reacting to. Derived, never fired as an event. */
+  const fx = React.useMemo(() => deriveFx(table, settlements, g), [table, settlements, g]);
+
   return (
     <div ref={ref} className={cn('relative flex h-full w-full items-center justify-center', className)}>
-      <div className="relative" style={{ width: g.w * scale, height: g.h * scale }}>
-        <Felt rules={table.rules} g={g} />
+      <div className="relative" style={{ width: outer.w * scale, height: outer.h * scale }}>
+        <Felt
+          rules={table.rules}
+          g={g}
+          fx={fx}
+          dealtSeats={dealtSeats}
+          dealerDealt={table.dealer.cards.length === 3}
+        />
 
-        {/* Everything below is in felt units, scaled as one block. */}
+        {/*
+          Everything below is in felt units, scaled as one block and pushed in
+          by the rail so felt coordinate (0,0) lands on the corner of the
+          playing surface rather than on the outer edge of the wood. The
+          translate comes before the scale, so it is in screen pixels while
+          everything inside is in felt units.
+        */}
         <div
           className="absolute top-0 left-0 origin-top-left"
-          style={{ width: g.w, height: g.h, transform: `scale(${scale})` }}
+          style={{
+            width: g.w,
+            height: g.h,
+            transform: `translate(${g.rail * scale}px, ${g.rail * scale}px) scale(${scale})`,
+          }}
         >
           <Shuffler x={g.machine.x} y={g.machine.y} scale={g.machine.scale} busy={dealing} round={table.round} />
           <DealerArea table={table} g={g} dealDelay={seatDealDelay(order.length, speed)} />
@@ -121,6 +155,9 @@ export function Surface({
               onSpot={(spot) => onSpotClick?.(i, spot)}
             />
           ))}
+
+          {/* Over the cards and the chips: money crossing the table. */}
+          <FxOverlay fx={fx} g={g} />
         </div>
       </div>
     </div>
@@ -355,7 +392,11 @@ function SeatArea({
                 type="button"
                 onClick={() => onSpot(spot)}
                 aria-label={`${seat.name} ${SPOT_LABEL[spot]}: ${fmt(amount)}. Add a ${fmt(chip)} chip.`}
-                className="spot-hit absolute inset-0 rounded-full transition-transform hover:scale-110"
+                title={`${SPOT_LABEL[spot]} · ${fmt(amount)} — click to add ${fmt(chip)}`}
+                // The glow on hover is `.spot-hit`, in the stylesheet: the
+                // button itself is transparent, so there is nothing here to
+                // scale or tint that anyone could see.
+                className="spot-hit absolute inset-0 rounded-full"
               />
             ) : null}
             {amount > 0 ? (

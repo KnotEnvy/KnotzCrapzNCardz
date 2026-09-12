@@ -2,8 +2,8 @@
   "project": "Knotz Three Card Poker",
   "path": "TableGames/three-card-poker",
   "oneLine": "A full Three Card Poker table for up to three seats sharing one screen: Ante and Play, Pair Plus, the Ante Bonus and the 6 Card Bonus, dealt by the procedure on a regulator's rule sheet, on seventeen real paytables — every one of them priced exactly rather than cited, and a trainer that tells you in money what the fold you just made cost.",
-  "handoffDate": "2026-09-11",
-  "status": "Feature complete and verified. Everything is green: 103 unit tests, 11 statistical tests (a million dealt rounds plus all 20,358,520 six-card sets), typecheck, lint with zero errors and zero warnings, a production build, and a container that builds, runs healthy and serves the game with no console errors. Built in one session on the architecture the blackjack table next door established, deliberately reusing its store, modal, keyboard guard and audio mixer so that eight rounds of review there are not re-learned here.",
+  "handoffDate": "2026-09-12",
+  "status": "Feature complete and verified. Everything is green: 113 unit tests, 11 statistical tests (a million dealt rounds plus all 20,358,520 six-card sets), typecheck, lint with zero errors and zero warnings, a production build, and a container that builds, runs healthy and serves the game with no console errors. Built in one session on the architecture the blackjack table next door established, deliberately reusing its store, modal, keyboard guard and audio mixer so that eight rounds of review there are not re-learned here. A second session (2026-09-12) rebuilt the table's visual layer against the craps table as the bar, and folded this container into the arcade's compose stack.",
   "whatWasBuilt": {
     "summary": "Engine first, driven by tests and by an exact enumeration of the whole game. Three Card Poker is small enough to solve outright — 22,100 player hands against the 18,424 the rest of the deck can make — so no figure this game prints is estimated, and the statistical suite exists to prove the engine deals the game those figures describe rather than to produce the figures.",
     "engine": [
@@ -42,7 +42,31 @@
       "The shallow felt's qualifier line was clipped by its own arc: text on a textPath stops where the path ends, and the cloth read 'DEALER PLAYS WITH QUEEN HIGH OR BETTE'.",
       "The session panel's tooltip read 'Includes even of Ante Bonus' — fmtSigned renders zero as the word 'even', which is right on a settlement chip and a typo in a sentence.",
       "The paytables dialog footnoted all three bets with Pair Plus's winning line, telling a reader that the Ante Bonus pays on a pair."
-    ]
+    ],
+    "visualPass": {
+      "why": "Play-tested against the craps table and judged short on visuals. The engine and the pacing were not the gap — the table was. Craps has furniture, lighting and an effects layer; this felt had one radial gradient, a hairline weave, and a rail drawn as a stroke centred on the cloth's own edge, so half its width fell outside the viewBox and was clipped away. Nothing reacted when a round settled.",
+      "whatChanged": [
+        "layout.ts — the geometry moved out of Felt.tsx into a module of its own, the way the craps table has it, so the print, the furniture, the effects and the React layout all read one description of the table. A flash that lights a spot cannot land anywhere but on the spot that was printed.",
+        "Bed.tsx — the furniture: wood with a stretched fractal grain, a padded bumper, cloth with a mottle and a nap over a five-stop gradient, the bumper's shadow cast inward, a lamp that sways, and the dark the lamp does not reach multiplied over the print. Drawn in a margin outside the playing surface, so the rail cost the layout nothing.",
+        "Fx.tsx — what the table does when a round settles: the printed spot lighting up in its own shape, winnings tossed to the seat's plate and losses raked to the dealer's tray, a burst at a hand that pays a bonus, a wash for the ones that stop the pit, and the qualifier line answering its own question.",
+        "Chip.tsx — chips redrawn as SVG with moulding, inlay, edge spots and side walls. A stack seen from a seat is mostly the sides of the chips under the top one, which a CSS disc cannot show.",
+        "The print gained a drop shadow so it sits in the nap, a hairline boundary inside the cloth's edge, and a lit top edge on each spot so the shapes are cut into the surface rather than drawn on it.",
+        "The betting spots answer the pointer. They are transparent HTML over printed SVG and hovering one did nothing you could see — the felt was the only surface in the arcade that did not react to being pointed at.",
+        "Cards gained a varnish highlight and a shadow in the cloth's blue rather than in black."
+      ],
+      "cost": "None measurable. Every effect is a CSS keyframe rather than an animation runtime, and the 18 pre-compressed files went from 864 KB / 272 KB gzipped to 842 KB / 249 KB.",
+      "alsoFixedHere": [
+        "A soft shadow was drawn on the cloth under the dealer's hand whether or not the dealer was holding one, which read as a stain."
+      ]
+    },
+    "composeConsolidation": {
+      "why": "This game's container was running in a compose project of its own rather than in the arcade's, because it had been started from its own folder. The root file also repeated all four service definitions, so every port and hardening flag lived in two places.",
+      "whatChanged": [
+        "The root docker-compose.yml is now a list: it `include`s each game's own compose file. Every service is defined exactly once, next to the Dockerfile it builds. Relative build contexts resolve against the included file's own directory, so each context stays `.` and works from either end.",
+        "All five files pin `name: knotzcrapzncardz`. A compose project is otherwise named for the directory it was started from, so the two ways of starting a game used to build rival projects that fought over the container name — and Docker's refusal says nothing about which of the two ways you used. Now starting a game from its folder joins the arcade and updates that one service."
+      ],
+      "verified": "docker compose config from the root resolves all four services with the right build contexts; from a game folder it resolves the same project name. All four containers were brought up from the root and report healthy."
+    }
   },
   "stack": {
     "framework": "Next.js 16.3.2 (App Router, Turbopack), React 19.2",
@@ -69,7 +93,10 @@
     "storeIsAMetronome": "src/lib/store/useGame.ts owns the pacing of a round and nothing else. Every money-moving call delegates to an engine function and swaps in whatever comes back, so the store cannot invent a payout.",
     "oneRulebook": "The bot calls deal(), decide(), revealDealer() and settle() — the same functions the buttons call. There is no second path into the state, which is why the measurement suite measures the game the felt plays.",
     "exactRatherThanMeasured": "analysis.ts computes every figure the game prints as a finite sum. The constants it carries (hand counts, six-card counts, the four strategies' totals) are re-derived from scratch by analysis.test.ts on every run, so a change that moves any number fails there first rather than drifting quietly.",
-    "cardVisibility": "Surface.tsx is the only place that decides which cards are face up, and the rule is the table's: a seat's hand is up on its own turn and at the showdown, never otherwise. Three seats on one screen would otherwise be able to read each other's cards, and another hand moves the dealer's odds."
+    "cardVisibility": "Surface.tsx is the only place that decides which cards are face up, and the rule is the table's: a seat's hand is up on its own turn and at the showdown, never otherwise. Three seats on one screen would otherwise be able to read each other's cards, and another hand moves the dealer's odds.",
+    "howTheTableIsDrawn": "One SVG holds the furniture (Bed), the print (Felt) and the effects that belong on the cloth; the cards, chips and money in flight are HTML positioned in the same coordinate space on a layer above it. SVG for what is printed, DOM for what moves, because a card flip is a CSS 3D transform and an SVG one is not. layout.ts owns every coordinate and the other three ask it.",
+    "railLivesInAMargin": "The playing surface keeps the coordinate space it always had — 0…1000 by 0…560 — and the rail is drawn in a margin outside it, with the SVG viewBox opened up by its width on every side and the HTML layer translated to match. Insetting the cloth instead would have meant re-tuning every coordinate on the table to buy the wood its width, and the outside seats' Play boxes had about five units to give.",
+    "effectsAreDerivedNotFired": "deriveFx is a pure function of the table and the round's settlements, not a queue of events. A re-render in the middle of an animation therefore cannot produce a different set of effects than the one already playing, and each effect's React key is stable for the round, which is what lets React leave a running animation alone."
   },
   "keyDecisions": [
     "Money is integer cents, floored on payout. Today's paytables are whole-number ratios, but half-unit lines exist in the wild and the measurement suite compares an edge in the third decimal place.",
@@ -83,7 +110,11 @@
     "The felt has two geometries, not one scale factor — the same decision the blackjack felt reached, for the same reason. The deep one stacks each seat's spots in a column and prints the paytables; the shallow one puts them in a row and drops the print, because a phone in landscape has about 280 pixels of height for the table.",
     "Settlement figures are placed per spot side rather than above. The blackjack felt puts them above because its spots are side by side; here they are stacked, and a figure rising off the Ante lands on Pair Plus.",
     "No immer. The blackjack engine measured immer's cost on a hot path and removed it from one; this table never had a hot path worth drafting.",
-    "Nothing plays or folds by default from the keyboard. At the blackjack table Space stands, which is the safe answer on most hands; here neither answer is safe on most hands."
+    "Nothing plays or folds by default from the keyboard. At the blackjack table Space stands, which is the safe answer on most hands; here neither answer is safe on most hands.",
+    "No animation library. Every effect on the felt is a CSS keyframe driven by custom properties. Adding a runtime to move a few chips across a table would have been the single largest thing in the bundle; as it is the whole effects layer arrived and the bundle got smaller.",
+    "prefers-reduced-motion splits three ways rather than switching everything off. Motion that decorates something already on screen stops where it is; motion that *is* the effect — a chip crossing the felt, a burst going off — is removed entirely, because it is pure travel and the settlement figures already say the same thing in place; and light that carries information, like which bets resolved and whether the dealer played, is kept, because it is opacity alone and moves nothing across the screen.",
+    "A win and a loss are opposite gestures, not one flash in two colours. A win blooms wide, holds while the payoff is counted and eases away; a loss is one hard frame that then drains. You can tell which happened from the corner of your eye without reading the colour, which is also what keeps them legible to a player who cannot tell red from green.",
+    "The wash and the burst are rationed by hand rank, not by whether money was won. A burst fires on the hands that pay an Ante Bonus (a straight or better, about 3.7% a seat) and the wash only on trips or better. A cold wash for the dealer failing to qualify was written and then cut: it happens on 30% of rounds, and a table that flashes a third of the time is a table nobody looks at."
   ],
   "gotchas": [
     "`deal` takes an Rng because the shuffle happens there. It is the only action that does. `dealFrom` is the same thing from a deck already in order, which is how every settlement branch is pinned by a test.",
@@ -98,11 +129,17 @@
     "`next dev` writes AGENTS.md and CLAUDE.md into the project root. They are gitignored.",
     "`pnpm run typecheck` fails on a clean checkout with \"Cannot find name 'LayoutProps'\" until `pnpm run build` has run once — that type is generated into .next/types, which tsconfig includes.",
     "public/cards is a committed copy of ../../cardArt. A static export cannot reach outside its own public directory.",
-    "The dealer's odds are computed from the seat's own three cards only. Feeding it another seat's cards would be more accurate and would also be collusion."
+    "The dealer's odds are computed from the seat's own three cards only. Feeding it another seat's cards would be more accurate and would also be collusion.",
+    "An `feTurbulence` filter fills its filter *region*, which is a rectangle, not the shape it was applied to. On a table with a curved bottom edge, an unclipped grain or nap overlay paints across the floor as well. Both are wrapped in a clipPath.",
+    "A CSS `transform` on an SVG element needs `transform-box: view-box` before a `px` translate means user units; without it the translate is measured against the element's own bounding box. That is what the lamp's sway sets.",
+    "Where an effect is two elements animating together — the chip toss is, because an arc is two easings and one element cannot hold two timing functions on one transform — the delay is passed as a custom property rather than as `animation-delay`, so both halves start on the same frame. Custom properties inherit; an inline `animationDelay` does not.",
+    "The independent `scale` and `translate` CSS properties, not `transform`, are what let a burst's rings be centred with `translate(-50%,-50%)` and animated at the same time. Animating `transform` would replace the centring.",
+    "Instrumenting the felt from the console: pausing everything `document.getAnimations()` returns also freezes the cards at the start of their deal-in, where they are at opacity 0, and calling `play()` on all of them restarts finished deal animations. Filter to `animationName.startsWith('fx-')`. Every effect layer carries a `data-fx` attribute for exactly this reason — so 'the win flash fired' can be asserted rather than inferred from a screenshot taken at the right millisecond."
   ],
   "verification": {
     "automated": [
-      "103 unit tests: hand ranking including the wheel and the mini royal, the qualifier, the strategy line, the best five of six against an independently written naive evaluator (20,000 random sets plus every straight flush, royal and four of a kind), every paytable's resolution and fallback, betting limits and the Play reserve, the deal's order and completeness, turn order with a Pair Plus-only seat, every settlement branch, conservation of money across a thousand rounds of every bet at three seats, the between-rounds paths, the advisor, and the store's seam.",
+      "113 unit tests: hand ranking including the wheel and the mini royal, the qualifier, the strategy line, the best five of six against an independently written naive evaluator (20,000 random sets plus every straight flush, royal and four of a kind), every paytable's resolution and fallback, betting limits and the Play reserve, the deal's order and completeness, turn order with a Pair Plus-only seat, every settlement branch, conservation of money across a thousand rounds of every bet at three seats, the between-rounds paths, the advisor, and the store's seam.",
+      "Fx.test.ts covers the one part of the effects layer with a decision in it, and every decision it pins is a rule about the game rather than about animation: that the Ante and its bonus collapse onto the one diamond they share, that a push lights nothing, that winnings end at the seat's plate and losses at the dealer's tray, that a folded hand gets no fanfare but a six card bonus behind a fold still does, and that the qualifier is read off the dealer only once the hand is turned. Every fixture is played through the real engine from a stacked deck, so the settlements are the ones the game produces rather than ones written to match the assertion.",
       "analysis.test.ts re-derives every constant in analysis.ts from nothing on each run: the three-card counts, and the four strategies' totals summed over all 407,170,400 pairings.",
       "The computed edges are held against the figures the Wizard of Odds publishes for the same tables — four Ante Bonus, six Pair Plus and four 6 Card Bonus tables — to half a hundredth of a percent. They agreed on every table the first time it ran.",
       "analysis.sim.test.ts enumerates all 20,358,520 six-card sets and asserts the counts the 6 Card Bonus figures are built on.",
@@ -114,15 +151,19 @@
       "The four dialogs opened by keyboard (C, B, comma, ?) and read: the strategy card's queen-high grid, the paytables matrices with the in-force column marked, the rules editor pricing every table where it is chosen.",
       "Phone landscape at 844x390 with the stats rail closed as a phone has it: the shallow geometry is chosen, the felt fills 84% of the width at scale 0.71.",
       "Portrait at 390x844 shows the rotate hint rather than a squeezed table.",
-      "The container was built, run, and checked: /healthz 200, HTML no-cache, the manifest served as application/manifest+json, card art immutable for a year, a real 404 on a miss."
+      "The container was built, run, and checked: /healthz 200, HTML no-cache, the manifest served as application/manifest+json, card art immutable for a year, a real 404 on a miss.",
+      "2026-09-12, the visual pass: three seats sat and bet, rounds dealt and settled in a browser at 1280x800 and at 844x390. The effects were confirmed by their data-fx hooks rather than by eye alone — flashes, flights, qualifier-YES and qualifier-NO all observed firing, and a jackpot burst caught on a live three-of-a-kind. The craps table was opened beside it at localhost:8080 for the comparison the whole pass was aimed at.",
+      "2026-09-12, the compose stack: `docker compose config` checked from the root and from a game folder, all four containers brought up from the root and reporting healthy, and the five endpoint checks re-run against the rebuilt image."
     ],
     "notVerified": [
       "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the blackjack mixer rather than measured.",
       "Touch interaction on a real phone, and the PWA install path on an actual iPhone.",
       "Screen readers. The controls carry roles and labels, the felt's SVG is aria-hidden and the settlement is announced in a live region, but nothing has been driven with VoiceOver or NVDA.",
-      "prefers-reduced-motion has been written for and read in the code, but not exercised with the setting on.",
+      "prefers-reduced-motion has been written for and read in the code, but not exercised with the setting on. The visual pass added a three-way split to that rule, which makes exercising it more worth doing than it was.",
       "Docker on a non-amd64 host.",
-      "Three seats have been exercised by the engine's tests and the conservation run, but a three-seat round has not been played by hand in a browser."
+      "Three seats have now been sat, bet and dealt in a browser, but the other two were played by the bot rather than by hand — so turn order and the decision buttons have not been driven by a person across all three seats.",
+      "The lamp's sway, the wood grain and the cloth's nap have been judged on a downscaled screenshot rather than on a real display. They are subtle by design and the screenshots lose exactly the detail they consist of.",
+      "The felt's effects have not been watched on a phone, where the compact geometry places the settlement figures below each spot rather than beside it and a burst has less room above the cards."
     ],
     "lastRun": {
       "when": "2026-09-11",
@@ -154,7 +195,8 @@
     "No service worker, so the installed app still needs the network to load.",
     "nginx.conf binds `listen [::]:80` unconditionally, so the container will not start on a Docker host with no IPv6 stack. The identical two lines are in craps, Dragon's Shrine and blackjack, so all four behave the same way; if it is ever worth fixing it should be fixed across all four at once.",
     "The trainer prices play-or-fold and says nothing about whether to make the side bets at all, beyond the house edges printed everywhere. A 'what this bet costs you per hour at your stake' line on the felt would be the honest next step.",
-    "Three seats have never been played by hand in a browser, only by the engine's tests.",
+    "Three seats have been sat and dealt in a browser, but the other two seats were played by the bot; nobody has driven all three by hand.",
+    "The settlement figure's rise-and-fade is a fixed 2,800ms while the settlement hold is scaled by the dealing speed, so on FAST the round clears at about 980ms and the figures are cut off mid-animation. That is arguably what FAST means, and it is also the only place in the game where a duration is not scaled with the rest.",
     "The autoplay bot and the strategies it offers are priced exactly, but it flat-bets and has no bankroll management; there is no equivalent of the blackjack table's betting ramp because there is nothing to count."
   ],
   "sources": {
@@ -167,6 +209,7 @@
     "git": "The repository is rooted at KnotzCrapzNCardz and published at https://github.com/KnotEnvy/KnotzCrapzNCardz (public).",
     "structure": "Games are self-contained apps under their own folders. This one carries its own package.json, .gitignore, README and DEPLOY; the root carries a repo-wide .gitignore and an index README. There is no root build.",
     "ports": "craps 8080, Dragon's Shrine 8081, blackjack 8082, three card poker 8083 — so all four run at once from the root compose file. Dev servers: 3000, 3001, 3002, 3003.",
+    "compose": "The root docker-compose.yml `include`s each game's own compose file rather than repeating it, so every service is defined once next to its Dockerfile. All five files pin `name: knotzcrapzncardz`, so starting a game from its own folder joins the arcade's project instead of standing up a rival one that fights over the container name. Either entry point is the same stack, and `docker compose ps` from the root lists a game whichever way it was started.",
     "sharedAssets": "../../cardArt is the source of the 54-card deck. It is copied, not referenced.",
     "towardOneCasino": "The chrome is already shared by copy rather than by abstraction: the pit palette, the button and panel primitives, the modal, the keyboard guard and the audio mixer are the blackjack table's. Each game's felt, engine and store are self-contained, which is the seam a combined casino would cut along."
   },
@@ -174,12 +217,14 @@
     "thenRead": [
       "src/lib/engine/analysis.ts — the enumeration. It is the most unusual thing in here and everything the game prints comes from it.",
       "src/lib/engine/table.ts — the state machine, and what each phase is waiting for.",
-      "src/components/table/Surface.tsx — the card-visibility rule, which is the one piece of game logic living in a component and says why."
+      "src/components/table/Surface.tsx — the card-visibility rule, which is the one piece of game logic living in a component and says why.",
+      "src/components/table/layout.ts — every coordinate on the table, and the reason the rail lives in a margin outside the playing surface."
     ],
     "safestPlacesToStart": [
       "Adding a paytable: paytables.ts only. It is priced, printed on the felt, listed in the dialogs and ordered by the test automatically.",
       "Adding a preset: rules.ts only.",
-      "Visual work: Felt.tsx is geometry and print, Surface.tsx is everything that moves. Neither can change what the game costs.",
+      "Visual work: layout.ts is the coordinates, Bed.tsx the furniture and the light, Felt.tsx the print, Fx.tsx what happens when a round settles, and Surface.tsx the React layout. None of them can change what the game costs.",
+      "Tuning an effect: the keyframes are all in globals.css under 'The table reacting', and Fx.tsx only decides which of them fire and when.",
       "Sound: audio.ts is self-contained and every voice is independent."
     ],
     "riskiestPlacesToChange": [
@@ -193,7 +238,7 @@
     "model": "Static. next build runs with output: 'export' and writes out/. No Node runs in production.",
     "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. Runs read_only with tmpfs for nginx's scratch directories, under no-new-privileges.",
     "run": "docker compose up -d --build  →  http://localhost:8083",
-    "measured": "Image 65.7 MB. Served folder 3.7 MB: 2.0 MB of card art and 1.7 MB of game. The JS, CSS and HTML are 864 KB raw and 272 KB gzipped across 18 pre-compressed files.",
+    "measured": "Image 62.7 MB. Served folder 3.7 MB: 2.0 MB of card art and 1.7 MB of game. The 18 pre-compressed files are 842 KB raw and 249 KB gzipped — down from 864 KB and 272 KB before the visual pass, measured the same way.",
     "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/.",
     "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting."
   },

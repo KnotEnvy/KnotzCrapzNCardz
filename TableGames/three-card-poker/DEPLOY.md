@@ -21,7 +21,10 @@ docker compose up -d --build
 Then open <http://localhost:8083>.
 
 Craps takes 8080, Dragon's Shrine 8081 and blackjack 8082, so every table can
-run at once from the repository root's compose file.
+run at once from the repository root's compose file — which does not redescribe
+this game but `include`s the file above, so there is one definition of this
+container and both ways of starting it are the same stack. `docker compose ps`
+from the root lists this table whether it was started from here or from there.
 
 ```bash
 docker compose logs -f     # watch it
@@ -157,13 +160,20 @@ accident. Each is commented in place, but in short:
 
 The image also pre-gzips its output at build time and serves that with
 `gzip_static`, so nginx never recompresses the same bundle on every request.
-Measured inside the built image: the JavaScript, CSS and HTML together are
-**864 KB, and 272 KB gzipped**, across 18 pre-compressed files. The card deck is
-deliberately not in that figure — a PNG is already compressed, so `gzip_types`
-omits `image/png` and the 54 cards are served as-is.
+Measured inside the built image: the 18 pre-compressed files are **842 KB, and
+249 KB gzipped**. The card deck is deliberately not in that figure — a PNG is
+already compressed, so `gzip_types` omits `image/png` and the 54 cards are
+served as-is.
+
+Those two numbers are **down** from 864 KB and 272 KB, measured the same way
+before the table grew its lighting and its effects layer. That is the expected
+direction rather than a surprise: every effect on this felt is a CSS keyframe
+rather than an animation runtime, so the whole of it costs a few kilobytes of
+stylesheet, and it replaced a chip drawn as a seventeen-stop conic gradient
+with one drawn as SVG.
 
 The whole served folder is **3.7 MB**: 2.0 MB of card art and 1.7 MB of game.
-The finished image is **65.7 MB**, almost all of which is the
+The finished image is **62.7 MB**, almost all of which is the
 `nginx:1.29-alpine` base.
 
 ---
