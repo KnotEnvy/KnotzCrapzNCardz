@@ -1,0 +1,38 @@
+# Knotz Three Card Poker, packaged.
+#
+#   docker compose up -d --build     build and run
+#   docker compose logs -f           watch it
+#   docker compose down              stop it
+#
+# The game then answers on http://localhost:8083, and on http://<this
+# machine's LAN IP>:8083 from any phone or laptop on the same network.
+#
+# 8083 rather than 8080: craps takes 8080, Dragon's Shrine 8081 and blackjack
+# 8082, so every table can run at once from the repository root's file.
+
+services:
+  three-card-poker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: knotz-three-card-poker:latest
+    container_name: knotz-three-card-poker
+    restart: unless-stopped
+    ports:
+      # A high port rather than 80: on Windows, 80 is often already taken, and
+      # nothing here needs a privileged port. Change the left number freely.
+      - "8083:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # The container serves files and holds no state, so it has no business
+    # writing to its own filesystem outside of nginx's scratch directories.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true

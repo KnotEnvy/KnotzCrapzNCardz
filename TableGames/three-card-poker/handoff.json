@@ -1,0 +1,207 @@
+{
+  "project": "Knotz Three Card Poker",
+  "path": "TableGames/three-card-poker",
+  "oneLine": "A full Three Card Poker table for up to three seats sharing one screen: Ante and Play, Pair Plus, the Ante Bonus and the 6 Card Bonus, dealt by the procedure on a regulator's rule sheet, on seventeen real paytables — every one of them priced exactly rather than cited, and a trainer that tells you in money what the fold you just made cost.",
+  "handoffDate": "2026-09-11",
+  "status": "Feature complete and verified. Everything is green: 103 unit tests, 11 statistical tests (a million dealt rounds plus all 20,358,520 six-card sets), typecheck, lint with zero errors and zero warnings, a production build, and a container that builds, runs healthy and serves the game with no console errors. Built in one session on the architecture the blackjack table next door established, deliberately reusing its store, modal, keyboard guard and audio mixer so that eight rounds of review there are not re-learned here.",
+  "whatWasBuilt": {
+    "summary": "Engine first, driven by tests and by an exact enumeration of the whole game. Three Card Poker is small enough to solve outright — 22,100 player hands against the 18,424 the rest of the deck can make — so no figure this game prints is estimated, and the statistical suite exists to prove the engine deals the game those figures describe rather than to produce the figures.",
+    "engine": [
+      "types.ts — cards, hands, wagers, seats, records. Money is integer cents everywhere; see money.ts.",
+      "rng.ts — xoshiro128** with rejection sampling. An honest copy of the blackjack one.",
+      "deck.ts — one deck, shuffled fresh every round. No shoe, no cut card, nothing to count.",
+      "poker.ts — three-card hands scored to a single integer that orders the whole game, plus the best five of six for the 6 Card Bonus.",
+      "paytables.ts — eight Pair Plus tables, four Ante Bonus, five 6 Card Bonus. Ids are the pays themselves.",
+      "analysis.ts — the exact figures: hand counts, dealer odds against any three cards, every house edge, four strategies summed over all 407,170,400 pairings.",
+      "rules.ts — five presets, limits, and a table's figures.",
+      "table.ts — the state machine: betting, the deal, play or fold, the showdown. Returns a new table or a refusal with a sentence in it.",
+      "resolve.ts — settlement, in the rule sheet's order: Ante, Play, Pair Plus, 6 Card Bonus. The only thing that pays anybody.",
+      "strategy/strategy.ts — the exact play-or-fold answer for the actual hand and wagers, and grading against it.",
+      "strategy/autoplay.ts — the bot, which moves money only through the exported actions the buttons call."
+    ],
+    "ui": [
+      "An SVG felt at a fixed viewBox with HTML positioned in the same coordinate space, scaled by one transform — two geometries, deep and shallow, chosen by the container's shape.",
+      "The felt prints its own paytables from the rules in force, so changing a table reprints the cloth.",
+      "Cards are the shared 54-PNG deck copied into public/cards, with a CSS 3D flip; nothing is ever dealt face up.",
+      "A shuffling machine instead of a shoe, alternating two decks with different backs by round parity.",
+      "Four dialogs: house rules (every paytable priced where it is chosen), the strategy card with its queen-high grid, the paytables side by side with the one in force marked, and help.",
+      "A stats panel beside the felt above 1180px and a drawer below it."
+    ],
+    "bugsFoundByTests": [
+      "Two test fixtures asserted J-10-9 as a high-card hand. It is a straight. The engine was right and the tests were wrong, which is worth recording because it looked like the opposite.",
+      "A count of qualifying dealer hands written from a hand calculation (15,272) was wrong; the enumeration said 15,380. It is now asserted two independent ways — the score table, and the MIMIC strategy's play count, which is the same set of hands reached from the other end.",
+      "Both paytable lists were ordered by eye and both were wrong. A 200-to-1 mini royal line is worth nearly three points (7.276% to 4.380%), which put it above three tables that pay a flush four; and cutting the 6 Card Bonus straight to nine to pay trips eight is worth almost two points to the player rather than being a trade, because three of a kind turns up in six cards twice as often as a straight. A test now pins the ordering of all three lists."
+    ],
+    "bugsFoundInBrowser": [
+      "A seat's cards turned face up while the machine was still dealing them: the engine moves to DECIDING the instant the deal is booked, and the felt read that alone. Gated on the deal animation finishing.",
+      "Settlement figures rose off each spot into the spot above it and into the hand's label, because the spots are stacked here rather than in a row as at the blackjack table. They are placed per spot side now — left for the 6 Card Bonus, right for the rest, below in the shallow layout.",
+      "The dealer's hand name appeared a beat before their cards finished turning over.",
+      "The 6 Card Bonus paytable was printed under the shuffling machine.",
+      "The default chip was $10, which is not a denomination in the rack — so a new player saw no chip selected and could not tell what a click would bet.",
+      "An empty seat's Sit button sat exactly on its printed ANTE diamond.",
+      "The shallow felt's qualifier line was clipped by its own arc: text on a textPath stops where the path ends, and the cloth read 'DEALER PLAYS WITH QUEEN HIGH OR BETTE'.",
+      "The session panel's tooltip read 'Includes even of Ante Bonus' — fmtSigned renders zero as the word 'even', which is right on a settlement chip and a typo in a sentence.",
+      "The paytables dialog footnoted all three bets with Pair Plus's winning line, telling a reader that the Ante Bonus pays on a pair."
+    ]
+  },
+  "stack": {
+    "framework": "Next.js 16.3.2 (App Router, Turbopack), React 19.2",
+    "language": "TypeScript 5, strict",
+    "state": "zustand 5 + persist. No immer: the table is three seats of three cards and four numbers, and a spread is as readable as a draft.",
+    "styling": "Tailwind CSS 4 (CSS-first @theme in src/app/globals.css)",
+    "test": "vitest 4, two configs",
+    "fonts": "next/font/google — Oswald (felt lettering) + Inter (UI)",
+    "art": "../../cardArt copied into public/cards by being committed there"
+  },
+  "commands": {
+    "dev": "pnpm run dev",
+    "build": "pnpm run build",
+    "test": "pnpm test — 103 tests, about six seconds. Run this constantly.",
+    "testStats": "pnpm run test:stats — 11 tests, about two and a half minutes: a million rounds through the real engine, and every six-card set enumerated.",
+    "typecheck": "pnpm run typecheck — run `pnpm run build` once first on a fresh clone; LayoutProps is generated into .next/types.",
+    "lint": "pnpm run lint — zero errors and zero warnings; keep it that way.",
+    "icons": "node tools/icons.mjs public/icons src/app — regenerates the app icons and the favicon from analytic shapes.",
+    "dockerUp": "docker compose up -d --build  →  http://localhost:8083",
+    "note": "All commands run from TableGames/three-card-poker. The repository root has no build."
+  },
+  "architecture": {
+    "principle": "The engine is pure. src/lib/engine and src/lib/strategy contain no React, no I/O and no clock; only `deal` takes an Rng. Every action returns a new table or a refusal, which is what makes a session replayable from a seed, testable without a browser, and safe to drive from a bot and a simulation at once.",
+    "storeIsAMetronome": "src/lib/store/useGame.ts owns the pacing of a round and nothing else. Every money-moving call delegates to an engine function and swaps in whatever comes back, so the store cannot invent a payout.",
+    "oneRulebook": "The bot calls deal(), decide(), revealDealer() and settle() — the same functions the buttons call. There is no second path into the state, which is why the measurement suite measures the game the felt plays.",
+    "exactRatherThanMeasured": "analysis.ts computes every figure the game prints as a finite sum. The constants it carries (hand counts, six-card counts, the four strategies' totals) are re-derived from scratch by analysis.test.ts on every run, so a change that moves any number fails there first rather than drifting quietly.",
+    "cardVisibility": "Surface.tsx is the only place that decides which cards are face up, and the rule is the table's: a seat's hand is up on its own turn and at the showdown, never otherwise. Three seats on one screen would otherwise be able to read each other's cards, and another hand moves the dealer's odds."
+  },
+  "keyDecisions": [
+    "Money is integer cents, floored on payout. Today's paytables are whole-number ratios, but half-unit lines exist in the wild and the measurement suite compares an edge in the third decimal place.",
+    "A three-card hand evaluates to one integer that orders the entire game. The showdown is `>`, the dealer's qualifier is a comparison against a constant, and the strategy line is another — which is also what lets the enumeration compare hundreds of millions of hands in seconds.",
+    "Ace-two-three is scored as a three-high straight, not an ace-high one. The rule sheet says it is the lowest straight; scoring it ace-high would make it the second best in the game and it would win showdowns it loses at a real table.",
+    "A fold forfeits Pair Plus and does not forfeit the 6 Card Bonus. Both come from published rules, not from inference — see `sources` — and the second is why the 6 Card Bonus is absent from the trainer's arithmetic: it rides whatever the player does, so it cannot change the decision.",
+    "The Ante and Play totals are stored without the Ante Bonus, so one constant serves every Ante Bonus table: the bonus pays only on straights and better, every strategy plays those, so it adds a closed-form amount on top. The test asserts that premise rather than trusting it.",
+    "The play-or-fold answer is computed per hand rather than looked up, even though the enumeration proved Q-6-4 is exactly optimal on all 22,100 hands. The point is not a different answer but the size of the answer: 'Q-6-3 folds' is a rule, and 'playing Q-6-3 costs a hundredth of an Ante more than folding' is what makes a trainer's verdict mean anything.",
+    "The table keeps the Play reserve back when chips go down: an Ante may only be placed if the bankroll can also cover the Play it may be asked to match. A casino leaves that to the player; a player who Antes their last chips and is dealt a straight flush can only fold it.",
+    "Seventeen paytables, every one real. Each appears in a published survey of the game's paytables or on a casino's own rack card, and none carries an edge written in by hand.",
+    "The felt has two geometries, not one scale factor — the same decision the blackjack felt reached, for the same reason. The deep one stacks each seat's spots in a column and prints the paytables; the shallow one puts them in a row and drops the print, because a phone in landscape has about 280 pixels of height for the table.",
+    "Settlement figures are placed per spot side rather than above. The blackjack felt puts them above because its spots are side by side; here they are stacked, and a figure rising off the Ante lands on Pair Plus.",
+    "No immer. The blackjack engine measured immer's cost on a hot path and removed it from one; this table never had a hot path worth drafting.",
+    "Nothing plays or folds by default from the keyboard. At the blackjack table Space stands, which is the safe answer on most hands; here neither answer is safe on most hands."
+  ],
+  "gotchas": [
+    "`deal` takes an Rng because the shuffle happens there. It is the only action that does. `dealFrom` is the same thing from a deck already in order, which is how every settlement branch is pinned by a test.",
+    "A seat's `bets` are the chips before the deal and `wagers` are what is riding after it; `wagers.play` is added by the decision. Conflating them is how a settlement pays a stake twice.",
+    "`settle` is guarded by `table.settled`. The UI drives it off a phase transition and a transition can fire twice.",
+    "A finished round sits at SETTLE for the settlement hold with its stakes already returned but still displayed. `abandonRound` checks `settled` before refunding anything — the blackjack table shipped the version that did not.",
+    "`lastBets` is a Map and is deliberately not persisted; JSON has no Maps and it would come back as {} and break the re-bet button.",
+    "Never use `advise` as a zustand selector — it builds a fresh object per call, which is an infinite render loop. Use `useAdvice`.",
+    "`fmtSigned` renders zero as the word 'even'. Right on a settlement chip, wrong inside a sentence.",
+    "Text on an SVG `textPath` is clipped where the path ends. A line that grows, or an arc that shrinks, silently loses its last words rather than wrapping.",
+    "Chart and spot colours live in a plain `:root` block, not in `@theme`: Tailwind 4 only emits a theme variable when a utility referencing it is generated, and these are read through `var()` in inline styles.",
+    "`next dev` writes AGENTS.md and CLAUDE.md into the project root. They are gitignored.",
+    "`pnpm run typecheck` fails on a clean checkout with \"Cannot find name 'LayoutProps'\" until `pnpm run build` has run once — that type is generated into .next/types, which tsconfig includes.",
+    "public/cards is a committed copy of ../../cardArt. A static export cannot reach outside its own public directory.",
+    "The dealer's odds are computed from the seat's own three cards only. Feeding it another seat's cards would be more accurate and would also be collusion."
+  ],
+  "verification": {
+    "automated": [
+      "103 unit tests: hand ranking including the wheel and the mini royal, the qualifier, the strategy line, the best five of six against an independently written naive evaluator (20,000 random sets plus every straight flush, royal and four of a kind), every paytable's resolution and fallback, betting limits and the Play reserve, the deal's order and completeness, turn order with a Pair Plus-only seat, every settlement branch, conservation of money across a thousand rounds of every bet at three seats, the between-rounds paths, the advisor, and the store's seam.",
+      "analysis.test.ts re-derives every constant in analysis.ts from nothing on each run: the three-card counts, and the four strategies' totals summed over all 407,170,400 pairings.",
+      "The computed edges are held against the figures the Wizard of Odds publishes for the same tables — four Ante Bonus, six Pair Plus and four 6 Card Bonus tables — to half a hundredth of a percent. They agreed on every table the first time it ran.",
+      "analysis.sim.test.ts enumerates all 20,358,520 six-card sets and asserts the counts the 6 Card Bonus figures are built on.",
+      "stats.sim.test.ts deals a million rounds through the real engine and checks the game against the exact figures, with every band computed from the run: the Ante and Play against both of its denominators, Pair Plus, the 6 Card Bonus, the play rate, the dealer's qualifying rate, all six three-card hand frequencies and all ten six-card ones, plus two more strategies over 300,000 rounds each."
+    ],
+    "manual": [
+      "Played in a real browser at 1280x800: chips on all three spots, a round dealt, the hint pill showing what each choice is worth, a fold graded and priced, and the money checked by hand against the settlement (a non-qualifying dealer paid the Ante, pushed the Play, and the two side bets lost — $1,000 to $995 exactly).",
+      "Zero console errors across the session; the only messages are React DevTools and HMR notices.",
+      "The four dialogs opened by keyboard (C, B, comma, ?) and read: the strategy card's queen-high grid, the paytables matrices with the in-force column marked, the rules editor pricing every table where it is chosen.",
+      "Phone landscape at 844x390 with the stats rail closed as a phone has it: the shallow geometry is chosen, the felt fills 84% of the width at scale 0.71.",
+      "Portrait at 390x844 shows the rotate hint rather than a squeezed table.",
+      "The container was built, run, and checked: /healthz 200, HTML no-cache, the manifest served as application/manifest+json, card art immutable for a year, a real 404 on a miss."
+    ],
+    "notVerified": [
+      "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the blackjack mixer rather than measured.",
+      "Touch interaction on a real phone, and the PWA install path on an actual iPhone.",
+      "Screen readers. The controls carry roles and labels, the felt's SVG is aria-hidden and the settlement is announced in a live region, but nothing has been driven with VoiceOver or NVDA.",
+      "prefers-reduced-motion has been written for and read in the code, but not exercised with the setting on.",
+      "Docker on a non-amd64 host.",
+      "Three seats have been exercised by the engine's tests and the conservation run, but a three-seat round has not been played by hand in a browser."
+    ],
+    "lastRun": {
+      "when": "2026-09-11",
+      "note": "What pnpm run test:stats printed, against the exact figures. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
+      "antePlayPerAnte": [3.077, 3.373, 0.492],
+      "antePlayPerAction": [1.838, 2.015, 0.294],
+      "pairPlus": [6.788, 7.276, 0.862],
+      "sixCardBonus": [9.399, 8.561, 1.583],
+      "handsPlayed": [67.4366, 67.4208, 0.1875],
+      "dealerQualifies": [69.5649, 69.5928, 0.184],
+      "mimicTheDealer": [3.72, 3.449, 0.904],
+      "neverFold": [7.564, 7.654, 1.007],
+      "format": "[measured %, exact %, band] — 3 sigma for the edges, 4 sigma for the frequencies. The frequencies are the tight part: a million deals place a straight at 3.2745% against an exact 3.2579%, and six-card flushes at 1.0136% against 1.0108%. The edges are loose because Pair Plus pays 40 to 1 and the 6 Card Bonus 1,000, and those tails are what a million rounds can and cannot resolve.",
+      "exactFigures": {
+        "antePlay5-4-1": "3.373% per Ante, 2.015% per unit of action, playing 67.42% of hands",
+        "pairPlusRange": "1.846% (40-32-6-4-1) to 7.276% (40-30-6-3-1); the 200-to-1 mini royal table is 4.380%",
+        "sixCardRange": "6.741% (…-9-8) to 15.279% (1000-200-50-25-15-10-5)",
+        "dealerQualifies": "15,380 of 22,100 hands, 69.593%"
+      }
+    }
+  },
+  "openItems": [
+    "Q-6-4 is exactly optimal for every Ante Bonus table this game books, and the test asserts there is no hand on which the exact answer and the line disagree. That is a statement about these paytables: a table paying a bonus on lower hands could in principle move the line, and nothing would catch it except re-running the derivation, which is cheap and not automatic.",
+    "No progressive, no Prime, no 'bet behind'. The four wagers here are the ones a Strip table books; the progressive in particular would need a jackpot meter and a different kind of figure.",
+    "One hand per seat. Some tables allow two boxes at one position.",
+    "The stats suite's element-of-risk band is scaled from the main measurement's band rather than accumulated per round. It is the right order of magnitude and it is not an independently computed standard error.",
+    "The 6 Card Bonus's measured edge sits inside a band a point and a half wide at a million rounds, because of the 1,000-to-1 tail. Tightening it means pooling seeds, which costs minutes per run and has not been done. The exact figure is not in doubt; the check on it is loose.",
+    "Sound is unlistened to, and the mixer's own header says to measure rather than nudge.",
+    "No service worker, so the installed app still needs the network to load.",
+    "nginx.conf binds `listen [::]:80` unconditionally, so the container will not start on a Docker host with no IPv6 stack. The identical two lines are in craps, Dragon's Shrine and blackjack, so all four behave the same way; if it is ever worth fixing it should be fixed across all four at once.",
+    "The trainer prices play-or-fold and says nothing about whether to make the side bets at all, beyond the house edges printed everywhere. A 'what this bet costs you per hour at your stake' line on the felt would be the honest next step.",
+    "Three seats have never been played by hand in a browser, only by the engine's tests.",
+    "The autoplay bot and the strategies it offers are priced exactly, but it flat-bets and has no bankroll management; there is no equivalent of the blackjack table's betting ramp because there is nothing to count."
+  ],
+  "sources": {
+    "rules": "California Bureau of Gambling Control, published standards of play for Three Card Poker (Rev. 01/13): hand rankings including 'ace, 2, 3 is the lowest ranked straight', the shuffler dispensing stacks of three, the queen-high qualifier, the settlement order, and 'If a player has placed a Pair Plus wager, but does not make a Play wager, the player shall forfeit the wager, as well as, the Ante wager.'",
+    "sixCardBonus": "Players Casino (Ventura) rack card, BGC ID GEGA-003036: 'A player shall only place a 6 Card Bonus wager if he/she has also placed an Ante wager prior to the initial deal', 'The 6 Card Bonus wager shall not be forfeited if the player folds their hand and does not place a Play wager', and the 1000-200-100-20-15-9-8 paytable.",
+    "paytablesAndPublishedEdges": "Wizard of Odds, Three Card Poker and its 6 Card Bonus pages. Used for the list of real paytables and as the cross-check the enumeration is held against — never as the source of a figure the game prints.",
+    "note": "Two rules differ between casual sources and regulator sheets: whether a fold forfeits Pair Plus, and whether the 6 Card Bonus survives a fold. Both were settled against the documents above rather than by inference."
+  },
+  "repoNotes": {
+    "git": "The repository is rooted at KnotzCrapzNCardz and published at https://github.com/KnotEnvy/KnotzCrapzNCardz (public).",
+    "structure": "Games are self-contained apps under their own folders. This one carries its own package.json, .gitignore, README and DEPLOY; the root carries a repo-wide .gitignore and an index README. There is no root build.",
+    "ports": "craps 8080, Dragon's Shrine 8081, blackjack 8082, three card poker 8083 — so all four run at once from the root compose file. Dev servers: 3000, 3001, 3002, 3003.",
+    "sharedAssets": "../../cardArt is the source of the 54-card deck. It is copied, not referenced.",
+    "towardOneCasino": "The chrome is already shared by copy rather than by abstraction: the pit palette, the button and panel primitives, the modal, the keyboard guard and the audio mixer are the blackjack table's. Each game's felt, engine and store are self-contained, which is the seam a combined casino would cut along."
+  },
+  "pickUpHere": {
+    "thenRead": [
+      "src/lib/engine/analysis.ts — the enumeration. It is the most unusual thing in here and everything the game prints comes from it.",
+      "src/lib/engine/table.ts — the state machine, and what each phase is waiting for.",
+      "src/components/table/Surface.tsx — the card-visibility rule, which is the one piece of game logic living in a component and says why."
+    ],
+    "safestPlacesToStart": [
+      "Adding a paytable: paytables.ts only. It is priced, printed on the felt, listed in the dialogs and ordered by the test automatically.",
+      "Adding a preset: rules.ts only.",
+      "Visual work: Felt.tsx is geometry and print, Surface.tsx is everything that moves. Neither can change what the game costs.",
+      "Sound: audio.ts is self-contained and every voice is independent."
+    ],
+    "riskiestPlacesToChange": [
+      "resolve.ts settleSeat — the branches are in the rule sheet's order and the order is the rules.",
+      "poker.ts evaluate3 — the score packing is relied on by the qualifier, the strategy line and the enumeration alike.",
+      "analysis.ts constants — change the evaluators and these go stale; the test will tell you, and the failure message is the new value.",
+      "The card-visibility rule in Surface.tsx. Loosening it is how three seats on one screen quietly become a collusion aid."
+    ]
+  },
+  "deployment": {
+    "model": "Static. next build runs with output: 'export' and writes out/. No Node runs in production.",
+    "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. Runs read_only with tmpfs for nginx's scratch directories, under no-new-privileges.",
+    "run": "docker compose up -d --build  →  http://localhost:8083",
+    "measured": "Image 65.7 MB. Served folder 3.7 MB: 2.0 MB of card art and 1.7 MB of game. The JS, CSS and HTML are 864 KB raw and 272 KB gzipped across 18 pre-compressed files.",
+    "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/.",
+    "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting."
+  },
+  "pwa": {
+    "what": "public/manifest.webmanifest plus icons in public/icons, generated by tools/icons.mjs from analytic shapes. Installs to a home screen as 'Three Card'.",
+    "orientation": "Landscape. Portrait under 560px wide shows a 'turn your phone sideways' overlay rather than a squeezed table.",
+    "appleTags": "Next 16 emits only the standardised mobile-web-app-capable; the legacy apple-mobile-web-app-capable is added by hand via metadata.other.",
+    "manifestMime": "nginx does not know .webmanifest natively; the types block in nginx.conf sets application/manifest+json, without which iOS silently refuses the install.",
+    "notDone": "No service worker."
+  }
+}

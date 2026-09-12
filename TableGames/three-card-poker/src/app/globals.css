@@ -1,0 +1,590 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ *
+ * Palette
+ *
+ * A carnival-games pit on the Strip: sapphire cloth, the layout printed in
+ * the two inks every Three Card Poker felt uses — a warm gold for the words
+ * and a red for the diamonds — mahogany at the rail, and brass on anything
+ * that carries a number. The chrome around the felt (pit greys, brass, the
+ * win/lose/push tones) is the blackjack room's exactly, so the two tables read
+ * as one casino; the cloth is what tells you which room you are in.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  --color-pit-950: #07080a;
+  --color-pit-900: #0d0f13;
+  --color-pit-850: #13161c;
+  --color-pit-800: #1a1e26;
+  --color-pit-700: #252b36;
+  --color-pit-600: #37404f;
+  --color-pit-500: #4f5a6b;
+  --color-pit-400: #6a7588;
+  --color-pit-300: #98a3b5;
+  --color-pit-200: #c2cad6;
+  --color-pit-100: #e7eaf0;
+
+  --color-felt-950: #041426;
+  --color-felt-900: #061c36;
+  --color-felt-800: #0a2a4f;
+  --color-felt-700: #0e3866;
+  --color-felt-600: #13497f;
+  --color-felt-line: #f3ecd8;
+
+  /* The two inks printed on a Three Card Poker layout, and nothing else. */
+  --color-print-gold: #f2c14e;
+  --color-print-red: #e4533f;
+
+  --color-brass-500: #c9a227;
+  --color-brass-400: #e2bc4e;
+  --color-brass-300: #f0d484;
+  --color-brass-700: #82691a;
+
+  --color-wood-900: #21140f;
+  --color-wood-800: #301d14;
+  --color-wood-700: #46291c;
+
+  --color-win: #45d98a;
+  --color-lose: #f2726a;
+  --color-push: #7cc3f0;
+
+  --font-display: var(--font-oswald), 'Arial Narrow', sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/*
+ * Plain custom properties rather than `@theme` entries.
+ *
+ * Tailwind 4 emits a theme variable only when a utility referencing it is
+ * generated, and these are never used as utilities: the spots, the hand tally
+ * and the strategy grid read them through `var()` in inline styles because the
+ * value is chosen at runtime from data. The blackjack table found that out the
+ * hard way — declared in `@theme`, every chart cell rendered with no
+ * background — so they live here from the start.
+ */
+:root {
+  /* One colour per spot, matching the ink the felt prints it in. */
+  --color-spot-ante: #e4533f;
+  --color-spot-play: #f3ecd8;
+  --color-spot-pairplus: #f2c14e;
+  --color-spot-sixcard: #5fc9c0;
+
+  /* The six three-card hands, for the tally and the paytable dialog. */
+  --color-hand-straight-flush: #f2c14e;
+  --color-hand-trips: #e0719b;
+  --color-hand-straight: #63aee0;
+  --color-hand-flush: #5fc9a4;
+  --color-hand-pair: #b59ae8;
+  --color-hand-high: #6a7588;
+
+  /* The strategy grid. */
+  --color-act-play: #3f9e6b;
+  --color-act-fold: #b5483c;
+
+  /* Chip colours follow the standard casino denominations. */
+  --chip-1: #f4f4f2;
+  --chip-1-edge: #b9b9b4;
+  --chip-5: #c8102e;
+  --chip-5-edge: #7d0a1d;
+  --chip-25: #1f8a4c;
+  --chip-25-edge: #115c33;
+  --chip-100: #16181d;
+  --chip-100-edge: #000;
+  --chip-500: #6d28d9;
+  --chip-500-edge: #431a94;
+  --chip-1000: #c9a227;
+  --chip-1000-edge: #82691a;
+}
+
+html,
+body {
+  height: 100%;
+  /* On a phone `100%` resolves against a viewport that grows and shrinks as
+     the browser chrome slides away. `dvh` tracks the space actually on
+     screen; the `100%` above stays as the fallback for anything without it. */
+  height: 100dvh;
+}
+
+body {
+  background: radial-gradient(120% 90% at 50% -12%, #16202e 0%, #0a0c10 55%, #05060a 100%);
+  color: var(--color-pit-100);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+
+  /* `viewport-fit=cover` lets the felt run under the notch and the home
+     indicator, which is right for the background and wrong for the chip rack
+     and the buttons. Padding the body back out by the insets keeps every
+     control reachable while the table still bleeds to the edge. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+
+  /* The felt is a tap surface. Without this, iOS reads a double-tap on a spot
+     as a zoom. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Felt typography
+ * ------------------------------------------------------------------ */
+
+.felt-text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  fill: var(--color-felt-line);
+  paint-order: stroke fill;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  user-select: none;
+}
+
+.felt-text--gold {
+  fill: var(--color-print-gold);
+}
+
+.felt-text--red {
+  fill: var(--color-print-red);
+}
+
+.felt-text--muted {
+  fill: color-mix(in srgb, var(--color-felt-line) 55%, transparent);
+  letter-spacing: 0.12em;
+}
+
+/* Paytables printed on the cloth: left-aligned rows, not arced lettering. */
+.felt-table {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * The card
+ *
+ * Two faces on one element, rotated in 3D. The back is the element's own
+ * gradient; the face is the PNG from the shared deck. `backface-visibility`
+ * keeps the down side hidden — without it both faces render and the card
+ * looks like a printing error mid-flip.
+ * ------------------------------------------------------------------ */
+
+.card3d {
+  perspective: 900px;
+  aspect-ratio: 5 / 7.2;
+}
+
+.card3d__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.25, 1);
+  transition-delay: var(--flip-delay, 0ms);
+}
+
+.card3d--down .card3d__inner {
+  transform: rotateY(180deg);
+}
+
+.card3d__face,
+.card3d__back {
+  position: absolute;
+  inset: 0;
+  border-radius: 6%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 6px 14px -6px rgba(0, 0, 0, 0.75);
+}
+
+.card3d__face {
+  background: #fbfbf8;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * The backs.
+ *
+ * A table dealt by a shuffling machine runs two decks with different backs,
+ * one in play while the machine shuffles the other, and swaps them every
+ * round. So there are two backs here, and the felt alternates them by round:
+ * a deep carmine and a gold-on-black. It is decoration, and it is also the one
+ * visible sign at the table that the deck in front of you is not the one you
+ * saw last hand.
+ */
+.card3d__back {
+  transform: rotateY(180deg);
+  background-color: #7a1524;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 6px),
+    radial-gradient(80% 70% at 50% 40%, rgba(255, 255, 255, 0.14), transparent 70%);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.card3d__back--alt {
+  background-color: #17140c;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(226, 188, 78, 0.18) 0 1.5px, transparent 1.5px 6px),
+    repeating-linear-gradient(-45deg, rgba(226, 188, 78, 0.12) 0 1.5px, transparent 1.5px 6px),
+    radial-gradient(80% 70% at 50% 40%, rgba(255, 240, 200, 0.1), transparent 70%);
+}
+
+.card3d__back::after {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 4%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+/* A stack of three arrives from the machine rather than appearing. */
+@keyframes deal-in {
+  from {
+    transform: translate(var(--deal-x, 40vw), var(--deal-y, -30vh)) rotate(-18deg) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0) rotate(var(--card-tilt, 0deg)) scale(1);
+    opacity: 1;
+  }
+}
+
+.card-dealt {
+  animation: deal-in 360ms cubic-bezier(0.22, 0.9, 0.3, 1) backwards;
+}
+
+/* A folded hand is pushed away from the player and dimmed. */
+.hand-folded {
+  opacity: 0.38;
+  filter: saturate(0.4);
+  transform: translateY(-6px) scale(0.94);
+  transition:
+    opacity 300ms ease-out,
+    transform 300ms ease-out,
+    filter 300ms ease-out;
+}
+
+/* ------------------------------------------------------------------ *
+ * Chips
+ * ------------------------------------------------------------------ */
+
+.chip {
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.35), transparent 45%),
+    var(--chip-face);
+  box-shadow:
+    0 0 0 2px var(--chip-edge) inset,
+    0 0 0 5px color-mix(in srgb, var(--chip-face) 80%, #000) inset,
+    0 2px 5px rgba(0, 0, 0, 0.55);
+  position: relative;
+}
+
+/* The eight dashes around a clay chip's rim, drawn with a conic gradient
+   rather than eight elements. */
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    var(--chip-edge) 0 6deg,
+    transparent 6deg 39deg,
+    var(--chip-edge) 39deg 45deg,
+    transparent 45deg 84deg,
+    var(--chip-edge) 84deg 90deg,
+    transparent 90deg 129deg,
+    var(--chip-edge) 129deg 135deg,
+    transparent 135deg 174deg,
+    var(--chip-edge) 174deg 180deg,
+    transparent 180deg 219deg,
+    var(--chip-edge) 219deg 225deg,
+    transparent 225deg 264deg,
+    var(--chip-edge) 264deg 270deg,
+    transparent 270deg 309deg,
+    var(--chip-edge) 309deg 315deg,
+    transparent 315deg 354deg,
+    var(--chip-edge) 354deg 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
+  mask: radial-gradient(circle, transparent 62%, #000 63%);
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion
+ * ------------------------------------------------------------------ */
+
+@keyframes pulse-focus {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brass-400) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-brass-400) 0%, transparent);
+  }
+}
+
+.focus-ring {
+  animation: pulse-focus 1.6s ease-out infinite;
+}
+
+/* ------------------------------------------------------------------ *
+ * Keyboard focus
+ * ------------------------------------------------------------------ *
+ *
+ * Brass, because it is the one colour that reads against every surface here:
+ * the blue cloth, the black rail, the panel chrome and a white card face. Two
+ * rings rather than one — a dark halo under a bright core — so it survives
+ * whichever it lands on.
+ *
+ * `:focus-visible` rather than `:focus`, so clicking a chip does not leave a
+ * ring behind on it. `.focus-ring` above is a different thing entirely: the
+ * pulsing highlight on the seat whose decision the table is waiting for.
+ *
+ * The selector list is wrapped in `:where()` so it costs no specificity; the
+ * shadow is `!important` because half the buttons carry a Tailwind `shadow-*`
+ * utility that would otherwise win the cascade and silently delete the halo.
+ * All three of those were blackjack defects before they were decisions here.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brass-300);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55) !important;
+}
+
+@keyframes rise-fade {
+  from {
+    transform: translateY(6px) scale(0.94);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+}
+
+.settle-chip {
+  animation: rise-fade 2800ms ease-out forwards;
+}
+
+@keyframes sweep-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sweep-in {
+  animation: sweep-in 220ms ease-out backwards;
+}
+
+/* The shuffler's light, while it is working. */
+@keyframes machine-busy {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.machine-busy {
+  animation: machine-busy 380ms ease-in-out infinite;
+}
+
+/*
+ * Everything above is decoration on top of a game that is fully playable
+ * without it. A player who has asked their operating system to stop moving
+ * things gets the game and not the motion — cards appear where they land, and
+ * a turned hand is simply face up.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .card3d__inner,
+  .card-dealt,
+  .focus-ring,
+  .settle-chip,
+  .sweep-in,
+  .hand-folded,
+  .machine-busy {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Scrollbars inside panels
+ * ------------------------------------------------------------------ */
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-pit-600) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-pit-600);
+  border-radius: 3px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Touch
+ *
+ * The spots are drawn at the felt's scale, which on a phone puts the 6 Card
+ * Bonus spot well under a finger. A coarse pointer gets a transparent hit area
+ * padded out to 44px around each one, without moving anything that is drawn.
+ * ------------------------------------------------------------------ */
+
+@media (pointer: coarse) {
+  .spot-hit::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Tall viewports
+ *
+ * The felt scales to fit, so a tall narrow window leaves height empty above
+ * and below it. There the stats panel goes under the table instead of over it.
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1179px) and (min-height: 720px) {
+  .table-shell {
+    flex-direction: column;
+  }
+
+  /*
+   * `:not(.hidden)` is load-bearing. These rules come after Tailwind's
+   * utilities and match on one class, so a bare `.stats-rail { display: block }`
+   * would beat the `hidden` utility and show the panel the player just closed.
+   */
+  .stats-rail:not(.hidden) {
+    display: block;
+    width: 100%;
+    max-height: 42vh;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    position: static;
+    box-shadow: none;
+    column-width: 17rem;
+    column-gap: 0.5rem;
+  }
+
+  .stats-rail:not(.hidden) > * {
+    break-inside: avoid;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Part of the page here, not a drawer over it: nothing to dismiss or dim. */
+  .rail-scrim {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Short viewports
+ *
+ * A phone in landscape has about 390 pixels of height, and the felt gets what
+ * the header and the control bar leave it. Every pixel taken back from those
+ * goes straight into the table.
+ * ------------------------------------------------------------------ */
+
+@media (max-height: 520px) {
+  .app-header {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .control-bar {
+    min-height: 66px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Portrait
+ *
+ * Three seats across a table is a wide shape. It fits a phone held sideways
+ * and squeezes badly held upright, so upright gets a message rather than a
+ * compressed felt. `max-width`, not `max-height` — the blackjack table shipped
+ * the other one, which is the dimension an upright phone has plenty of, and
+ * the hint fired on no phone at all.
+ * ------------------------------------------------------------------ */
+
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 560px) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    text-align: center;
+    background: radial-gradient(120% 90% at 50% 0%, #121a26, #06070a);
+  }
+
+  .rotate-hint ~ * {
+    /* The table keeps rendering behind the message so returning to landscape
+       is instant, but nothing behind it is reachable. */
+    pointer-events: none;
+    filter: blur(2px);
+  }
+}
+
+.rotate-hint__cards {
+  animation: rock 2.4s ease-in-out infinite;
+}
+
+@keyframes rock {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint__cards {
+    animation: none;
+  }
+}

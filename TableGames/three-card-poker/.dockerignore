@@ -1,0 +1,27 @@
+# Everything the build makes for itself, or that would only slow the context up.
+node_modules
+.next
+out
+.git
+.gitignore
+.claude
+
+# Test and tooling artefacts
+coverage
+*.tsbuildinfo
+stats-run.txt
+bench-out.txt
+
+# Docker's own files. nginx.conf is deliberately NOT here -- the serve stage
+# copies it out of the build context, so excluding it fails the build.
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Local secrets never belong in an image
+.env*
+*.pem
+
+# Editor noise
+.DS_Store
+*.log

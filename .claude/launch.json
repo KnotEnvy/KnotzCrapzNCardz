@@ -18,6 +18,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "TableGames/blackjack", "run", "dev", "--", "--port", "3002"],
       "port": 3002
+    },
+    {
+      "name": "three-card-poker",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "TableGames/three-card-poker", "run", "dev", "--", "--port", "3003"],
+      "port": 3003
     }
   ]
 }
