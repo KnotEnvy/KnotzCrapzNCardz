@@ -15,9 +15,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { deriveFx, NO_FX } from './Fx';
+import { deriveFx, NO_FX, sweepAt } from './Fx';
 import { FULL, spotCentre } from './layout';
 import { defaultRules } from '@/lib/engine/rules';
+import { seatSettleDelay, seatSweepDelay } from '@/lib/store/useGame';
 import { settle } from '@/lib/engine/resolve';
 import {
   createTable,
@@ -193,6 +194,48 @@ describe('deriveFx', () => {
     expect(fx.wash).toBe(true);
   });
 
+  it('takes a losing bet off the felt and leaves a winner and a push alone', () => {
+    // King high against a pair of sevens: the Ante and the Play go to the
+    // dealer, Pair Plus never had a pair, and the six cards make only that
+    // same pair — so every spot at this seat is cleared. (Not A-K-Q, which
+    // looks like a losing high-card hand and is in fact the highest straight
+    // in the game.)
+    const beaten = round(['PLAY'], ['Ks 9h 5d', '7s 7h 4c']);
+    const cleared = deriveFx(beaten.table, beaten.settlements, g);
+    expect(cleared.flashes.length).toBeGreaterThan(0);
+    for (const f of cleared.flashes) {
+      expect(f.win).toBe(false);
+      expect(f.sweep).not.toBeNull();
+    }
+
+    // A straight wins the Ante and its bonus, and Pair Plus: those chips stay.
+    const winner = round(['PLAY'], ['9s 8h 7d', 'Qs 6h 4d']);
+    const kept = deriveFx(winner.table, winner.settlements, g);
+    for (const f of kept.flashes.filter((x) => x.win)) expect(f.sweep).toBeNull();
+
+    // A pushed Play is not a loss, so there is nothing to take and no flash at
+    // all — the chips sit there and the figure beside them says "even".
+    const noQualify = round(['PLAY'], ['Ks 9h 5d', 'Js 6h 4d']);
+    const pushed = deriveFx(noQualify.table, noQualify.settlements, g);
+    expect(pushed.flashes.some((f) => f.spot === 'PLAY')).toBe(false);
+    expect(sweepAt(pushed, 0, 'PLAY')).toBeNull();
+  });
+
+  it('sweeps the chips on the same beat the raked chip leaves', () => {
+    // The chips going and the chip appearing in the air above them are one
+    // gesture. If these two numbers ever differ, the felt shows a chip
+    // vanishing and then, separately, a chip arriving.
+    const { table, settlements } = round(['PLAY'], ['Ks 9h 5d', '7s 7h 4c']);
+    const fx = deriveFx(table, settlements, g);
+    expect(fx.flashes.some((x) => !x.win)).toBe(true);
+    for (const f of fx.flashes.filter((x) => !x.win)) {
+      const flight = fx.flights.find((x) => x.key === f.key);
+      expect(flight).toBeDefined();
+      expect(flight!.delay).toBe(f.sweep);
+      expect(f.sweep).toBe(seatSweepDelay(f.seat));
+    }
+  });
+
   it('staggers three seats so the table settles one at a time', () => {
     const { table, settlements } = round(
       ['PLAY', 'PLAY', 'PLAY'],
@@ -205,7 +248,7 @@ describe('deriveFx', () => {
     for (const seat of [0, 1, 2]) {
       const own = fx.flashes.filter((f) => f.seat === seat);
       expect(own.length).toBeGreaterThan(0);
-      for (const f of own) expect(f.delay).toBe(seat * 110);
+      for (const f of own) expect(f.delay).toBe(seatSettleDelay(seat));
     }
   });
 

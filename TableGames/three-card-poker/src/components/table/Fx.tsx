@@ -3,9 +3,11 @@
 /**
  * Table juice: the layers that fire when a round settles.
  *
- * Everything here is read-only decoration. Nothing in this file touches the
- * store or the engine — it is handed a table and the round's settlements and
- * draws what just happened.
+ * Everything here is read-only decoration: it is handed a table and the round's
+ * settlements and draws what just happened, and it decides nothing about the
+ * game. The one thing it reads from outside is the store's settlement clock,
+ * for the reason given at `seatSweepDelay` — the dealer taking a losing bet is
+ * three things at once, and only two of them are drawn here.
  *
  * It comes in two halves, and the split is physical rather than technical.
  * `FxUnder` is drawn inside the felt's own SVG, so it is *on the cloth*: the
@@ -42,6 +44,7 @@ import {
 } from './layout';
 import { fmt } from '@/lib/engine/money';
 import { evaluate3, qualifies } from '@/lib/engine/poker';
+import { seatSettleDelay, seatSweepDelay } from '@/lib/store/useGame';
 import type { Settlement, SettlementKind, SixCardCategory, TableState } from '@/lib/engine/types';
 
 /* ------------------------------------------------------------------ *
@@ -54,6 +57,16 @@ export interface SpotFlash {
   spot: SpotName;
   win: boolean;
   delay: number;
+  /**
+   * When the dealer sweeps this spot's chips away, or null if nothing is taken
+   * from it.
+   *
+   * A losing bet does not sit on the felt while the next one is placed — the
+   * dealer takes it, and until now this table left it there until the round
+   * cleared. Set only on a loss: a winner keeps their chips and a push is not
+   * touched.
+   */
+  sweep: number | null;
 }
 
 export interface Flight {
@@ -106,9 +119,6 @@ const SPOT_OF: Record<SettlementKind, SpotName> = {
 
 /** Beyond this many chips in the air at once it reads as confetti, not money. */
 const MAX_FLIGHTS = 10;
-
-/** One seat after another, so three seats settling do not read as one event. */
-const SEAT_STEP = 110;
 
 /**
  * How long after the dealer's hand is turned the qualifier line answers.
@@ -171,18 +181,19 @@ export function deriveFx(table: TableState, settlements: readonly Settlement[], 
     // A push is neither, and lighting the box for one would say a bet resolved
     // when nothing moved. The figure on the spot already says "even".
     if (m.net === 0) continue;
-    const delay = m.seat * SEAT_STEP;
-    flashes.push({ key, seat: m.seat, spot: m.spot, win: m.net > 0, delay });
+    const delay = seatSettleDelay(m.seat);
+    const win = m.net > 0;
+    flashes.push({ key, seat: m.seat, spot: m.spot, win, delay, sweep: win ? null : seatSweepDelay(m.seat) });
     if (flights.length < MAX_FLIGHTS) {
       flights.push({
         key,
         from: spotCentre(g, m.seat, m.spot),
         // Winnings go out to the seat's own plate, where the bankroll is
         // printed; losses are raked in to the dealer's tray.
-        to: m.net > 0 ? payPoint(g, m.seat) : g.bank,
+        to: win ? payPoint(g, m.seat) : g.bank,
         cents: Math.abs(m.net),
-        win: m.net > 0,
-        delay: delay + 90,
+        win,
+        delay: seatSweepDelay(m.seat),
       });
     }
   }
@@ -195,7 +206,7 @@ export function deriveFx(table: TableState, settlements: readonly Settlement[], 
     if (!r) continue;
     const cardH = g.seatCard / 0.6944;
     const at = { x: g.seats[i].x, y: g.seats[i].y + g.handBottom - cardH * 0.5 };
-    const delay = i * SEAT_STEP + 120;
+    const delay = seatSettleDelay(i) + 120;
 
     // A hand the player gave up does not get a fanfare. The six card bonus is
     // the exception the rule sheet makes: it is settled whether the seat
@@ -219,6 +230,17 @@ export function deriveFx(table: TableState, settlements: readonly Settlement[], 
   }
 
   return { round: table.round, flashes, flights, bursts, wash, qualifier };
+}
+
+/**
+ * When the dealer takes the chips off a spot, or null if they stay.
+ *
+ * The felt asks this rather than reading the settlements again, so there is one
+ * answer to "did this bet lose" and one clock for when the dealer gets there.
+ */
+export function sweepAt(fx: TableFx, seat: number, spot: SpotName): number | null {
+  for (const f of fx.flashes) if (f.seat === seat && f.spot === spot) return f.sweep;
+  return null;
 }
 
 /* ------------------------------------------------------------------ *

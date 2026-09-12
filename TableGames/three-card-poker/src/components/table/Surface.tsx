@@ -26,7 +26,7 @@ import { cn } from '@/components/ui/primitives';
 import { HandFan } from './Card';
 import { ChipStack } from './Chip';
 import { Felt } from './Felt';
-import { deriveFx, FxOverlay } from './Fx';
+import { deriveFx, FxOverlay, sweepAt, type TableFx } from './Fx';
 import { geometryFor, spotCentre, type FeltGeometry, type SpotName } from './layout';
 import { Shuffler } from './Shuffler';
 import { fmt, fmtSigned } from '@/lib/engine/money';
@@ -150,6 +150,7 @@ export function Surface({
               dealing={dealing}
               table={table}
               g={g}
+              fx={fx}
               settlements={settlements}
               onSit={() => onSeatClick?.(i)}
               onSpot={(spot) => onSpotClick?.(i, spot)}
@@ -254,6 +255,7 @@ function SeatArea({
   dealing,
   table,
   g,
+  fx,
   settlements,
   onSit,
   onSpot,
@@ -266,6 +268,7 @@ function SeatArea({
   dealing: boolean;
   table: TableState;
   g: FeltGeometry;
+  fx: TableFx;
   settlements: readonly Settlement[];
   onSit: () => void;
   onSpot: (spot: SpotKind) => void;
@@ -377,6 +380,10 @@ function SeatArea({
         if (!booked(spot)) return null;
         const centre = spotCentre(g, index, spot);
         const amount = amountOn(spot);
+        // Null unless this bet lost: then it is when the dealer reaches it.
+        const sweep = sweepAt(fx, index, spot);
+        // Chips that are still being put down, as opposed to already riding.
+        const landing = betting || spot === 'PLAY';
         const floats = settlements.filter((s) => s.seat === seat.id && FLOATS[spot].includes(s.kind));
         const clickable = betting && spot !== 'PLAY';
         const size = spot === 'SIX_CARD' ? g.spotSize * 0.78 : g.spotSize;
@@ -400,7 +407,29 @@ function SeatArea({
               />
             ) : null}
             {amount > 0 ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              /*
+               * The chips on the spot.
+               *
+               * Keyed on the amount while chips are still arriving, so adding
+               * one remounts the stack and replays its drop: a chip that simply
+               * appears was the one thing on this felt that never looked like
+               * money being put down. The Play box counts as arriving too —
+               * that bet is made after the deal, and it is the only chip a
+               * player puts out having seen their hand.
+               *
+               * Once a bet is riding the key goes fixed, because a stack that
+               * is already on the felt must not twitch every time something
+               * else on the table changes.
+               */
+              <div
+                key={landing ? amount : 'riding'}
+                className={cn(
+                  'pointer-events-none absolute inset-0 flex items-center justify-center',
+                  landing && sweep === null && 'chip-drop',
+                  sweep !== null && 'chip-swept',
+                )}
+                style={sweep !== null ? ({ '--sweep-delay': `${sweep}ms` } as React.CSSProperties) : undefined}
+              >
                 <ChipStack cents={amount} size={spot === 'SIX_CARD' ? g.chip * 0.82 : g.chip} />
               </div>
             ) : null}

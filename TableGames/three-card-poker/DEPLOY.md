@@ -160,8 +160,8 @@ accident. Each is commented in place, but in short:
 
 The image also pre-gzips its output at build time and serves that with
 `gzip_static`, so nginx never recompresses the same bundle on every request.
-Measured inside the built image: the 18 pre-compressed files are **842 KB, and
-249 KB gzipped**. The card deck is deliberately not in that figure — a PNG is
+Measured inside the built image: the 18 pre-compressed files are **843 KB, and
+250 KB gzipped**. The card deck is deliberately not in that figure — a PNG is
 already compressed, so `gzip_types` omits `image/png` and the 54 cards are
 served as-is.
 

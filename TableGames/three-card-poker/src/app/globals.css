@@ -309,6 +309,63 @@ body {
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 4px rgba(240, 212, 132, 0.45));
 }
 
+/*
+ * A chip being put down.
+ *
+ * Dropped from a little above the spot and landing slightly hard, because that
+ * is what a chip does. Short — a bet is placed in a moment, and a chip that
+ * floats down reads as a balloon.
+ */
+@keyframes chip-drop {
+  0% {
+    transform: translateY(-14px) scale(1.12);
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(1px) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.chip-drop {
+  animation: chip-drop 190ms cubic-bezier(0.35, 0.9, 0.4, 1) backwards;
+}
+
+/*
+ * A losing bet being taken.
+ *
+ * The dealer clears the losers before anybody bets again, and this felt used to
+ * leave them sitting on their spots until the round cleared — so a hand you had
+ * just lost still looked like money you had. It goes at the same moment the
+ * raked chip appears in the air above it, which is what makes the two read as
+ * one chip rather than as a disappearance and an arrival.
+ *
+ * `forwards` and not `both`: before the delay elapses the chips are simply
+ * themselves, which is the whole point — they sit there until the dealer
+ * reaches them.
+ */
+@keyframes chip-swept {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.82);
+  }
+}
+
+.chip-swept {
+  animation: chip-swept 150ms ease-in forwards;
+  animation-delay: var(--sweep-delay, 0ms);
+}
+
 /* ------------------------------------------------------------------ *
  * Motion
  * ------------------------------------------------------------------ */
@@ -762,9 +819,19 @@ body {
   .sweep-in,
   .hand-folded,
   .machine-busy,
-  .lamp-sway {
+  .lamp-sway,
+  .chip-drop {
     animation: none !important;
     transition: none !important;
+  }
+
+  /*
+   * Not switched off, and not removed either: a bet being taken off the felt
+   * is the table telling you that you lost it, so the chips still have to go.
+   * Only the travel does.
+   */
+  .chip-swept {
+    animation-duration: 1ms !important;
   }
 
   /*

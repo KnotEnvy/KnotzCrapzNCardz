@@ -199,6 +199,14 @@ felt, goes away entirely; and light that carries information — which bets
 resolved, whether the dealer played — is kept, because it is opacity alone and
 moves nothing across the screen.
 
+Chips arrive and they leave. A chip you place drops in from above its spot, and
+a bet that loses is taken off the felt as the dealer reaches that seat — with
+the raked chip appearing in the air on the same frame, so the two read as one
+object. A winner keeps their chips with the payoff beside them, and a push is
+not touched, which is why the sweep is driven off the sign of each settlement
+rather than off the round's outcome: a round where the dealer fails to qualify
+wins the Ante and pushes the Play at the same seat.
+
 The one effect here that no other table in the arcade has is the simplest: the
 qualifier line answers its own question. The single fact that decides every Ante
 and every Play is whether the dealer reached queen high, the felt already has

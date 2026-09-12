@@ -3,7 +3,7 @@
   "path": "TableGames/three-card-poker",
   "oneLine": "A full Three Card Poker table for up to three seats sharing one screen: Ante and Play, Pair Plus, the Ante Bonus and the 6 Card Bonus, dealt by the procedure on a regulator's rule sheet, on seventeen real paytables — every one of them priced exactly rather than cited, and a trainer that tells you in money what the fold you just made cost.",
   "handoffDate": "2026-09-12",
-  "status": "Feature complete and verified. Everything is green: 113 unit tests, 11 statistical tests (a million dealt rounds plus all 20,358,520 six-card sets), typecheck, lint with zero errors and zero warnings, a production build, and a container that builds, runs healthy and serves the game with no console errors. Built in one session on the architecture the blackjack table next door established, deliberately reusing its store, modal, keyboard guard and audio mixer so that eight rounds of review there are not re-learned here. A second session (2026-09-12) rebuilt the table's visual layer against the craps table as the bar, and folded this container into the arcade's compose stack.",
+  "status": "Feature complete and verified. Everything is green: 115 unit tests, 11 statistical tests (a million dealt rounds plus all 20,358,520 six-card sets), typecheck, lint with zero errors and zero warnings, a production build, and a container that builds, runs healthy and serves the game with no console errors. Built in one session on the architecture the blackjack table next door established, deliberately reusing its store, modal, keyboard guard and audio mixer so that eight rounds of review there are not re-learned here. A second session (2026-09-12) rebuilt the table's visual layer against the craps table as the bar, and folded this container into the arcade's compose stack.",
   "whatWasBuilt": {
     "summary": "Engine first, driven by tests and by an exact enumeration of the whole game. Three Card Poker is small enough to solve outright — 22,100 player hands against the 18,424 the rest of the deck can make — so no figure this game prints is estimated, and the statistical suite exists to prove the engine deals the game those figures describe rather than to produce the figures.",
     "engine": [
@@ -52,12 +52,15 @@
         "Chip.tsx — chips redrawn as SVG with moulding, inlay, edge spots and side walls. A stack seen from a seat is mostly the sides of the chips under the top one, which a CSS disc cannot show.",
         "The print gained a drop shadow so it sits in the nap, a hairline boundary inside the cloth's edge, and a lit top edge on each spot so the shapes are cut into the surface rather than drawn on it.",
         "The betting spots answer the pointer. They are transparent HTML over printed SVG and hovering one did nothing you could see — the felt was the only surface in the arcade that did not react to being pointed at.",
-        "Cards gained a varnish highlight and a shadow in the cloth's blue rather than in black."
+        "Cards gained a varnish highlight and a shadow in the cloth's blue rather than in black.",
+        "Chips arrive and leave. A losing bet is taken off the felt as the dealer reaches it rather than sitting on its spot until the round clears, and a chip being placed drops in from above instead of appearing. Both were the last things at this table that did not look like money changing hands, and the first was reported from play-testing.",
+        "`sndSweep` -- “the dealer's hand sweeping lost chips off the layout” -- had been written in the mixer and never called by anything. Now that the chips actually go it has something to sound for: one sweep per losing seat rather than one per losing bet, because a dealer clears a seat in a single movement of the hand and four of these inside a frame is a hiss."
       ],
-      "cost": "None measurable. Every effect is a CSS keyframe rather than an animation runtime, and the 18 pre-compressed files went from 864 KB / 272 KB gzipped to 842 KB / 249 KB.",
+      "cost": "None measurable. Every effect is a CSS keyframe rather than an animation runtime, and the 18 pre-compressed files went from 864 KB / 272 KB gzipped to 843 KB / 250 KB.",
       "alsoFixedHere": [
         "A soft shadow was drawn on the cloth under the dealer's hand whether or not the dealer was holding one, which read as a stain."
-      ]
+      ],
+      "sweepClock": "The chips leaving the spot, the raked chip appearing in the air above them, and the mixer's sweep are one gesture, so they share one number. `seatSweepDelay` lives in the store with the rest of the round's pacing, and the felt and the mixer both ask it. Unlike the deal and the reveal it is deliberately not scaled by the dealing speed: at fast the whole settlement lasts under a second, and a stagger scaled down with it would put all three seats on the same frame, which is the one thing the stagger exists to prevent."
     },
     "composeConsolidation": {
       "why": "This game's container was running in a compose project of its own rather than in the arcade's, because it had been started from its own folder. The root file also repeated all four service definitions, so every port and hardening flag lived in two places.",
@@ -80,7 +83,7 @@
   "commands": {
     "dev": "pnpm run dev",
     "build": "pnpm run build",
-    "test": "pnpm test — 103 tests, about six seconds. Run this constantly.",
+    "test": "pnpm test — 115 tests, about six seconds. Run this constantly.",
     "testStats": "pnpm run test:stats — 11 tests, about two and a half minutes: a million rounds through the real engine, and every six-card set enumerated.",
     "typecheck": "pnpm run typecheck — run `pnpm run build` once first on a fresh clone; LayoutProps is generated into .next/types.",
     "lint": "pnpm run lint — zero errors and zero warnings; keep it that way.",
@@ -114,7 +117,8 @@
     "No animation library. Every effect on the felt is a CSS keyframe driven by custom properties. Adding a runtime to move a few chips across a table would have been the single largest thing in the bundle; as it is the whole effects layer arrived and the bundle got smaller.",
     "prefers-reduced-motion splits three ways rather than switching everything off. Motion that decorates something already on screen stops where it is; motion that *is* the effect — a chip crossing the felt, a burst going off — is removed entirely, because it is pure travel and the settlement figures already say the same thing in place; and light that carries information, like which bets resolved and whether the dealer played, is kept, because it is opacity alone and moves nothing across the screen.",
     "A win and a loss are opposite gestures, not one flash in two colours. A win blooms wide, holds while the payoff is counted and eases away; a loss is one hard frame that then drains. You can tell which happened from the corner of your eye without reading the colour, which is also what keeps them legible to a player who cannot tell red from green.",
-    "The wash and the burst are rationed by hand rank, not by whether money was won. A burst fires on the hands that pay an Ante Bonus (a straight or better, about 3.7% a seat) and the wash only on trips or better. A cold wash for the dealer failing to qualify was written and then cut: it happens on 30% of rounds, and a table that flashes a third of the time is a table nobody looks at."
+    "The wash and the burst are rationed by hand rank, not by whether money was won. A burst fires on the hands that pay an Ante Bonus (a straight or better, about 3.7% a seat) and the wash only on trips or better. A cold wash for the dealer failing to qualify was written and then cut: it happens on 30% of rounds, and a table that flashes a third of the time is a table nobody looks at.",
+    "A losing bet is taken and a winning one is left. The dealer sweeps the losers as they reach each seat; a winner keeps their chips with the payoff beside them, and a push is not touched at all. That last distinction is why the sweep is driven off the settlement's sign rather than off the round's outcome: a no-qualify round pushes the Play and wins the Ante at the same seat."
   ],
   "gotchas": [
     "`deal` takes an Rng because the shuffle happens there. It is the only action that does. `dealFrom` is the same thing from a deck already in order, which is how every settlement branch is pinned by a test.",
@@ -134,12 +138,14 @@
     "A CSS `transform` on an SVG element needs `transform-box: view-box` before a `px` translate means user units; without it the translate is measured against the element's own bounding box. That is what the lamp's sway sets.",
     "Where an effect is two elements animating together — the chip toss is, because an arc is two easings and one element cannot hold two timing functions on one transform — the delay is passed as a custom property rather than as `animation-delay`, so both halves start on the same frame. Custom properties inherit; an inline `animationDelay` does not.",
     "The independent `scale` and `translate` CSS properties, not `transform`, are what let a burst's rings be centred with `translate(-50%,-50%)` and animated at the same time. Animating `transform` would replace the centring.",
-    "Instrumenting the felt from the console: pausing everything `document.getAnimations()` returns also freezes the cards at the start of their deal-in, where they are at opacity 0, and calling `play()` on all of them restarts finished deal animations. Filter to `animationName.startsWith('fx-')`. Every effect layer carries a `data-fx` attribute for exactly this reason — so 'the win flash fired' can be asserted rather than inferred from a screenshot taken at the right millisecond."
+    "Instrumenting the felt from the console: pausing everything `document.getAnimations()` returns also freezes the cards at the start of their deal-in, where they are at opacity 0, and calling `play()` on all of them restarts finished deal animations. Filter to `animationName.startsWith('fx-')`. Every effect layer carries a `data-fx` attribute for exactly this reason — so 'the win flash fired' can be asserted rather than inferred from a screenshot taken at the right millisecond.",
+    "Animations do not advance while the Browser pane is hidden -- `playState` still reads “running” and `currentTime` stays at 0 -- so an effect probed from the console looks broken when it is fine. Assert the end state with `animation.finish()` instead of sleeping, or take a screenshot, which forces the page to render."
   ],
   "verification": {
     "automated": [
-      "113 unit tests: hand ranking including the wheel and the mini royal, the qualifier, the strategy line, the best five of six against an independently written naive evaluator (20,000 random sets plus every straight flush, royal and four of a kind), every paytable's resolution and fallback, betting limits and the Play reserve, the deal's order and completeness, turn order with a Pair Plus-only seat, every settlement branch, conservation of money across a thousand rounds of every bet at three seats, the between-rounds paths, the advisor, and the store's seam.",
+      "115 unit tests: hand ranking including the wheel and the mini royal, the qualifier, the strategy line, the best five of six against an independently written naive evaluator (20,000 random sets plus every straight flush, royal and four of a kind), every paytable's resolution and fallback, betting limits and the Play reserve, the deal's order and completeness, turn order with a Pair Plus-only seat, every settlement branch, conservation of money across a thousand rounds of every bet at three seats, the between-rounds paths, the advisor, and the store's seam.",
       "Fx.test.ts covers the one part of the effects layer with a decision in it, and every decision it pins is a rule about the game rather than about animation: that the Ante and its bonus collapse onto the one diamond they share, that a push lights nothing, that winnings end at the seat's plate and losses at the dealer's tray, that a folded hand gets no fanfare but a six card bonus behind a fold still does, and that the qualifier is read off the dealer only once the hand is turned. Every fixture is played through the real engine from a stacked deck, so the settlements are the ones the game produces rather than ones written to match the assertion.",
+      "Fx.test.ts also pins the sweep: every spot at a beaten seat is cleared, a winner's and a push's are not, and the moment the chips go is the same moment the raked chip leaves -- if those two ever differ the felt shows a chip vanishing and then, separately, a chip arriving. 12 tests in that file, 115 in the suite.",
       "analysis.test.ts re-derives every constant in analysis.ts from nothing on each run: the three-card counts, and the four strategies' totals summed over all 407,170,400 pairings.",
       "The computed edges are held against the figures the Wizard of Odds publishes for the same tables — four Ante Bonus, six Pair Plus and four 6 Card Bonus tables — to half a hundredth of a percent. They agreed on every table the first time it ran.",
       "analysis.sim.test.ts enumerates all 20,358,520 six-card sets and asserts the counts the 6 Card Bonus figures are built on.",
@@ -153,7 +159,8 @@
       "Portrait at 390x844 shows the rotate hint rather than a squeezed table.",
       "The container was built, run, and checked: /healthz 200, HTML no-cache, the manifest served as application/manifest+json, card art immutable for a year, a real 404 on a miss.",
       "2026-09-12, the visual pass: three seats sat and bet, rounds dealt and settled in a browser at 1280x800 and at 844x390. The effects were confirmed by their data-fx hooks rather than by eye alone — flashes, flights, qualifier-YES and qualifier-NO all observed firing, and a jackpot burst caught on a live three-of-a-kind. The craps table was opened beside it at localhost:8080 for the comparison the whole pass was aimed at.",
-      "2026-09-12, the compose stack: `docker compose config` checked from the root and from a game folder, all four containers brought up from the root and reporting healthy, and the five endpoint checks re-run against the rebuilt image."
+      "2026-09-12, the compose stack: `docker compose config` checked from the root and from a game folder, all four containers brought up from the root and reporting healthy, and the five endpoint checks re-run against the rebuilt image.",
+      "2026-09-12, the rake: driven in a browser with three seats under autoplay. A settled round was frozen deterministically -- the sweeps finished, the flashes held mid-bloom -- and screenshotted: the beaten seat's four spots are bare while the two winning seats still have their chips. The placed-chip drop was checked the same way: the stack that changed gets exactly one animation, starting at opacity 0 and scale 1.12 fourteen units above the spot and ending landed, and its unchanged neighbours get none."
     ],
     "notVerified": [
       "Sound has not been listened to. Every voice is synthesised and the levels were chosen by analogy with the blackjack mixer rather than measured.",
@@ -168,14 +175,46 @@
     "lastRun": {
       "when": "2026-09-11",
       "note": "What pnpm run test:stats printed, against the exact figures. Kept so a future change is compared against real numbers rather than against the tolerances that admit them.",
-      "antePlayPerAnte": [3.077, 3.373, 0.492],
-      "antePlayPerAction": [1.838, 2.015, 0.294],
-      "pairPlus": [6.788, 7.276, 0.862],
-      "sixCardBonus": [9.399, 8.561, 1.583],
-      "handsPlayed": [67.4366, 67.4208, 0.1875],
-      "dealerQualifies": [69.5649, 69.5928, 0.184],
-      "mimicTheDealer": [3.72, 3.449, 0.904],
-      "neverFold": [7.564, 7.654, 1.007],
+      "antePlayPerAnte": [
+        3.077,
+        3.373,
+        0.492
+      ],
+      "antePlayPerAction": [
+        1.838,
+        2.015,
+        0.294
+      ],
+      "pairPlus": [
+        6.788,
+        7.276,
+        0.862
+      ],
+      "sixCardBonus": [
+        9.399,
+        8.561,
+        1.583
+      ],
+      "handsPlayed": [
+        67.4366,
+        67.4208,
+        0.1875
+      ],
+      "dealerQualifies": [
+        69.5649,
+        69.5928,
+        0.184
+      ],
+      "mimicTheDealer": [
+        3.72,
+        3.449,
+        0.904
+      ],
+      "neverFold": [
+        7.564,
+        7.654,
+        1.007
+      ],
       "format": "[measured %, exact %, band] — 3 sigma for the edges, 4 sigma for the frequencies. The frequencies are the tight part: a million deals place a straight at 3.2745% against an exact 3.2579%, and six-card flushes at 1.0136% against 1.0108%. The edges are loose because Pair Plus pays 40 to 1 and the 6 Card Bonus 1,000, and those tails are what a million rounds can and cannot resolve.",
       "exactFigures": {
         "antePlay5-4-1": "3.373% per Ante, 2.015% per unit of action, playing 67.42% of hands",
@@ -238,7 +277,7 @@
     "model": "Static. next build runs with output: 'export' and writes out/. No Node runs in production.",
     "image": "Two-stage Dockerfile: node:24-alpine builds, nginx:1.29-alpine serves. Runs read_only with tmpfs for nginx's scratch directories, under no-new-privileges.",
     "run": "docker compose up -d --build  →  http://localhost:8083",
-    "measured": "Image 62.7 MB. Served folder 3.7 MB: 2.0 MB of card art and 1.7 MB of game. The 18 pre-compressed files are 842 KB raw and 249 KB gzipped — down from 864 KB and 272 KB before the visual pass, measured the same way.",
+    "measured": "Image 62.7 MB. Served folder 3.7 MB: 2.0 MB of card art and 1.7 MB of game. The 18 pre-compressed files are 843 KB raw and 250 KB gzipped — down from 864 KB and 272 KB before the visual pass, measured the same way.",
     "buildNeedsNetwork": "next/font/google fetches Inter and Oswald during the build and self-hosts them into out/.",
     "docs": "DEPLOY.md — the container, LAN play on a phone, and the options for public hosting."
   },

@@ -34,6 +34,7 @@ import {
   sndMachine,
   sndPushResult,
   sndShuffle,
+  sndSweep,
   sndWin,
   sndWrong,
 } from '@/lib/audio';
@@ -59,7 +60,7 @@ import {
   type ActionResult,
 } from '@/lib/engine/table';
 import type { Decision, SeatId, Settlement, SpotKind, TableRules, TableState, Wagers } from '@/lib/engine/types';
-import { SPOT_KEY } from '@/lib/engine/types';
+import { SEAT_IDS, SPOT_KEY } from '@/lib/engine/types';
 import { choose, DEFAULT_BOT, type BotConfig } from '@/lib/strategy/autoplay';
 import { adviseSeat, grade, type Advice } from '@/lib/strategy/strategy';
 
@@ -83,6 +84,10 @@ const TIMING = {
   afterReveal: 420,
   settleHold: 2800,
   botThink: 650,
+  /** Between one seat being settled and the next, so three seats are three events. */
+  settleStep: 110,
+  /** Between a spot lighting up and the dealer's hand reaching its chips. */
+  sweepLead: 90,
 } as const;
 
 export type Speed = 'RELAXED' | 'NORMAL' | 'FAST';
@@ -101,6 +106,30 @@ export function seatDealDelay(order: number, speed: Speed): number {
 /** When the dealer reaches a seat's hand at the showdown, counted from the reveal. */
 export function seatRevealDelay(order: number, speed: Speed): number {
   return (TIMING.revealDealer + order * TIMING.revealSeat) * SPEED_SCALE[speed];
+}
+
+/**
+ * When the dealer settles a seat, counted from the moment the round is paid.
+ *
+ * Deliberately *not* scaled by the dealing speed, unlike the two above. These
+ * stagger three seats apart from each other rather than pacing the round: at
+ * fast the whole settlement lasts under a second, and a stagger scaled down
+ * with it would put all three seats on the same frame, which is the one thing
+ * the stagger exists to prevent.
+ */
+export function seatSettleDelay(index: number): number {
+  return index * TIMING.settleStep;
+}
+
+/**
+ * When the dealer's hand takes that seat's losing chips.
+ *
+ * The felt sweeps the chips off the spot on this beat, the raked chip appears
+ * in the air on it, and the mixer plays the sweep on it. One number, so the
+ * three cannot drift into three separate events.
+ */
+export function seatSweepDelay(index: number): number {
+  return seatSettleDelay(index) + TIMING.sweepLead;
 }
 
 /* ------------------------------------------------------------------ *
@@ -686,6 +715,19 @@ function scoreSounds(
   else if (won) sound(sndWin, 0.1);
   else if (pushed) sound(sndPushResult, 0.1);
   else sound(sndLose, 0.1);
+
+  /*
+   * The dealer clearing the losers, one seat after another.
+   *
+   * One sweep per seat rather than one per losing bet: a dealer takes a seat's
+   * losers in a single movement of the hand, and four of these firing inside a
+   * frame is a hiss rather than a sweep. Timed off the same helper the felt
+   * uses to take the chips away, so the sound and the sight are one event.
+   */
+  const lost = new Set(settlements.filter((s) => s.net < 0).map((s) => s.seat));
+  SEAT_IDS.forEach((id, i) => {
+    if (lost.has(id)) sound(sndSweep, seatSweepDelay(i) / 1000);
+  });
 }
 
 /* ------------------------------------------------------------------ *
