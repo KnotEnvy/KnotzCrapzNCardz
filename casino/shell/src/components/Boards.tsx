@@ -104,6 +104,15 @@ export function Leaderboard({ games }: { games: GameManifest[] }): React.JSX.Ele
   const [tab, setTab] = React.useState<'bankrolls' | 'sessions'>('bankrolls');
   const me = useFloor((s) => s.player?.handle);
 
+  /*
+   * `me` is a dependency, and not just so the "you" marker appears.
+   *
+   * The board's first load races the guest sign-up: the lobby renders before
+   * there is a player, so the very first request ranks a floor with nobody on
+   * it and answers "nobody has bought in yet" — to a player who is looking at
+   * five thousand dollars. Re-running when the handle arrives fixes the one
+   * case that is guaranteed to happen: a brand new visitor's first screen.
+   */
   React.useEffect(() => {
     let alive = true;
     const load = () => {
@@ -128,7 +137,7 @@ export function Leaderboard({ games }: { games: GameManifest[] }): React.JSX.Ele
       alive = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [me]);
 
   const bySlug = new Map(games.map((g) => [g.slug, g]));
 

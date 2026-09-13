@@ -2,27 +2,67 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "casino shell",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "casino/shell",
+        "run",
+        "dev"
+      ],
+      "port": 3010
+    },
+    {
       "name": "craps",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "TableGames/craps", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "TableGames/craps",
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "dragons-shrine",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "SlotsGames/DragonsShrine", "run", "dev", "--", "--port", "3001"],
+      "runtimeArgs": [
+        "--prefix",
+        "SlotsGames/DragonsShrine",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3001"
+      ],
       "port": 3001
     },
     {
       "name": "blackjack",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "TableGames/blackjack", "run", "dev", "--", "--port", "3002"],
+      "runtimeArgs": [
+        "--prefix",
+        "TableGames/blackjack",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3002"
+      ],
       "port": 3002
     },
     {
       "name": "three-card-poker",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "TableGames/three-card-poker", "run", "dev", "--", "--port", "3003"],
+      "runtimeArgs": [
+        "--prefix",
+        "TableGames/three-card-poker",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3003"
+      ],
       "port": 3003
     }
   ]

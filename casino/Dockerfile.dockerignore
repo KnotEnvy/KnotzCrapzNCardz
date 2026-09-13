@@ -1,0 +1,25 @@
+# Named `Dockerfile.dockerignore`, not `.dockerignore`, and that matters.
+#
+# This image's build context is the *repository root* — it builds five apps in
+# five folders — but the Dockerfile lives here. Docker looks for a plain
+# `.dockerignore` next to the context root, so one in this folder is silently
+# ignored, and BuildKit then ships the whole working tree: node_modules five
+# times over, every Next cache, the Rust target directory and the git history.
+# Measured at 5.4 GB and about a minute before the first instruction ran.
+#
+# `<dockerfile>.dockerignore` beside the Dockerfile is the mechanism for exactly
+# this case, and BuildKit prefers it over the context root's own.
+#
+# Everything below is either rebuilt inside the image or enormous.
+
+**/node_modules
+**/.next
+**/out
+**/target
+casino/dist
+**/.git
+**/.claude
+**/*.log
+**/.env*
+**/*.pem
+**/*.key

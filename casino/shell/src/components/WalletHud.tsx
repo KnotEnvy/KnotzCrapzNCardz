@@ -32,33 +32,36 @@ export function WalletHud({ compact }: { compact?: boolean }): React.JSX.Element
   return (
     <div className="flex items-center gap-3">
       <div className="text-right">
-        <div className="flex items-baseline justify-end gap-1.5">
-          <Counter
-            value={total}
-            format={compact ? moneyShort : money}
-            className={
-              compact
-                ? 'text-lg font-bold text-neon-gold'
-                : 'text-2xl font-bold text-neon-gold floor:text-3xl'
-            }
-          />
+        <Counter
+          value={total}
+          format={compact ? moneyShort : money}
+          className={
+            compact
+              ? 'block text-lg font-bold text-neon-gold'
+              : 'block text-2xl font-bold text-neon-gold floor:text-3xl'
+          }
+        />
+
+        <div className="figure mt-0.5 flex items-center justify-end gap-2 text-[0.68rem] text-void-400">
           {/*
-           * A dot rather than a word. The socket being up is worth showing —
-           * it is why the figure above can be trusted while a game is running
-           * in a frame — but it is not worth a line of text on every screen.
+           * A dot rather than a word, and on this row rather than beside the
+           * figure: next to the total it reads as a decimal point, which on the
+           * one element that exists to state an amount precisely is the worst
+           * possible place to put a stray full stop.
+           *
+           * The socket being up is worth showing at all — it is why the figure
+           * above can be trusted while a game runs in a frame — but it is not
+           * worth a word on every screen.
            */}
           <span
             aria-hidden
             title={live ? 'Live' : 'Reconnecting'}
             className={
               live
-                ? 'mb-0.5 h-1.5 w-1.5 rounded-full bg-neon-lime shadow-[0_0_0.4rem_var(--color-neon-lime)]'
-                : 'mb-0.5 h-1.5 w-1.5 rounded-full bg-void-600'
+                ? 'h-1.5 w-1.5 rounded-full bg-neon-lime shadow-[0_0_0.4rem_var(--color-neon-lime)]'
+                : 'h-1.5 w-1.5 rounded-full bg-void-600'
             }
           />
-        </div>
-
-        <div className="figure mt-0.5 flex items-center justify-end gap-2 text-[0.68rem] text-void-400">
           <span title="Spendable">{money(balance)} free</span>
           {chips > 0 && (
             <>

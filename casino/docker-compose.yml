@@ -1,0 +1,71 @@
+# The casino, packaged.
+#
+#   docker compose up -d --build     build and run it
+#   docker compose logs -f           watch it
+#   docker compose down              stop it
+#
+# The floor then answers on http://localhost:8090 — the lobby at `/`, each game
+# under `/games/<slug>/`, and the API at `/api/v1`. On a phone on the same
+# network the same address installs to the home screen as an app.
+#
+# 8090 rather than 8080–8083: those are the four games' own containers, and the
+# casino is meant to be able to run beside them. The games standalone and the
+# games on the floor are the same code either way; `?casino=1` is the only
+# difference, and only the shell appends it.
+#
+# ---------------------------------------------------------------------------
+# Why one service and not five
+#
+# The four games each ship an nginx container of their own, and they still do:
+# a game is built and play-tested from its own folder long before the casino
+# exists. But the casino is one origin on purpose. The shell frames each game
+# and money crosses the boundary as postMessage, so splitting the shell off
+# onto its own host would turn every one of those messages cross-origin, put
+# CORS in front of the wallet, and hand each game frame a browser's
+# third-party storage rules to fight. One binary serving everything removes all
+# three problems and leaves one port to open.
+# ---------------------------------------------------------------------------
+
+# The same project name the four games use, so `docker compose ps` from the
+# repository root lists the casino and the standalone games together.
+name: knotzcrapzncardz
+
+services:
+  casino:
+    build:
+      # The repository root: this image builds the shell and all four games.
+      context: ..
+      dockerfile: casino/Dockerfile
+    image: knotz-casino:latest
+    container_name: knotz-casino
+    restart: unless-stopped
+    ports:
+      # A high port rather than 80: on Windows 80 is often already taken, and
+      # nothing here needs a privileged port. Change the left number freely.
+      - "8090:8090"
+    environment:
+      # What a new player finds in their wallet, and what the cage comps.
+      # Cents, always. See casino/server/src/config.rs for the rest.
+      KNOTZ_SIGNUP_STAKE: "500000"
+      KNOTZ_COMP: "250000"
+      KNOTZ_COMP_INTERVAL_SECS: "28800"
+    volumes:
+      # The books. The one thing in this container worth keeping, and the one
+      # thing it writes — which is what lets the root filesystem stay read-only.
+      - floor-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  floor-data:
+    # Named, so `docker compose down` keeps the wallets and `down -v` is the
+    # deliberate way to throw them away.

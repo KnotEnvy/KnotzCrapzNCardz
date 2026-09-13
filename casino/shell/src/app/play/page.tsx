@@ -506,6 +506,38 @@ function Table(): React.JSX.Element {
         )}
 
         {view === 'loading' && <Waiting label="Finding the table" />}
+
+        {/*
+         * The stage is empty while the cage is open, because the frame is not
+         * mounted until there is a session to seat it with — and an empty black
+         * rectangle behind a buy-in dialog reads as a page that failed to load.
+         * So the table announces itself instead: its mark, its name, and the
+         * figure it has measured, in its own colour. It is also the only place
+         * in the casino that quotes the return at the size it deserves.
+         */}
+        {view === 'cage' && game && (
+          <div className="absolute inset-0 grid place-items-center px-6">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(45rem 28rem at 50% 42%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%)',
+              }}
+            />
+            <div className="relative max-w-2xl text-center opacity-70">
+              <span className="mx-auto block w-24 text-[var(--accent)]">
+                <GameArt game={game} className="h-24 w-24" />
+              </span>
+              <h1 className="display mt-5 text-2xl text-void-100 sm:text-4xl">{game.title}</h1>
+              <p className="mt-2 text-sm text-void-300">{game.tagline}</p>
+              <p className="figure mt-6 text-xs tracking-wide text-neon-gold/80">
+                {game.edgeLabel}
+              </p>
+            </div>
+          </div>
+        )}
+
         {view === 'cage' && cageBusy && <Waiting label="Counting out the chips" />}
       </div>
 

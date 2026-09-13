@@ -5,9 +5,13 @@
 #   docker compose ps                what is up, and is it healthy
 #   docker compose down              stop them
 #
-# Craps answers on http://localhost:8080, Dragon's Shrine on
-# http://localhost:8081, Blackjack on http://localhost:8082 and Three Card
-# Poker on http://localhost:8083.
+# The casino answers on http://localhost:8090 — that is the one to open, and
+# every game is inside it.
+#
+# The four games also still answer on their own addresses, as standalone apps
+# with their own bankrolls: craps on http://localhost:8080, Dragon's Shrine on
+# http://localhost:8081, blackjack on http://localhost:8082 and three card
+# poker on http://localhost:8083. Same code, no casino behind it.
 #
 # ---------------------------------------------------------------------------
 # Why this file is nothing but a list
@@ -40,6 +44,11 @@
 name: knotzcrapzncardz
 
 include:
+  # The casino: one container serving the lobby, the API and every game.
+  - path: casino/docker-compose.yml
+  # The same four games, standalone, one nginx container each. Still here
+  # because a game is built and play-tested from its own folder long before
+  # the casino is involved, and because each one is deployable on its own.
   # Table games
   - path: TableGames/craps/docker-compose.yml
   - path: TableGames/blackjack/docker-compose.yml
