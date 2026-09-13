@@ -20,6 +20,7 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { persistKey } from '@/lib/casino/mode';
 import {
   initAudio,
   setAudioEnabled,
@@ -652,7 +653,14 @@ export const useGame = create<GameStore>()(
       };
     },
     {
-      name: 'knotz-three-card-poker',
+      /*
+       * Two save files: one for the table played on its own, one for the table
+       * played on the casino floor. `casino/mode.ts` explains why that question
+       * has to be answered synchronously, right here — the short version is that
+       * chips funded by the casino's wallet must not be written into the save a
+       * standalone visit reads back.
+       */
+      name: persistKey('knotz-three-card-poker'),
       storage: createJSONStorage(debouncedLocalStorage),
       /*
        * Bump this with any required field added to persisted state, and decide

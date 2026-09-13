@@ -35,16 +35,24 @@ const source = join(root, 'casino', 'protocol');
 /**
  * Who gets what.
  *
- * The games get the client and the types; they have no business being able to
- * seat themselves. The shell gets the host and the types; it has no business
- * pretending to be a game.
+ * A game gets the client and the types. It does not get the host, because a
+ * game has no business being able to seat itself.
+ *
+ * The shell gets the host, the types, *and* the client — which is the one
+ * asymmetry worth explaining. It is not for running: the shell never pretends
+ * to be a game at runtime. It is because the shell is the only app that holds
+ * both ends of the protocol, so it is the only place the protocol can be tested
+ * as a protocol rather than as two halves that have each been read carefully.
+ * `handshake.test.ts` there drives a real client against a real host through a
+ * pair of fake windows, and an untested wire format that moves money is worse
+ * than one asymmetric dependency in a build that tree-shakes it out anyway.
  */
 const targets = [
-  { app: 'casino/shell', files: ['protocol.ts', 'host.ts'] },
-  { app: 'TableGames/craps', files: ['protocol.ts', 'client.ts'] },
-  { app: 'TableGames/blackjack', files: ['protocol.ts', 'client.ts'] },
-  { app: 'TableGames/three-card-poker', files: ['protocol.ts', 'client.ts'] },
-  { app: 'SlotsGames/DragonsShrine', files: ['protocol.ts', 'client.ts'] },
+  { app: 'casino/shell', files: ['protocol.ts', 'host.ts', 'client.ts', 'mode.ts', 'mode.test.ts'] },
+  { app: 'TableGames/craps', files: ['protocol.ts', 'client.ts', 'mode.ts', 'mode.test.ts'] },
+  { app: 'TableGames/blackjack', files: ['protocol.ts', 'client.ts', 'mode.ts', 'mode.test.ts'] },
+  { app: 'TableGames/three-card-poker', files: ['protocol.ts', 'client.ts', 'mode.ts', 'mode.test.ts'] },
+  { app: 'SlotsGames/DragonsShrine', files: ['protocol.ts', 'client.ts', 'mode.ts', 'mode.test.ts'] },
 ];
 
 /** Where a vendored copy lands inside an app. */

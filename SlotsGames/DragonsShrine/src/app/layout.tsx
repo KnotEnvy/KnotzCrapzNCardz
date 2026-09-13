@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Cinzel, Inter, Orbitron } from 'next/font/google';
 import './globals.css';
+import { FloorLink } from '@/components/FloorLink';
 
 /**
  * Cinzel is a Roman inscriptional face -- the closest widely available thing
@@ -73,7 +74,12 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       lang="en"
       className={`${cinzel.variable} ${inter.variable} ${orbitron.variable} h-full antialiased`}
     >
-      <body className="h-full overflow-hidden">{children}</body>
+      <body className="h-full overflow-hidden">
+        {children}
+        {/* Draws nothing. On the casino floor this is what puts the house
+            wallet behind the cabinet; opened on its own, it is inert. */}
+        <FloorLink />
+      </body>
     </html>
   );
 }
