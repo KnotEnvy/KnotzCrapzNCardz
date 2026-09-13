@@ -166,7 +166,19 @@ export function createCasinoClient(options: CasinoClientOptions): CasinoClient {
     return inertClient();
   }
 
-  const parent = window.parent;
+  /*
+   * The window this client belongs to, captured now.
+   *
+   * `window` and `window.parent` are read once at construction rather than at
+   * every use, and the difference matters twice. It is what makes the client
+   * drivable in a test harness that swaps the global — which is how the
+   * protocol gets tested as a protocol rather than as two halves somebody read
+   * carefully. And it is what makes `dispose` remove its listeners from the
+   * window it added them to, rather than from whatever `window` happens to mean
+   * by the time the frame is being torn down.
+   */
+  const self = window;
+  const parent = self.parent;
   let table: SeatedTable | null = null;
   let seq = 0;
   let disposed = false;
@@ -261,7 +273,7 @@ export function createCasinoClient(options: CasinoClientOptions): CasinoClient {
     }
   };
 
-  window.addEventListener('message', onMessage);
+  self.addEventListener('message', onMessage);
 
   const announceReady = () =>
     send({
@@ -271,12 +283,24 @@ export function createCasinoClient(options: CasinoClientOptions): CasinoClient {
       capabilities: options.capabilities,
     });
 
-  announceReady();
+  /*
+   * The timers are armed *before* the first hello goes out, and the order is
+   * load-bearing.
+   *
+   * `postMessage` into a real browser window is always asynchronous, so a floor
+   * cannot answer inside the `announceReady()` call. But a host that delivers
+   * synchronously — a test harness, or a future transport that is not
+   * `postMessage` — would run `stopHandshake` before these variables had been
+   * assigned, clearing nothing, and the retry interval would then be armed with
+   * the handshake already complete: a game shouting `ready` at a floor that
+   * seated it, forever. Arming first makes the two orders equivalent.
+   */
   handshake = setInterval(announceReady, HANDSHAKE_RETRY_MS);
   deadline = setTimeout(() => {
     stopHandshake();
     if (table === null) options.onStandalone?.();
   }, options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS);
+  announceReady();
 
   /*
    * The tab is closing and there are chips on the table. One last position,
@@ -284,7 +308,7 @@ export function createCasinoClient(options: CasinoClientOptions): CasinoClient {
    * `beforeunload`: it fires on mobile Safari, where `beforeunload` does not.
    */
   const onPageHide = () => flush();
-  window.addEventListener('pagehide', onPageHide);
+  self.addEventListener('pagehide', onPageHide);
 
   return {
     get seated() {
@@ -337,8 +361,8 @@ export function createCasinoClient(options: CasinoClientOptions): CasinoClient {
       flush();
       disposed = true;
       stopHandshake();
-      window.removeEventListener('message', onMessage);
-      window.removeEventListener('pagehide', onPageHide);
+      self.removeEventListener('message', onMessage);
+      self.removeEventListener('pagehide', onPageHide);
     },
   };
 }

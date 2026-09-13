@@ -100,6 +100,13 @@ function fromFrame(event: MessageEvent, frame: HTMLIFrameElement | null): boolea
 }
 
 export function createHostLink(options: HostLinkOptions): HostLink {
+  /*
+   * The window this link belongs to, captured now rather than read at every
+   * use — same reason as the client: `dispose` has to remove its listener from
+   * the window it added it to, and capturing makes the link drivable by the
+   * protocol test that swaps the global.
+   */
+  const self = window;
   let disposed = false;
   /** Highest sequence applied. Anything at or below it is stale and dropped. */
   let applied = 0;
@@ -193,7 +200,7 @@ export function createHostLink(options: HostLinkOptions): HostLink {
     }
   };
 
-  window.addEventListener('message', onMessage);
+  self.addEventListener('message', onMessage);
 
   return {
     seat: (seating) => send({ type: 'hello', ...seating }),
@@ -204,7 +211,7 @@ export function createHostLink(options: HostLinkOptions): HostLink {
     resume: () => send({ type: 'resume' }),
     dispose: () => {
       disposed = true;
-      window.removeEventListener('message', onMessage);
+      self.removeEventListener('message', onMessage);
     },
   };
 }
