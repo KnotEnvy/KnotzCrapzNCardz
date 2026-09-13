@@ -1,0 +1,61 @@
+[package]
+name = "knotz-floor"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "The Knotz Casino floor: wallet, ledger, table sessions and the games that plug into them"
+publish = false
+
+[lib]
+name = "knotz_floor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "knotz-floor"
+path = "src/main.rs"
+
+[dependencies]
+# The web layer. Axum because it is tower-based, so compression, tracing,
+# static files and CORS are middleware rather than framework features, and
+# because its extractor model makes "this handler requires a logged-in player"
+# a type rather than a line of boilerplate repeated in thirty handlers.
+axum = { version = "0.8", features = ["ws", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip", "compression-br", "cors", "set-header", "normalize-path"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# SQLite by default: the floor's working set is one row per player and one per
+# open table, and a single file that needs no service to exist is the right
+# shape for that. The driver is the async one and the queries are all
+# runtime-checked strings, so switching the URL to Postgres is a feature flag
+# rather than a rewrite.
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio-rustls",
+  "sqlite",
+  "migrate",
+  "macros",
+] }
+
+argon2 = "0.5"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[profile.release]
+# The floor is a long-lived process whose hot path is a handful of small SQL
+# statements and a lot of JSON. LTO and a single codegen unit are worth the
+# build time here; panic=abort is not, because a panic in one connection
+# handler should not take the wallet down with it.
+lto = "thin"
+codegen-units = 1
+strip = true
