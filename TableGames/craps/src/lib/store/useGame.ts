@@ -11,6 +11,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { persistKey } from '@/lib/casino/mode';
 import type { RollAnimation } from '@/lib/dice/simulate';
 import { initDicePhysics, simulateThrow } from '@/lib/dice/simulate';
 import { applyRoll } from '@/lib/engine/resolve';
@@ -776,7 +777,14 @@ export const useGame = create<GameState>()(
       };
     },
     {
-      name: 'knotz-craps-session',
+      /*
+       * Two save files: one for the table played on its own, one for the table
+       * played on the casino floor. `casino/mode.ts` explains why that question
+       * has to be answered synchronously, right here — the short version is that
+       * a rack funded by the casino's wallet must not be written into the save a
+       * standalone visit reads back.
+       */
+      name: persistKey('knotz-craps-session'),
       // Bumped whenever the saved table changes shape. A mismatched version is
       // discarded rather than migrated: a half-understood old session is worse
       // than a fresh table.

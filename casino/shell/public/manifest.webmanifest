@@ -1,0 +1,19 @@
+{
+  "name": "Knotz Casino",
+  "short_name": "Knotz",
+  "description": "One bankroll, every table.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#03050b",
+  "theme_color": "#03050b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

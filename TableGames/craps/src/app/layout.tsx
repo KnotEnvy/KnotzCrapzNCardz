@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Oswald } from 'next/font/google';
 import './globals.css';
+import { FloorLink } from '@/components/FloorLink';
 
 /** Oswald is the closest widely available face to screen-printed layout type. */
 const oswald = Oswald({
@@ -100,6 +101,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           </p>
         </div>
         {children}
+        {/* Draws nothing. On the casino floor this is what puts the house
+            wallet behind the table; opened on its own, it is inert. */}
+        <FloorLink />
       </body>
     </html>
   );

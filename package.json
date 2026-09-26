@@ -1,0 +1,12 @@
+{
+  "name": "knotzcrapzncardz",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "description": "The casino, and the games that live in it",
+  "scripts": {
+    "casino:sync": "node casino/tools/sync-protocol.mjs",
+    "casino:check": "node casino/tools/sync-protocol.mjs --check",
+    "casino:build": "node casino/tools/build-casino.mjs",
+    "casino:serve": "node casino/tools/serve-casino.mjs"
+  }
+}

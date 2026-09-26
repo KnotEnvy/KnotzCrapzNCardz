@@ -43,6 +43,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { persistKey } from '@/lib/casino/mode';
 
 import {
   AUTOPLAY_GAP,
@@ -124,7 +125,16 @@ type BuyForce = ReturnType<typeof buyForce>;
  * fresh cabinet, and the only thing a player actually loses is a bankroll the
  * machine will hand straight back through the rebuy button.
  */
-const PERSIST_KEY = 'knotz-dragons-shrine-session';
+/*
+ * Two save files, and which one is opened is decided by whether the cabinet is
+ * running on the casino floor -- see `casino/mode.ts` for why that question has
+ * to be answerable synchronously, right here, before the store exists.
+ *
+ * The short version: on the floor the credit meter belongs to the casino's
+ * wallet, and writing it into the save a standalone visit reads back would put
+ * the casino's money in a pocket that never bought it.
+ */
+const PERSIST_KEY = persistKey('knotz-dragons-shrine-session');
 const PERSIST_VERSION = 1;
 
 /** How many spins the history strip remembers. Beyond this nobody is looking. */

@@ -18,6 +18,10 @@ out/
 build/
 dist/
 
+# rust build output — the floor's target dir is gigabytes of it
+target/
+**/target/
+
 # testing
 coverage/
 
@@ -43,3 +47,4 @@ Thumbs.db
 
 # local agent scratch
 .claude/settings.local.json
+casino/dist/

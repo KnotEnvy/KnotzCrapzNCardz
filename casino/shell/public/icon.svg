@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Knotz Casino">
+  <!--
+    The house chip. One shape at every size: a gold ring on the concourse
+    black, with the four edge cuts a real chip carries. Drawn as SVG rather
+    than exported as a set of PNGs so the maskable icon, the favicon and the
+    home-screen tile are the same file and cannot drift.
+  -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#1a2136"/>
+      <stop offset="100%" stop-color="#03050b"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="45%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#a16207"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#glow)"/>
+  <g fill="none" stroke="url(#gold)" stroke-linecap="round">
+    <circle cx="256" cy="256" r="150" stroke-width="26"/>
+    <circle cx="256" cy="256" r="70" stroke-width="22"/>
+    <path d="M256 76v54M256 382v54M76 256h54M382 256h54" stroke-width="26"/>
+  </g>
+</svg>

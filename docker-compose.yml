@@ -1,33 +1,40 @@
-# The whole arcade, in one place.
+# The whole stack, in one place: the casino, and the four games standalone.
 #
-#   docker compose up -d --build     build and run every game
+#   docker compose up -d --build     build and run all five
+#   docker compose up -d --build casino     just the casino
 #   docker compose logs -f           watch them
 #   docker compose ps                what is up, and is it healthy
 #   docker compose down              stop them
 #
-# Craps answers on http://localhost:8080, Dragon's Shrine on
-# http://localhost:8081, Blackjack on http://localhost:8082 and Three Card
-# Poker on http://localhost:8083.
+# The casino answers on http://localhost:8090 — that is the one to open, and
+# every game is inside it.
+#
+# The four games also still answer on their own addresses, as standalone apps
+# with their own bankrolls: craps on http://localhost:8080, Dragon's Shrine on
+# http://localhost:8081, blackjack on http://localhost:8082 and three card
+# poker on http://localhost:8083. Same code, no casino behind it.
 #
 # ---------------------------------------------------------------------------
 # Why this file is nothing but a list
 #
-# Each game already describes how it is built and run, in a compose file next
-# to its own Dockerfile, because each one has to stand on its own: a game is
-# developed, built and play-tested from its own folder long before it is worth
-# starting the whole arcade. This file used to *repeat* all four of those
-# definitions so the stack could start them together, which meant every port,
-# health check and hardening flag existed in two places and was one edit away
-# from disagreeing — and a service that drifts here fails only when someone
-# starts the arcade the other way, which is the last thing anybody tries.
+# Every service already describes how it is built and run, in a compose file
+# next to its own Dockerfile, because each one has to stand on its own: a game
+# is developed, built and play-tested from its own folder long before it is
+# worth starting the whole stack. This file used to *repeat* those definitions
+# so they could start together, which meant every port, health check and
+# hardening flag existed in two places and was one edit away from disagreeing —
+# and a service that drifts here fails only when someone starts it the other
+# way, which is the last thing anybody tries.
 #
-# `include` removes the second copy. Each game is defined exactly once, in its
-# own folder, and the arcade is the list of games in it. Relative paths inside
-# an included file resolve against that file's own directory, so each build
-# context stays `.` and keeps working from either end.
+# `include` removes the second copy. Each service is defined exactly once, in
+# its own folder, and this file is the list of them. Relative paths inside an
+# included file resolve against that file's own directory, so each build
+# context stays as that file wrote it and keeps working from either end. The
+# casino's is the one exception worth knowing about: its context is `..`,
+# because that image builds the shell and all four games.
 #
-# The other half of the fix is `name`, below, which is repeated in all four
-# game files. A compose project is named for the directory it was started from
+# The other half of the fix is `name`, below, which is repeated in all five
+# files. A compose project is named for the directory it was started from
 # unless it says otherwise, so starting a game from its own folder used to
 # build a *second* project that wanted the same container name as this one —
 # and Docker refuses, with an error about a name already in use that says
@@ -40,6 +47,11 @@
 name: knotzcrapzncardz
 
 include:
+  # The casino: one container serving the lobby, the API and every game.
+  - path: casino/docker-compose.yml
+  # The same four games, standalone, one nginx container each. Still here
+  # because a game is built and play-tested from its own folder long before
+  # the casino is involved, and because each one is deployable on its own.
   # Table games
   - path: TableGames/craps/docker-compose.yml
   - path: TableGames/blackjack/docker-compose.yml
