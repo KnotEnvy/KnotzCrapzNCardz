@@ -4,9 +4,15 @@ A casino, and the games in it. Each game is a self-contained app under its own
 folder and still runs on its own; [the casino](casino) is the floor they live
 on, and it holds the one bankroll they all share.
 
+**To see it:**
+
 ```bash
-pnpm run casino:build && docker compose up -d --build casino   # http://localhost:8090
+docker compose up -d --build casino
 ```
+
+…then open **<http://localhost:8090>**. The first build takes a few minutes and
+is cached after that. [`casino/README.md`](casino/README.md#quick-start) covers
+the rest, including how to run it without Docker.
 
 ## The casino
 
@@ -65,6 +71,10 @@ cd TableGames/three-card-poker
 pnpm install
 pnpm run dev -- --port 3003
 ```
+
+The casino shell runs the same way, on 3010 — though it needs a floor to talk
+to, so see [`casino/README.md`](casino/README.md) for the pair of terminals that
+wants.
 
 See [the craps README](TableGames/craps/README.md) for how it plays, what is on
 the layout, and how the dice manage to be both genuine rigid-body physics and

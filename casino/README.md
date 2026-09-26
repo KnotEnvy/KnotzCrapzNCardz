@@ -21,23 +21,53 @@ so the fifth one is a manifest row rather than a rewrite.
 
 ---
 
-## Running it
+## Quick start
+
+**Two commands, from the repository root.**
 
 ```bash
-pnpm run casino:build      # builds the shell and all four games into casino/dist
-cargo run --release --manifest-path casino/server/Cargo.toml
+docker compose up -d --build casino
 ```
 
-…with `KNOTZ_SHELL_DIR=casino/dist/shell` and `KNOTZ_GAMES_DIR=casino/dist/games`
-in the environment — the build script prints the exact line. Then open
-<http://localhost:8090>.
+Then open **<http://localhost:8090>**. That is the casino's front page.
 
-Or in one container:
+The first build takes a few minutes — it compiles five web apps and a Rust
+binary — and is cached after that. To watch it, or to see why it is not up:
 
 ```bash
-docker compose up -d --build casino     # http://localhost:8090
 docker compose logs -f casino
+docker compose ps casino          # `healthy` once it is answering
+docker compose down               # stop it; the wallets are kept
 ```
+
+Three things worth knowing on the first run:
+
+- **Port 8090, not 8080–8083.** Those four are the games' own standalone
+  containers, which still work and still have their own separate bankrolls. The
+  casino is a fifth service and can run beside them. A bare
+  `docker compose up -d --build` now brings up all five.
+- **You will be signed in automatically.** The first visit creates a guest with
+  $5,000 and no password. The wallet lives in that browser, so a phone and a
+  laptop are two different players until you claim the account from the panel in
+  the top right.
+- **Nothing is lost by closing a tab.** Chips stay on the table and the lobby
+  offers them back under "Chips on tables".
+
+### Without Docker
+
+Needs Node 22+, pnpm (via `corepack enable`) and a [Rust toolchain](https://rustup.rs):
+
+```bash
+pnpm run casino:build      # the shell and all four games, with the right base paths
+pnpm run casino:serve      # the floor, pointed at what that just built
+```
+
+Same address. `casino:serve` takes `--port`, `--db`, and `--fresh` (which
+deletes the database, so it is how you see a new player's first screen again).
+
+`casino:build` is the slow one and only needs re-running when a game or the
+shell changes; `casino:serve` rebuilds the floor itself if it has changed and is
+otherwise instant.
 
 ### Working on the shell
 

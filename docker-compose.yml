@@ -1,6 +1,7 @@
-# The whole arcade, in one place.
+# The whole stack, in one place: the casino, and the four games standalone.
 #
-#   docker compose up -d --build     build and run every game
+#   docker compose up -d --build     build and run all five
+#   docker compose up -d --build casino     just the casino
 #   docker compose logs -f           watch them
 #   docker compose ps                what is up, and is it healthy
 #   docker compose down              stop them
@@ -16,22 +17,24 @@
 # ---------------------------------------------------------------------------
 # Why this file is nothing but a list
 #
-# Each game already describes how it is built and run, in a compose file next
-# to its own Dockerfile, because each one has to stand on its own: a game is
-# developed, built and play-tested from its own folder long before it is worth
-# starting the whole arcade. This file used to *repeat* all four of those
-# definitions so the stack could start them together, which meant every port,
-# health check and hardening flag existed in two places and was one edit away
-# from disagreeing — and a service that drifts here fails only when someone
-# starts the arcade the other way, which is the last thing anybody tries.
+# Every service already describes how it is built and run, in a compose file
+# next to its own Dockerfile, because each one has to stand on its own: a game
+# is developed, built and play-tested from its own folder long before it is
+# worth starting the whole stack. This file used to *repeat* those definitions
+# so they could start together, which meant every port, health check and
+# hardening flag existed in two places and was one edit away from disagreeing —
+# and a service that drifts here fails only when someone starts it the other
+# way, which is the last thing anybody tries.
 #
-# `include` removes the second copy. Each game is defined exactly once, in its
-# own folder, and the arcade is the list of games in it. Relative paths inside
-# an included file resolve against that file's own directory, so each build
-# context stays `.` and keeps working from either end.
+# `include` removes the second copy. Each service is defined exactly once, in
+# its own folder, and this file is the list of them. Relative paths inside an
+# included file resolve against that file's own directory, so each build
+# context stays as that file wrote it and keeps working from either end. The
+# casino's is the one exception worth knowing about: its context is `..`,
+# because that image builds the shell and all four games.
 #
-# The other half of the fix is `name`, below, which is repeated in all four
-# game files. A compose project is named for the directory it was started from
+# The other half of the fix is `name`, below, which is repeated in all five
+# files. A compose project is named for the directory it was started from
 # unless it says otherwise, so starting a game from its own folder used to
 # build a *second* project that wanted the same container name as this one —
 # and Docker refuses, with an error about a name already in use that says
