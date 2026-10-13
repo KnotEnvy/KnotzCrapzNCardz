@@ -1,0 +1,92 @@
+# Publishes Knotz Craps to GitHub Pages.
+#
+# The game is a static export (see TableGames/craps/next.config.ts), so the
+# whole job is: test it, build it, and hand the folder to Pages. Pages serves a
+# project site at https://<owner>.github.io/<repo>/, which is a subpath, so the
+# build is told that subpath through CASINO_BASE_PATH. Every other game in this
+# repo stays out of this workflow; each gets its own when it goes live.
+#
+# One-time setup: nothing, if the repository allows Pages. The configure-pages
+# step below turns Pages on with "GitHub Actions" as its source. If that step
+# reports that Pages is not available, the repository is private on a plan
+# without Pages, and it needs to be public or on a plan that serves Pages.
+
+name: Deploy Knotz Craps to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TableGames/craps/**'
+      - '.github/workflows/craps-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A newer push waits for the one in flight rather than
+# cancelling it, so a deploy is never left half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: TableGames/craps
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The packageManager field pins pnpm 10.13.1; corepack reads it, which is
+      # the same path a laptop takes after `corepack enable`. It runs after
+      # setup-node so the shim it installs belongs to the Node that will use it.
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm run lint
+
+      # `next build` runs the TypeScript check itself, so there is no separate
+      # typecheck step: a standalone `tsc` on a fresh checkout fails on types
+      # that only exist once a build has generated them.
+      - name: Build
+        env:
+          CASINO_BASE_PATH: /${{ github.event.repository.name }}
+        run: pnpm run build
+
+      - name: Mark the output as static
+        # Keeps Pages from running Jekyll over the folder, which would skip the
+        # _next directory the game's scripts live in.
+        run: touch out/.nojekyll
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: TableGames/craps/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

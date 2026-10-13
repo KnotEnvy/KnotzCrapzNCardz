@@ -93,11 +93,20 @@ npx netlify deploy --prod --dir out   # Netlify
 npx wrangler pages deploy out         # Cloudflare Pages
 ```
 
-GitHub Pages works too — push `out/` to a `gh-pages` branch. If you serve the
-game from a subpath rather than a domain root, set `basePath` in
-`next.config.ts` to match, or the asset URLs will not resolve.
+**GitHub Pages** is how this repository publishes it:
+[`.github/workflows/craps-pages.yml`](../../.github/workflows/craps-pages.yml)
+tests and builds the game, then publishes it on every push to `main` that
+touches this folder. It is served at
+`https://knotenvy.github.io/KnotzCrapzNCardz/`, which is a subpath, so the
+build is given that subpath through `CASINO_BASE_PATH` (the variable `basePath`
+reads in `next.config.ts`). A custom domain at the root would mean leaving that
+variable unset.
 
-**Deploying to Vercel from the repository** is the better version of this,
+The first run needs Pages' source set to **GitHub Actions**; the workflow's
+`configure-pages` step does this itself when the repository allows it. Run it
+by hand from the Actions tab with **Run workflow** at any time.
+
+**Deploying to Vercel from the repository** is the other version of this,
 because every push to `main` then redeploys on its own. The one setting that
 matters: this game is not at the repository root, so set **Root Directory** to
 `TableGames/craps` when importing the project. Vercel reads `vercel.json` from

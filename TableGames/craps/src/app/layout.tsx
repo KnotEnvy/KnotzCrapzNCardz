@@ -17,15 +17,24 @@ const inter = Inter({
   display: 'swap',
 });
 
+/*
+ * The subpath this build is served from, if any (see next.config.ts). Next puts
+ * basePath on the scripts, styles and fonts it emits, but not on what the
+ * metadata API emits, so these links name it themselves. Without it, a build
+ * served from `/<repo>/` on GitHub Pages would ask the site root for the
+ * manifest and the icons, and the home-screen install would lose both.
+ */
+const base = process.env.CASINO_BASE_PATH?.replace(/\/$/, '') ?? '';
+
 export const metadata: Metadata = {
   title: 'Knotz Craps',
   description:
     'A full craps table with real dice physics, true casino odds, and two seats at the rail.',
   applicationName: 'Knotz Craps',
-  manifest: '/manifest.webmanifest',
+  manifest: `${base}/manifest.webmanifest`,
   icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/apple-touch-icon.png',
+    icon: `${base}/icons/icon-192.png`,
+    apple: `${base}/icons/apple-touch-icon.png`,
   },
   // Added to the home screen on an iPhone, this is what makes it open without
   // Safari's chrome around it. iOS ignores the manifest for all of this and
