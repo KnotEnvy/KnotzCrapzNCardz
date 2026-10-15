@@ -137,6 +137,33 @@ things to configure wherever you put it:
   scale up rather than out. For a play-money floor, one instance is a very long
   way from a bottleneck.
 
+#### Render
+
+[`render.yaml`](../render.yaml) at the repository root is a Blueprint that
+already says all of the above: the Docker build from the repository root, a
+1 GB disk at `/data`, one instance, and the health check. In the Render
+dashboard choose **New → Blueprint**, pick this repository, and apply it. The
+first build takes a while (four Next builds and a release Rust build); after
+that, every push to `main` that touches the casino or a game redeploys it.
+
+Three things are worth knowing:
+
+- **It is a paid instance.** A disk cannot attach to Render's free type, and a
+  casino without a disk forgets every wallet on each deploy.
+- **A deploy is a brief outage.** A service with a disk stops the old instance
+  before starting the new one, so there is no zero-downtime deploy. The build
+  filter in the Blueprint keeps documentation-only pushes from causing one.
+- **The disk can arrive owned by root.** The image starts as root only long
+  enough to hand `/data` to the `floor` user, then drops to it. See the
+  `ENTRYPOINT` in the Dockerfile.
+
+The service answers on its `onrender.com` address with HTTPS already on. For
+your own domain, add it under the service's **Custom Domains** in Render, then
+create the CNAME it asks for in Cloudflare's DNS. With Cloudflare's proxy on,
+keep its caching away from `/api/v1` (see the note on caching below), and that
+proxy is also the natural place for the rate limit on `POST /auth/guest`
+described under *Not built yet*.
+
 ### 3. A VPS with a reverse proxy
 
 nginx or Caddy in front, terminating TLS. The only requirement beyond the usual

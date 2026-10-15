@@ -1,0 +1,68 @@
+# The casino on Render, as a Blueprint.
+#
+# One service: the image casino/Dockerfile builds, which is the floor binary,
+# the shell and all four games on one origin. See casino/DEPLOY.md for why it
+# is one process and not five.
+#
+# Create it from the Render dashboard with New → Blueprint, pointed at this
+# repository. Render reads this file and builds from `main`.
+
+services:
+  - type: web
+    name: knotz-casino
+    runtime: docker
+    branch: main
+
+    # The build context is the repository root, not casino/: the image builds
+    # five apps that live in five folders.
+    dockerfilePath: ./casino/Dockerfile
+    dockerContext: .
+
+    # A persistent disk needs a paid instance; the free type cannot hold one,
+    # and without one every deploy is a new casino with every bankroll reset.
+    # The floor is a small Rust process, so the smallest paid size is plenty.
+    plan: 0.5c-512mb
+
+    # Fixed once the service exists. Pick the one nearest the players.
+    region: oregon
+
+    # Exactly one. SQLite is a file on this disk, the live feed is an in-process
+    # channel, and a service with a disk cannot be scaled past one anyway.
+    numInstances: 1
+
+    # The floor's own readiness check: it answers once the database is open.
+    healthCheckPath: /api/v1/health
+
+    # The books. Everything worth keeping is the one SQLite file the image
+    # writes at /data/floor.db, and this is what keeps it across deploys.
+    # It can be grown later but never shrunk.
+    disk:
+      name: floor-data
+      mountPath: /data
+      sizeGB: 1
+
+    # A deploy restarts the floor (a service with a disk cannot do zero-downtime
+    # deploys), so only rebuild for changes that are actually in the image.
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - casino/**
+        - TableGames/**
+        - SlotsGames/**
+        - cardArt/**
+        - render.yaml
+
+    envVars:
+      # The port the image already listens on and its health check already
+      # probes. Stated here so Render's own default does not move it.
+      - key: PORT
+        value: "8090"
+      # What a new player finds in their wallet, and what the cage comps.
+      # Cents, always. Same values as casino/docker-compose.yml; see
+      # casino/server/src/config.rs for the rest.
+      - key: KNOTZ_SIGNUP_STAKE
+        value: "500000"
+      - key: KNOTZ_COMP
+        value: "250000"
+      - key: KNOTZ_COMP_INTERVAL_SECS
+        value: "28800"

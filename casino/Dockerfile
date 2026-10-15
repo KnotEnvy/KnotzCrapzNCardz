@@ -98,14 +98,23 @@ ENV KNOTZ_SHELL_DIR=/srv/shell \
     PORT=8090 \
     RUST_LOG=knotz_floor=info,tower_http=warn,sqlx=warn
 
-USER floor
 VOLUME ["/data"]
 EXPOSE 8090
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8090/api/v1/health || exit 1
 
-# No shell form, so the binary is PID 1 and receives SIGTERM directly — which
-# is what its graceful shutdown is waiting for. A cash-out interrupted halfway
-# is the one request worth draining for.
+# The container starts as root for one reason: whatever is mounted at /data
+# arrives owned by whoever made it. A Docker named volume copies the image's
+# ownership, but a host's persistent disk (Render's, for one) can arrive owned
+# by root, and the floor would then fail to create its database. So the
+# entrypoint hands /data to `floor` if it is not already, then drops to `floor`
+# with setpriv before the binary starts. Nothing runs as root after that line.
+#
+# It is inline rather than a script file so a Windows checkout's line endings
+# cannot break it. Every step is `exec`, so the binary still ends up as PID 1
+# and receives SIGTERM directly — which is what its graceful shutdown is
+# waiting for. A cash-out interrupted halfway is the one request worth draining
+# for. Started with `--user` as anything but root, it simply runs as that user.
+ENTRYPOINT ["/bin/sh", "-c", "if [ \"$(id -u)\" = 0 ]; then [ \"$(stat -c %u /data)\" = 10001 ] || chown -R floor:floor /data; exec setpriv --reuid=floor --regid=floor --init-groups -- \"$@\"; fi; exec \"$@\"", "entrypoint"]
 CMD ["knotz-floor"]
